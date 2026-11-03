@@ -127,17 +127,18 @@ Vue 3.5 + TypeScript + Vite + Naive UI + Pinia + Vue Router + vue-i18n（中英�
 
 ## 快速开始
 
-前提：`go 1.27+`、`node 20+`、`pnpm`。
+前提：`go 1.27+` 即可（前端构建产物已直接提交在 `internal/web/dist`，不需要 node/pnpm）。
 
 ```bash
-# 1. 构建前端并同步到 internal/web/dist（go:embed 要求）
-make web
-
-# 2. 构建 Linux 二进制
+# 构建 Linux 二进制（前端产物 go:embed 进二进制）
 make build-all        # 产出 bin/gowaf-linux-amd64 / arm64 / windows-amd64
 
-# 3. 把部署包传到服务器（见下一节「打包与部署」更省事）
+# 也可以只构建本机平台
+make build
 ```
+
+> 只有要修改控制台界面时才需要前端源码 `Frontend/`（独立维护，不在本仓库内）。
+> 改完执行 `make web` 同步回 `internal/web/dist` 再提交。
 
 服务器上（Ubuntu + 宝塔 Apache）：
 
@@ -167,9 +168,9 @@ ssh -L 8899:127.0.0.1:8899 root@<服务器IP>   # 隧道访问控制台
 ### 方式一：PowerShell 一键打包（Windows 开发机）
 
 ```powershell
-.\deploy\package.ps1                  # 用现有前端产物打包 linux/amd64
+.\deploy\package.ps1                  # 用仓库自带前端产物打包 linux/amd64
 .\deploy\package.ps1 -Arch arm64      # 交叉编译 arm64
-.\deploy\package.ps1 -WithWebBuild    # 先 pnpm install + build 再打包
+.\deploy\package.ps1 -WithWebBuild    # 本机有 Frontend 源码时：先 pnpm build 再打包
 ```
 
 产出（位于 `dist/`）：
@@ -188,9 +189,7 @@ make build-all
 mkdir gowaf-deploy && cp bin/gowaf-linux-amd64 deploy/install.sh rules/builtin.yaml gowaf-deploy/
 tar czf gowaf-deploy.tar.gz gowaf-deploy/
 sha256sum gowaf-deploy.tar.gz > gowaf-deploy.tar.gz.sha256
-```
-
-### 上传与安装
+```### 上传与安装
 
 ```bash
 scp gowaf-deploy-*.tar.gz root@服务器IP:/tmp/
@@ -380,15 +379,16 @@ gowaf/
 │   ├── store/              # GORM + SQLite、migrations、事件与站点模型、种子数据
 │   ├── tasks/              # 计划任务中心（清理事件、备份规则）
 │   ├── metrics/            # 指标统计
-│   └── web/                # go:embed 前端产物（构建时同步）
-├── Frontend/               # Vue 3 + Naive UI 控制台（dashboard/events/rules/sites/
-│                           #   bans/ips/tasks/settings/audit）
+│   └── web/                # go:embed 前端构建产物（仓库直接自带，clone 后即可编译）
 ├── rules/builtin.yaml      # 49 条内置检测规则（YAML，可在线增删改）
 ├── deploy/
 │   ├── install.sh          # 一键部署 / 运维脚本（本文档主角）
 │   └── package.ps1         # Windows 打包脚本
 ├── configs/config.yaml     # 配置样例
-└── Makefile                # web / build / build-all / test / vet / fmt
+└── Makefile                # build / build-all / test / vet / fmt（web 目标需 Frontend 源码）
+
+> 控制台前端源码（Vue 3 + Naive UI）独立维护，不在本仓库内；
+> 仓库自带其构建产物 `internal/web/dist`，`go build` 即可得到完整功能。
 ```
 
 **规则文件格式**（`rules/builtin.yaml`，控制台可在线管理）：

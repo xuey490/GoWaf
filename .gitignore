@@ -1,8 +1,8 @@
-# 构建产物
-bin/
-dist/
-internal/web/dist/*
-!internal/web/dist/.gitkeep
+# 构建产物（注意：internal/web/dist 是 go:embed 的前端产物，仓库直接自带，不要忽略）
+# 带前导 / 锚定仓库根目录，避免误伤 internal/web/dist
+/bin/
+/dist/
+/coverage.out
 
 # Go
 *.exe
@@ -10,13 +10,11 @@ internal/web/dist/*
 *.out
 
 # 运行时数据（含数据库、JWT 密钥、初始密码、备份）——绝不入库
-data/
-logs/
+/data/
+/logs/
 
-# 前端
-Frontend/node_modules/
-Frontend/dist/
-Frontend/.workbuddy-ai/
+# 前端源码独立维护，不在本仓库内（如本机放回 Frontend，不要提交）
+/Frontend/
 
 # 本地开发与编辑器
 logs_dev.log

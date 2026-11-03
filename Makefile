@@ -1,8 +1,9 @@
 # GoWAF 构建与发布
 #
 # 关键约束：internal/web 用 go:embed 内嵌前端产物，而 go:embed 不能跨包引用
-# 上级目录，因此构建前必须把 Frontend/dist 同步到 internal/web/dist。
-# 所有发布命令都依赖 sync-web，不要跳过。
+# 上级目录。前端构建产物已直接提交在 internal/web/dist —— clone 后 go build 即可，
+# 不需要 node/pnpm。仅当要改界面时才需要 Frontend 源码（不在仓库内），
+# 改完执行 make web 同步回 internal/web/dist。
 
 APP        := gowaf
 VERSION    ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
@@ -21,18 +22,33 @@ export CGO_ENABLED = 0
 
 .PHONY: help
 help:
-	@echo "make web        - 构建前端并同步到 internal/web/dist"
-	@echo "make sync-web   - 仅同步已有的 Frontend/dist"
-	@echo "make build      - 构建本机二进制到 bin/$(APP)"
+	@echo "make build      - 构建本机二进制到 bin/$(APP)（直接用已提交的 internal/web/dist）"
 	@echo "make build-all  - 交叉编译 linux/amd64 + linux/arm64 + windows/amd64"
+	@echo "make web        - （需 Frontend 源码）构建前端并同步到 internal/web/dist"
+	@echo "make sync-web   - （需 Frontend/dist）仅同步已有产物"
 	@echo "make test       - 运行 go test"
 	@echo "make vet        - 运行 go vet"
 	@echo "make fmt        - gofmt 全部源码"
 	@echo "make run        - 用 configs/config.yaml 启动"
 	@echo "make clean      - 清理构建产物"
 
+# 前端源码不在仓库内时（视图很少改动，产物已直接提交），build 不依赖前端，
+# 只要求 internal/web/dist 里有 index.html —— 没有就明确报错，而不是编译出空壳。
+.PHONY: check-web
+check-web:
+	@if [ ! -f internal/web/dist/index.html ]; then \
+		echo "错误：internal/web/dist/index.html 不存在。"; \
+		echo "仓库应自带前端产物；若被误删，请取回 Frontend 源码后执行 make web 重新生成。"; \
+		exit 1; \
+	fi
+
 .PHONY: web
 web:
+	@if [ ! -d Frontend ]; then \
+		echo "错误：找不到 Frontend 源码目录（前端源码独立维护，不在本仓库内）。"; \
+		echo "仅当你要修改控制台界面时才需要它；常规构建直接 make build 即可。"; \
+		exit 1; \
+	fi
 	cd Frontend && pnpm install --ignore-workspace --frozen-lockfile=false && pnpm build
 	$(MAKE) sync-web
 
@@ -48,7 +64,7 @@ sync-web:
 	@echo "synced Frontend/dist -> internal/web/dist"
 
 .PHONY: build
-build: sync-web
+build: check-web
 	go build -trimpath -ldflags "$(LDFLAGS)" -o bin/$(APP) ./cmd/gowaf
 
 .PHONY: build-noweb
@@ -56,7 +72,7 @@ build-noweb:
 	go build -trimpath -ldflags "$(LDFLAGS)" -o bin/$(APP) ./cmd/gowaf
 
 .PHONY: build-all
-build-all: sync-web
+build-all: check-web
 	GOOS=linux   GOARCH=amd64 go build -trimpath -ldflags "$(LDFLAGS)" -o bin/$(APP)-linux-amd64 ./cmd/gowaf
 	GOOS=linux   GOARCH=arm64 go build -trimpath -ldflags "$(LDFLAGS)" -o bin/$(APP)-linux-arm64 ./cmd/gowaf
 	GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "$(LDFLAGS)" -o bin/$(APP)-windows-amd64.exe ./cmd/gowaf

@@ -1,0 +1,1 @@
+import{E as e}from"./light-D4diJaDS.js";import{F as t,R as n}from"./runtime-core.esm-bundler-B5qSvmKr.js";var r=e?document?.fonts?.ready:void 0,i=!1;r===void 0?i=!0:r.then(()=>{i=!0});function a(e){if(i)return;let a=!1;n(()=>{i||r?.then(()=>{a||e()})}),t(()=>{a=!0})}export{a as t};

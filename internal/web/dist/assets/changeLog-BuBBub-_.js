@@ -1,0 +1,1 @@
+import{_t as e}from"./runtime-core.esm-bundler-B5qSvmKr.js";var t=e([{version:`v1.0.0`,title:`将组件库全量从 Ant Design Vue 迁移到 Naive UI 2.x`,date:`2026-10-24`,detail:[`修复：增加了大批新组件在 功能实例--》组件演示`,`修复：增加了弹窗选择、下拉选择组件在 功能实例--》弹窗选择`,`修复：将ant design vue的表格组件完美复刻Art design pro的样式和功能`,`修复：其他若干匹配问题`]}]);export{t};

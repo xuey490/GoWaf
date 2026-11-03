@@ -1,0 +1,1 @@
+import{E as e}from"./resolve-slot-D0ESJhJD.js";import{P as t,Z as n}from"./light-D4diJaDS.js";import{O as r,d as i}from"./runtime-core.esm-bundler-B5qSvmKr.js";function a(a){let{mergedLocaleRef:o,mergedDateLocaleRef:s}=r(e,null)||{},c=i(()=>o?.value?.[a]??n[a]);return{dateLocaleRef:i(()=>s?.value??t),localeRef:c}}export{a as t};

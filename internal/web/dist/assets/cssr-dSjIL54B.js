@@ -1,0 +1,1 @@
+import{pt as e}from"./resolve-slot-D0ESJhJD.js";var{c:t}=e(),n=`vueuc-style`;export{n,t};

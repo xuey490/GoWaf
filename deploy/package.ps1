@@ -4,7 +4,8 @@
 
 .DESCRIPTION
     做四件事：
-      1. 把 Frontend/dist 同步到 internal/web/dist（go:embed 不能跨目录引用）
+      1. 准备前端产物：默认直接使用仓库自带的 internal/web/dist（go:embed 需要它存在）。
+         仅当本机存在 Frontend 源码且显式加 -WithWebBuild 时才重新构建并同步。
       2. CGO_ENABLED=0 交叉编译 linux/amd64 或 arm64
       3. 把 二进制 + install.sh + builtin.yaml 组装成一个部署目录
       4. 打成 tar.gz + 生成 SHA256，并打印上传命令
@@ -14,18 +15,15 @@
 .EXAMPLE
     .\deploy\package.ps1
     .\deploy\package.ps1 -Arch arm64
-    .\deploy\package.ps1 -WithWebBuild          # 先 pnpm build 再打包
+    .\deploy\package.ps1 -WithWebBuild          # 本机有 Frontend 源码时，先 pnpm build 再打包
 #>
 [CmdletBinding()]
 param(
     [ValidateSet('amd64', 'arm64')]
     [string]$Arch = 'amd64',
 
-    # 重新构建前端（pnpm install + build）
-    [switch]$WithWebBuild,
-
-    # 跳过前端同步，直接用现有 internal/web/dist
-    [switch]$SkipFrontend
+    # 重新构建前端（pnpm install + build），仅在本机有 Frontend 源码时可用
+    [switch]$WithWebBuild
 )
 
 $ErrorActionPreference = 'Stop'
@@ -65,7 +63,13 @@ Write-Step '准备前端产物（go:embed 需要 internal/web/dist）'
 $srcDist = Join-Path $root 'Frontend\dist'
 $dstDist = Join-Path $root 'internal\web\dist'
 
+# 仓库直接自带 internal/web/dist（前端源码独立维护，不在仓库内），
+# 所以默认路径是「什么都不做，直接用」。只有本机恰好有 Frontend 源码、
+# 且明确要求重新构建时，才走 pnpm build + 同步。
 if ($WithWebBuild) {
+    if (-not (Test-Path (Join-Path $root 'Frontend'))) {
+        throw "找不到 Frontend 源码目录（前端源码独立维护，不在本仓库内）。常规打包直接运行 .\deploy\package.ps1 即可，无需 -WithWebBuild"
+    }
     Write-Host "    执行 pnpm build（耗时约 1-3 分钟）..."
     Push-Location (Join-Path $root 'Frontend')
     try {
@@ -76,27 +80,7 @@ if ($WithWebBuild) {
     }
     finally { Pop-Location }
     Write-Ok '前端已重新构建'
-}
 
-if (-not (Test-Path (Join-Path $srcDist 'index.html'))) {
-    throw "Frontend/dist 不存在或不完整。请先 cd Frontend; pnpm build，或加 -WithWebBuild 参数"
-}
-
-$needSync = $true
-if ($SkipFrontend -and (Test-Path (Join-Path $dstDist 'index.html'))) {
-    $needSync = $false
-    Write-Ok '按 -SkipFrontend 跳过同步'
-}
-elseif (Test-Path (Join-Path $dstDist 'index.html')) {
-    $srcTime = (Get-Item (Join-Path $srcDist 'index.html')).LastWriteTime
-    $dstTime = (Get-Item (Join-Path $dstDist 'index.html')).LastWriteTime
-    if ($dstTime -ge $srcTime) {
-        $needSync = $false
-        Write-Ok 'internal/web/dist 已是最新，跳过同步'
-    }
-}
-
-if ($needSync) {
     # 用 robocopy /MIR 做镜像同步，而不是 Remove-Item + Copy-Item。
     # 原因：宿主的 safe-delete 守卫会拦截删除上百个文件的递归删除动作，
     # 表现为「trash-failed」但目录已经被移走，随后 go:embed 找不到 dist 直接编译失败。
@@ -106,10 +90,15 @@ if ($needSync) {
     # robocopy 退出码 0-7 都算成功，>=8 才是失败
     if ($LASTEXITCODE -ge 8) { throw "robocopy 同步失败（退出码 $LASTEXITCODE）" }
     $global:LASTEXITCODE = 0
-    # .gitkeep 保证 embed 目录在空仓库里也存在
     $keep = Join-Path $dstDist '.gitkeep'
     if (-not (Test-Path $keep)) { New-Item -ItemType File -Path $keep | Out-Null }
     Write-Ok 'Frontend/dist -> internal/web/dist 同步完成'
+}
+elseif (Test-Path (Join-Path $dstDist 'index.html')) {
+    Write-Ok '使用仓库自带的 internal/web/dist（如需改界面，取回 Frontend 源码后加 -WithWebBuild）'
+}
+else {
+    throw "internal/web/dist 缺少 index.html（仓库应自带前端产物，可能被误删）。请从版本库恢复它，或取回 Frontend 源码后加 -WithWebBuild 重新构建"
 }
 
 # ---------------------------------------------------------------- 3. 交叉编译

@@ -1,0 +1,1 @@
+import{V as e,f as t,h as n}from"./runtime-core.esm-bundler-B5qSvmKr.js";import{t as r}from"./_plugin-vue_export-helper-BDNMzG2s.js";var i={},a={class:`page-content`};function o(r,i){return e(),n(`div`,a,[...i[0]||(i[0]=[t(`h1`,null,`菜单-2-1`,-1)])])}var s=r(i,[[`render`,o]]);export{s as default};

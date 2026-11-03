@@ -1,0 +1,1 @@
+import{S as e,V as t,h as n}from"./runtime-core.esm-bundler-B5qSvmKr.js";var r={style:{display:`none`}},i=e({name:`ArtTableColumn`,inheritAttrs:!1,__name:`index`,setup(e){return(e,i)=>(t(),n(`i`,r))}});export{i as t};

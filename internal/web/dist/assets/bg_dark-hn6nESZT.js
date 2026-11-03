@@ -1,0 +1,1 @@
+var e=`/assets/bg_dark-BoZNsetB.webp`;export{e as t};
