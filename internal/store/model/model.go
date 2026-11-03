@@ -172,7 +172,7 @@ type Rule struct {
 	Targets  string `gorm:"column:targets;size:128;not null" json:"targets"` // path,query,body,header,cookie,ua
 	Keywords string `gorm:"column:keywords;size:1024" json:"-"`              // JSON 数组，AC 预筛
 	Pattern  string `gorm:"column:pattern;size:2048" json:"pattern"`
-	Action   string `gorm:"column:action;size:16;not null;default:block" json:"action"` // block/challenge/log
+	Action   string `gorm:"column:action;size:16;not null;default:block" json:"action"` // block/challenge/log/ban（ban: 命中即封禁来源 IP）
 	Enabled  int    `gorm:"column:enabled;not null;default:1" json:"enabled"`
 	// Builtin 不带 default tag：GORM 对「有 default 且值为零」的字段会省略该列，
 	// 导致自建规则被写成内置规则而无法删除，这里必须让零值真正落库。

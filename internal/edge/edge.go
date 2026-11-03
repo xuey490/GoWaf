@@ -128,8 +128,9 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if !skipDetect && !skipBody && route.DetectBody {
 		in := buildInput(r, body)
 		result = h.rt.Engine.Inspect(&in)
-		// 站点自定义防护：阈值/模式与全局不同，用站点生效值重判动作
-		if route.Guard != nil {
+		// 站点自定义防护：阈值/模式与全局不同，用站点生效值重判动作。
+		// action=ban 是规则的显式动作（命中即封），不参与分数重判。
+		if route.Guard != nil && result.Action != "ban" {
 			result.Action = decideByGuard(result.Score, route.Guard, h.rt.Engine.Mode())
 		}
 		metrics.DetectDuration.Observe(float64(result.ElapsedUS) / 1e6)
@@ -139,6 +140,11 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	switch result.Action {
+	case "ban":
+		// 高危规则一次即封：不进频次统计，命中这条本身就是证据。
+		h.recordDirectBan(clientIP.String(), &result)
+		h.reject(w, r, route, clientIP, reqID, start, "ban", "rule", http.StatusForbidden, &result)
+		return
 	case "block":
 		h.recordAutoBan(clientIP.String())
 		h.reject(w, r, route, clientIP, reqID, start, "block", "rule", http.StatusForbidden, &result)
@@ -418,6 +424,40 @@ func (h *Handler) recordAutoBan(ip string) {
 	if permanent {
 		log.Printf("[edge] %s 连续 %d 次触发，已永久封禁", ip, strikes)
 	}
+}
+
+// recordDirectBan action=ban 规则专用：命中即封，一次都不给尝试机会。
+//
+// 与 recordAutoBan（N 次阈值 + 连击升级）不同，这里不做任何频次累计——
+// 规则本身被标记为高危（如扫描器 UA、爆破端点），触发这一次就该走。
+// 封禁时长沿用 ban_ttl 设置，source 记为 rule_ban，面板上一眼可辨。
+func (h *Handler) recordDirectBan(ip string, result *detect.Result) {
+	cfg := h.rt.Cfg.Guard
+	ttlSec := h.rt.SettingInt(runtime.KeyBanTTL, int(cfg.BanTTL.Duration()/time.Second))
+	if ttlSec <= 0 {
+		ttlSec = 3600
+	}
+	expires := store.NowMS() + int64(ttlSec)*1000
+
+	h.rt.Bans.Ban(ip, expires)
+	metrics.BannedGauge.Set(float64(h.rt.Bans.Size()))
+
+	ids := "unknown"
+	if result != nil && len(result.RuleIDs) > 0 {
+		ids = strings.Join(result.RuleIDs, ",")
+	}
+	ban := model.Ban{
+		IP:        ip,
+		Reason:    fmt.Sprintf("命中高危规则（一次封禁）：%s", ids),
+		Source:    "rule_ban",
+		HitCount:  1,
+		CreatedAt: store.NowMS(),
+		ExpiresAt: expires,
+	}
+	if err := h.rt.Store.Gorm().Create(&ban).Error; err != nil {
+		log.Printf("[edge] 写高危规则封禁记录失败: %v", err)
+	}
+	log.Printf("[edge] %s 命中 action=ban 规则(%s)，已封禁 %d 秒", ip, ids, ttlSec)
 }
 
 // autoBanStrikes 统计该 IP 在 resetMS 内被自动封禁过几次（不含本次）。

@@ -200,7 +200,8 @@ type Hit struct {
 // Result 是一次检测的结论。
 type Result struct {
 	Score      int      `json:"score"`
-	Action     string   `json:"action"` // pass / log / challenge / block
+	Action     string   `json:"action"` // pass / log / challenge / block / ban
+	Ban        bool     `json:"-"`      // 命中了 action=ban 的规则：一次即封，不走评分
 	Hits       []Hit    `json:"hits"`
 	Categories []string `json:"categories"`
 	RuleIDs    []string `json:"ruleIds"`
@@ -317,6 +318,11 @@ func (e *Engine) Inspect(in *Input) Result {
 			}
 			matched[rule.ID] = struct{}{}
 			res.Score += rule.Score
+			if rule.Action == "ban" {
+				// 高危规则：命中即封。只打标记，最终动作在下面统一决定
+				//（observe 模式下会降级为评分结果，保持"观察模式不拦截"语义）。
+				res.Ban = true
+			}
 			res.Hits = append(res.Hits, Hit{
 				RuleID:   rule.ID,
 				Name:     rule.Name,
@@ -331,6 +337,11 @@ func (e *Engine) Inspect(in *Input) Result {
 	}
 
 	res.Action = e.decide(res.Score)
+	if res.Ban && e.Mode() != "observe" {
+		// action=ban 的规则命中即封：一次就封禁来源 IP，不走评分与重试。
+		// observe 模式下保持 decide() 的结果（只记录不拦截）。
+		res.Action = "ban"
+	}
 	res.ElapsedUS = time.Since(start).Microseconds()
 	return res
 }

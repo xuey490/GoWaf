@@ -7,6 +7,9 @@
 #   targets   检测目标：path/query/body/header/cookie/ua
 #   keywords  AC 预筛关键词（必须能在归一化后的文本里出现，否则规则永不命中）
 #   pattern   RE2 正则，自动加 (?i)；不写则纯关键词匹配
+#   action    命中动作：block（计分拦截）/ challenge（人机校验）/ log（只记录）/
+#             ban（高危专用：命中一次立即封禁来源 IP，不走评分与频次累计；
+#             observe 观察模式下自动降级为只记录）
 #
 # 重要：keywords 是性能闸门，写不准会导致规则形同虚设。
 # 例如 SQLi 规则如果关键词写 "union select"（带空格），而 payload 是 union%0aselect，

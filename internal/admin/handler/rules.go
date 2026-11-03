@@ -111,8 +111,8 @@ func validateRule(in *ruleInput) string {
 	if in.Pattern == "" && len(in.Keywords) == 0 {
 		return "关键词与正则至少填一个"
 	}
-	if in.Action != "" && in.Action != "block" && in.Action != "challenge" && in.Action != "log" {
-		return "action 只能是 block/challenge/log"
+	if in.Action != "" && in.Action != "block" && in.Action != "challenge" && in.Action != "log" && in.Action != "ban" {
+		return "action 只能是 block/challenge/log/ban"
 	}
 	for _, t := range in.Targets {
 		switch strings.ToLower(strings.TrimSpace(t)) {
