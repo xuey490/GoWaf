@@ -15,6 +15,9 @@ GoWAF 检测，干净的请求原样转发给后端，恶意请求在到达业�
 
 ---
 
+## Demo 示意图： https://github.com/xuey490/GoWaf/tree/main/demo
+
+
 ## 目录
 
 - [工作原理](#工作原理)
