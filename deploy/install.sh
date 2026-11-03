@@ -556,9 +556,25 @@ retarget_vhosts() {
     # 锚行首：注释掉的 <VirtualHost *:443> 不能被误改。
     sed -i -E "s/^([[:space:]]*)<VirtualHost[[:space:]]+\*:80[[:space:]]*>/\\1<VirtualHost 127.0.0.1:${UPSTREAM_PORT}>/g" "$f"
     sed -i -E "s/^([[:space:]]*)<VirtualHost[[:space:]]+\*:8080[[:space:]]*>/\\1<VirtualHost 127.0.0.1:${UPSTREAM_PORT}>/g" "$f"
+    # 宝塔的「强制 HTTPS」段用 `RewriteCond %{SERVER_PORT} !^443$` 判断，而 WAF 终止
+    # TLS 后走 8080 明文转发——端口永远不是 443，https 访客也会被 301 到自身，
+    # 造成 ERR_TOO_MANY_REDIRECTS 死循环。补一条 X-Forwarded-Proto 条件：
+    # WAF 传来的 https 请求不跳，真正的 http 直连仍然 301 到 https。幂等。
+    awk '
+      /HTTP_TO_HTTPS_START/ { inseg = 1 }
+      /HTTP_TO_HTTPS_END/   { inseg = 0 }
+      {
+        if (inseg && index($0, "RewriteCond %{SERVER_PORT} !^443$") > 0 \
+            && index(prev, "X-Forwarded-Proto") == 0) {
+          print "        RewriteCond %{HTTP:X-Forwarded-Proto} !^https$"
+        }
+        print $0
+        prev = $0
+      }
+    ' "$f" > "${f}.gowaf.tmp" && mv "${f}.gowaf.tmp" "$f"
     [[ $(md5sum "$f" | awk '{print $1}') != "$before" ]] && n=$((n + 1))
   done
-  [[ $n -eq 0 ]] && info "所有 vhost 端口已经就位" || ok "改写 ${n} 个 vhost 文件到 127.0.0.1:${UPSTREAM_PORT}"
+  [[ $n -eq 0 ]] && info "所有 vhost 端口已经就位" || ok "改写 ${n} 个 vhost 文件到 127.0.0.1:${UPSTREAM_PORT}（含强制 HTTPS 跳转适配）"
 }
 
 # 安装中途失败统一收尾：停掉 gowaf、关掉自愈定时器、还原 Apache
