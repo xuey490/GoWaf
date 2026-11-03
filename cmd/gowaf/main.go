@@ -1,18 +1,17 @@
 // Command gowaf 是 Go-WAF 的唯一入口。
 //
 // 启动顺序：读配置 → 校验 → 建库迁移 → 装配 → 起三组监听 → 等信号优雅退出。
+//
+// Windows：SCM 拉起时自动进入服务模式（svc_windows.go）；
+// `gowaf svc install|start|stop|uninstall` 管理服务注册。
 package main
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"log"
 	"os"
-	"os/signal"
 	"runtime"
-	"syscall"
-	"time"
 
 	"gowaf/internal/app"
 	"gowaf/internal/config"
@@ -26,6 +25,16 @@ var (
 )
 
 func main() {
+	// 被 Windows SCM 拉起：进服务模式，不解析 flag
+	if maybeRunAsService() {
+		return
+	}
+	// `gowaf svc ...`：Windows 服务注册管理
+	if len(os.Args) > 1 && os.Args[1] == "svc" {
+		runSvc(os.Args[2:])
+		return
+	}
+
 	cfgPath := flag.String("c", "configs/config.yaml", "配置文件路径")
 	showVer := flag.Bool("v", false, "打印版本并退出")
 	checkOnly := flag.Bool("t", false, "只校验配置，不启动")
@@ -58,16 +67,5 @@ func main() {
 		log.Fatalf("[main] 启动失败: %v", err)
 	}
 
-	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
-	s := <-sig
-	log.Printf("[main] 收到信号 %s，开始优雅退出", s)
-
-	ctx, cancel := context.WithTimeout(context.Background(), cfg.Server.ShutdownTimeout.Duration())
-	defer cancel()
-	if err := a.Shutdown(ctx); err != nil {
-		log.Printf("[main] 退出过程中有错误: %v", err)
-	}
-	time.Sleep(100 * time.Millisecond)
-	log.Printf("[main] 已退出")
+	_ = runForeground(cfg, a, nil)
 }

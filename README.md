@@ -214,19 +214,49 @@ ssh -L 8899:127.0.0.1:8899 root@<服务器IP>   # 隧道访问控制台
 ### 方式一：PowerShell 一键打包（Windows 开发机）
 
 ```powershell
-.\deploy\package.ps1                  # 用仓库自带前端产物打包 linux/amd64
-.\deploy\package.ps1 -Arch arm64      # 交叉编译 arm64
-.\deploy\package.ps1 -WithWebBuild    # 本机有 Frontend 源码时：先 pnpm build 再打包
+.\deploy\package.ps1                          # linux/amd64 tar.gz（用仓库自带前端产物）
+.\deploy\package.ps1 -Arch arm64              # 交叉编译 arm64
+.\deploy\package.ps1 -Platform windows        # windows/amd64 zip（服务模式 + IIS/小皮适配）
+.\deploy\package.ps1 -WithWebBuild            # 本机有 Frontend 源码时：先 pnpm build 再打包
 ```
 
 产出（位于 `dist/`）：
 
 ```
-gowaf-deploy-<版本>-linux-amd64.tar.gz
-gowaf-deploy-<版本>-linux-amd64.tar.gz.sha256
+gowaf-deploy-<版本>-linux-amd64.tar.gz / .sha256
+gowaf-deploy-<版本>-windows-amd64.zip / .zip.sha256
 ```
 
-包内容：`gowaf-linux-amd64` + `install.sh` + `rules/builtin.yaml`。
+包内容：二进制 + 部署脚本 + `rules/builtin.yaml`。
+
+## 多面板 / 多引擎部署
+
+GoWAF 是**引擎无关**的：数据面对后端是 Apache 还是 Nginx 完全无感，部署脚本自动探测面板与引擎并做端口接管（`deploy/install.sh` 适配器架构，详见 [docs/panel-adaptation-assessment.md](docs/panel-adaptation-assessment.md)）。
+
+| 环境 | 接管方式 | 说明 |
+|---|---|---|
+| 宝塔/小皮 Linux + Apache | vhost 端口改写 + mod_remoteip | 原 Apache 链路，实战最多 |
+| 宝塔/小皮 Linux + Nginx | server 块级 listen 改写 + realip | 自动处理 default_server 冲突、强制 HTTPS 301 死循环 |
+| 1Panel + OpenResty (Docker) | compose 端口重映射 `80:80 → 8080:80` | 容器内配置零侵入，升级不回退 |
+| 原生 systemd Nginx/Apache | 常规接管 | 无面板环境 |
+| 小皮 Windows / IIS | `install.ps1`（见下） | Windows 服务模式 |
+
+```bash
+# Linux（服务器上）
+bash install.sh install                       # 自动探测面板与引擎
+bash install.sh install --engine nginx        # 同机双引擎时显式指定
+bash install.sh doctor                        # 只读体检：面板/引擎/站点/证书/端口
+```
+
+Windows（管理员 PowerShell）：
+
+```powershell
+.\install.ps1 doctor       # 探测 IIS / 小皮 Apache / 小皮 Nginx、站点清单、端口
+.\install.ps1 install      # 备份 → 引擎让出 80/443 → gowaf svc 开机自启 → 防火墙
+.\install.ps1 rollback     # 一键还原，流量回到引擎直连
+```
+
+Windows 说明：服务模式用 `gowaf svc install|start|stop|uninstall` 实现（单二进制，无 NSSM 依赖）；IIS 走 appcmd 改 `applicationHost.config` 绑定（https 绑定转 http，TLS 由 WAF 终止）；已知降级——IIS 后端应用看到的客户端 IP 是 127.0.0.1（IIS 无 realip 模块），WAF 侧限流/封禁不受影响。
 
 ### 方式二：Makefile 手动打包
 

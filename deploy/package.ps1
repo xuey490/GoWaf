@@ -1,26 +1,32 @@
 ﻿<#
 .SYNOPSIS
-    GoWAF Windows 打包脚本 —— 交叉编译 Linux 二进制并打成可直接上传的 tar.gz。
+    GoWAF 打包脚本 —— 交叉编译二进制并打成可直接上传的部署包。
 
 .DESCRIPTION
     做四件事：
       1. 准备前端产物：默认直接使用仓库自带的 internal/web/dist（go:embed 需要它存在）。
          仅当本机存在 Frontend 源码且显式加 -WithWebBuild 时才重新构建并同步。
-      2. CGO_ENABLED=0 交叉编译 linux/amd64 或 arm64
-      3. 把 二进制 + install.sh + builtin.yaml 组装成一个部署目录
-      4. 打成 tar.gz + 生成 SHA256，并打印上传命令
+      2. CGO_ENABLED=0 交叉编译（-Platform linux → linux/amd64|arm64 tar.gz；
+         -Platform windows → windows/amd64 zip）
+      3. 把 二进制 + 部署脚本 + builtin.yaml 组装成一个部署目录
+      4. 打包 + 生成 SHA256，并打印上传/部署命令
 
     注意：本项目没有 git 仓库时版本号取时间戳，不会失败。
 
 .EXAMPLE
-    .\deploy\package.ps1
+    .\deploy\package.ps1                          # linux/amd64 tar.gz
     .\deploy\package.ps1 -Arch arm64
-    .\deploy\package.ps1 -WithWebBuild          # 本机有 Frontend 源码时，先 pnpm build 再打包
+    .\deploy\package.ps1 -Platform windows        # windows/amd64 zip（服务模式 + IIS/小皮适配）
+    .\deploy\package.ps1 -WithWebBuild            # 本机有 Frontend 源码时，先 pnpm build 再打包
 #>
 [CmdletBinding()]
 param(
     [ValidateSet('amd64', 'arm64')]
     [string]$Arch = 'amd64',
+
+    # 目标平台：linux（默认，tar.gz + install.sh）或 windows（zip + install.ps1 + gowaf svc 服务模式）
+    [ValidateSet('linux', 'windows')]
+    [string]$Platform = 'linux',
 
     # 重新构建前端（pnpm install + build），仅在本机有 Frontend 源码时可用
     [switch]$WithWebBuild
@@ -103,7 +109,7 @@ else {
 
 # ---------------------------------------------------------------- 3. 交叉编译
 
-Write-Step "交叉编译 linux/$Arch"
+Write-Step "交叉编译 $Platform/$Arch"
 
 $ver = 'dev-' + (Get-Date -Format 'yyyyMMdd-HHmm')
 $builtAt = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
@@ -111,7 +117,11 @@ $ldflags = "-s -w -X main.version=$ver -X main.buildTime=$builtAt"
 
 $outDir = Join-Path $root 'dist'
 New-Item -ItemType Directory -Path $outDir -Force | Out-Null
-$exeName = "gowaf-linux-$Arch"
+if ($Platform -eq 'windows') {
+    $exeName = "gowaf-windows-amd64.exe"
+} else {
+    $exeName = "gowaf-linux-$Arch"
+}
 $exePath = Join-Path $outDir $exeName
 
 $oldCgo = $env:CGO_ENABLED
@@ -119,8 +129,8 @@ $oldOs = $env:GOOS
 $oldArch = $env:GOARCH
 try {
     $env:CGO_ENABLED = '0'
-    $env:GOOS = 'linux'
-    $env:GOARCH = $Arch
+    $env:GOOS = $Platform
+    if ($Platform -eq 'windows') { $env:GOARCH = 'amd64' } else { $env:GOARCH = $Arch }
 
     Push-Location $root
     try {
@@ -142,17 +152,48 @@ Write-Ok "$exeName  $sizeMb MB  ($ver)"
 
 Write-Step '组装部署包'
 
-$stageName = "gowaf-deploy-$ver-linux-$Arch"
+$stageName = "gowaf-deploy-$ver-$Platform-$($env:GOARCH)"
 $stage = Join-Path $outDir $stageName
 if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
 New-Item -ItemType Directory -Path $stage -Force | Out-Null
 
 Copy-Item $exePath (Join-Path $stage $exeName) -Force
-Copy-Item (Join-Path $root 'deploy\install.sh') $stage -Force
 Copy-Item (Join-Path $root 'rules\builtin.yaml') $stage -Force
+
+if ($Platform -eq 'windows') {
+    Copy-Item (Join-Path $root 'deploy\install.ps1') $stage -Force
+} else {
+    Copy-Item (Join-Path $root 'deploy\install.sh') $stage -Force
+}
 
 $ruleCount = (Select-String -Path (Join-Path $root 'rules\builtin.yaml') -Pattern '^- id:' -AllMatches).Count
 
+if ($Platform -eq 'windows') {
+$readme = @"
+GoWAF 部署包  $ver  (windows/amd64)
+================================================================
+
+包含：gowaf-windows-amd64.exe / install.ps1 / builtin.yaml（规则 $ruleCount 条）
+
+────────────────────────────────────────────────────────────────
+部署（管理员 PowerShell）
+────────────────────────────────────────────────────────────────
+  解压本目录到服务器（如 C:\gowaf-deploy），然后：
+
+  cd C:\gowaf-deploy
+  .\install.ps1 doctor        # 只读体检：探测 IIS / 小皮 Apache / Nginx、站点清单、端口
+  .\install.ps1 install       # 备份 → 引擎让出 80/443 → gowaf svc 注册开机自启 → 防火墙放行
+  .\install.ps1 rollback      # 一键还原引擎配置，流量回到引擎直连
+  .\install.ps1 uninstall     # 停服 + 卸载服务 + 还原
+
+说明：
+  · Windows 服务模式用 gowaf svc 实现（单二进制，无 NSSM 依赖）
+  · IIS 走 appcmd 改 applicationHost.config 绑定（https 绑定转 http，TLS 由 WAF 终止）
+  · 小皮 Windows 版自动探测 phpstudy_pro\Extensions\Apache*\conf\vhosts 或 Nginx*\conf\vhosts
+  · 已知降级：IIS 后端应用看到的客户端 IP 是 127.0.0.1（IIS 无 realip 模块）；
+    WAF 本身的限流/封禁不受影响。控制台 http://127.0.0.1:8899
+"@
+} else {
 $readme = @"
 GoWAF 部署包  $ver  (linux/$Arch)
 ================================================================
@@ -213,6 +254,7 @@ install.sh 会先打印要做的改动并等你确认。
 注意：install.sh 会修改 Apache 的 Listen 端口与 vhost。
       改动前自动备份到 /www/server/gowaf/backup/。
 "@
+}
 $readmePath = Join-Path $stage 'README.txt'
 [System.IO.File]::WriteAllText($readmePath, $readme, (New-Object System.Text.UTF8Encoding($false)))
 
@@ -220,17 +262,29 @@ Write-Ok "已组装 $stageName （含 README.txt）"
 
 # ---------------------------------------------------------------- 5. 打包
 
-Write-Step '打包 tar.gz'
+if ($Platform -eq 'windows') {
+    Write-Step '打包 zip'
 
-$tarPath = Join-Path $outDir "$stageName.tar.gz"
-if (Test-Path $tarPath) { Remove-Item $tarPath -Force }
+    $tarPath = Join-Path $outDir "$stageName.zip"
+    if (Test-Path $tarPath) { Remove-Item $tarPath -Force }
+    Compress-Archive -Path "$stage\*" -DestinationPath $tarPath -Force
 
-# 包内保留一层目录，解压后不会散落在当前目录
-& $tarCmd.Source -czf $tarPath -C $outDir $stageName
-if ($LASTEXITCODE -ne 0) { throw "tar 打包失败" }
+    $tarMb = [math]::Round((Get-Item $tarPath).Length / 1MB, 1)
+    Write-Ok "$stageName.zip  $tarMb MB"
+}
+else {
+    Write-Step '打包 tar.gz'
 
-$tarMb = [math]::Round((Get-Item $tarPath).Length / 1MB, 1)
-Write-Ok "$stageName.tar.gz  $tarMb MB"
+    $tarPath = Join-Path $outDir "$stageName.tar.gz"
+    if (Test-Path $tarPath) { Remove-Item $tarPath -Force }
+
+    # 包内保留一层目录，解压后不会散落在当前目录
+    & $tarCmd.Source -czf $tarPath -C $outDir $stageName
+    if ($LASTEXITCODE -ne 0) { throw "tar 打包失败" }
+
+    $tarMb = [math]::Round((Get-Item $tarPath).Length / 1MB, 1)
+    Write-Ok "$stageName.tar.gz  $tarMb MB"
+}
 
 # ---------------------------------------------------------------- 6. 校验值
 
@@ -249,6 +303,18 @@ Write-Host " 文件   $tarPath"
 Write-Host " 大小   $tarMb MB"
 Write-Host " 规则   $ruleCount 条"
 Write-Host ""
+
+if ($Platform -eq 'windows') {
+    Write-Host " Windows 部署（目标机需管理员 PowerShell）：" -ForegroundColor Cyan
+    Write-Host "    解压 $stageName.zip 到任意目录"
+    Write-Host "    .\install.ps1 doctor      # 只读体检"
+    Write-Host "    .\install.ps1 install     # 备份→引擎让出80/443→gowaf svc 安装→防火墙"
+    Write-Host ""
+    Write-Host " 控制台：http://127.0.0.1:8899" -ForegroundColor Cyan
+    Write-Host ""
+    exit 0
+}
+
 Write-Host " 1) 上传到服务器：" -ForegroundColor Cyan
 Write-Host "    scp `"$tarPath`" root@<服务器IP>:/tmp/"
 Write-Host ""
