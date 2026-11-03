@@ -1,1 +1,0 @@
-import{I as e,at as t,t as n,tt as r}from"./user-ZPntuAC8.js";var i=()=>{let i=r(),{isFrontendMode:a}=e(),{info:o}=t(n()),s=Array.isArray(i.meta.authList)?i.meta.authList:[];return{hasAuth:e=>a.value?(o.value?.buttons??[]).includes(e):s.some(t=>t?.authMark===e)}};export{i as t};
