@@ -26,6 +26,7 @@ GoWAF 检测，干净的请求原样转发给后端，恶意请求在到达业�
 - [反复安装 / 回滚 / 彻底卸载](#反复安装--回滚--彻底卸载)
 - [控制台临时对外开放](#控制台临时对外开放)
 - [命令速查](#命令速查)
+- [本地开发与调试](#本地开发与调试)
 - [项目结构](#项目结构)
 - [关键技术细节](#关键技术细节)
 - [系统亮点](#系统亮点)
@@ -359,6 +360,86 @@ Apache 重新接管 80/443），然后再清理：
 | `install.sh doctor` | 只读体检，不改任何东西 |
 
 安装后可用短命令 `gowaf` 代替 `install.sh`（软链到 `/usr/local/bin/gowaf`）。
+
+---
+
+## 本地开发与调试
+
+### 启动
+
+```bash
+# 一键启动（读 configs/config.yaml，数据/控制台按 dev 配置监听回环）
+make run
+# 或者直接
+go run ./cmd/gowaf -c configs/config.yaml
+
+# 只校验配置，不启动（改完配置先验一把）
+go run ./cmd/gowaf -c configs/config.yaml -t
+
+# 打印版本
+go run ./cmd/gowaf -v
+```
+
+本地默认监听（见 `configs/config.yaml`）：
+
+| 地址 | 用途 |
+|---|---|
+| `http://127.0.0.1:8899` | 控制台（管理面） |
+| `http://127.0.0.1:8089` | 数据面，**用 Host 头模拟不同站点**（dev 配置的站点是 `localhost` / `127.0.0.1` / `demo.local`） |
+
+**首次启动**会自动创建管理员 `admin`，随机 16 位密码写入 `data/initial-password.txt`
+（`data/` 不入库，删掉它重启即可重新生成）。
+
+### 模拟流量验证 WAF
+
+```bash
+# 正常请求（engine.mode: protect 时干净流量应 200）
+curl -s -o /dev/null -w "%{http_code}\n" -H "Host: demo.local" http://127.0.0.1:8089/
+
+# SQL 注入 payload → 应返回 403，事件进控制台
+curl -s -o /dev/null -w "%{http_code}\n" -H "Host: demo.local" "http://127.0.0.1:8089/?id=1+union+select+1,2,3"
+
+# XSS payload
+curl -s -o /dev/null -w "%{http_code}\n" -H "Host: demo.local" "http://127.0.0.1:8089/?q=%3Cscript%3Ealert(1)%3C/script%3E"
+
+# 敏感文件探测
+curl -s -o /dev/null -w "%{http_code}\n" -H "Host: demo.local" http://127.0.0.1:8089/.git/config
+```
+
+返回码含义：`200` 放行、`403` 拦截、`429` 限流。控制台「攻击事件」页可看
+每条命中的规则、评分与来源；日志在 `logs/waf.log`。
+
+> 注意两点：① 检测模式以**数据库/控制台**设置为准（配置文件里的 `engine.mode`
+> 只在首次建库时生效），如果 payload 返回 200，先到控制台确认当前是不是
+> observe 观察模式；② 启动报「端口被占用」说明 8089/8899 已被别的进程监听，
+> `netstat -ano | findstr 8089` 找到 PID 换端口即可。
+
+### 测试与代码检查
+
+```bash
+make test   # go test ./...
+make vet    # go vet ./...
+make fmt    # gofmt
+```
+
+### 断点调试（Delve）
+
+```bash
+dlv debug ./cmd/gowaf -- -c configs/config.yaml
+# 常用断点位置：
+#   internal/edge/edge.go        请求处理流水线（检测/限流决策）
+#   internal/detect/rules.go     规则匹配与评分
+#   internal/proxy/router.go     站点路由匹配
+```
+
+### 前端联调（需 Frontend 源码，不在本仓库）
+
+```bash
+cd Frontend && pnpm dev     # Vite dev server，默认 http://127.0.0.1:3006
+# configs/config.yaml 的 admin.cors.allow_origins 已放行 3006，
+# 前端把 API 代理到 127.0.0.1:8899 即可热更新调试；改完 pnpm build
+# 并执行 make sync-web 把产物同步回 internal/web/dist 再提交
+```
 
 ---
 
