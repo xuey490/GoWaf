@@ -1,0 +1,122 @@
+# Go-WAF 配置示例（生产模板）
+#
+# 校验规则在启动时执行，任何一条不通过都会拒绝启动：
+#   - 端口不重复、不为 0
+#   - 上游必须是 http(s)://host:port，且不能指向控制面 8899
+#   - block_score > challenge_score > 0
+#   - 管理端口不在回环时必须显式 i_know_what_i_am_doing: true
+#   - demo 库路径不能与主库相同
+
+server:
+  listen: "0.0.0.0:80"            # 阶段二：WAF 接管 80
+  tls_listen: "0.0.0.0:443"       # 阶段二：WAF 接管 443
+  admin_listen: "127.0.0.1:8899"  # 控制面，默认只回环
+  read_header_timeout: 5s
+  read_timeout: 30s
+  write_timeout: 0s               # 0 = 不限制，SSE/大文件需要
+  idle_timeout: 90s
+  max_header_bytes: 32768
+  shutdown_timeout: 15s
+  trusted_proxies:                # 只有这些来源的 XFF 才会被采信
+    - "127.0.0.1/32"
+    - "::1/128"
+
+tls:
+  enabled: true
+  cert_dir: "/www/server/panel/vhost/cert"   # 宝塔证书目录：<domain>/fullchain.pem + privkey.pem
+  default_cert: "www.example.com"
+  min_version: "1.2"
+  hsts: true
+  # 也可显式指定：
+  # certs:
+  #   - cert: /etc/gowaf/certs/www.example.com/fullchain.pem
+  #     key:  /etc/gowaf/certs/www.example.com/privkey.pem
+
+storage:
+  dsn: "/www/server/gowaf/data/waf.db"
+  retain_days: 30
+  archive_dir: "/www/server/gowaf/data/archive"
+  archive_days: 180
+  sample_rate: 0.01               # 正常请求采样 1%，拦截全量记录
+
+# 首次启动写入的站点，之后以控制台/数据库为准
+sites:
+  - name: "官网"
+    hosts: ["www.example.com", "example.com"]
+    upstream: "http://127.0.0.1:8080"
+    behind_cdn: "cloudflare"      # 开了小橙云就填 cloudflare，直连留空
+  - name: "商城"
+    hosts: ["shop.example.com"]
+    upstream: "http://127.0.0.1:8080"
+    # behind_cdn 留空 = 直连。只用于风险自检：
+    # 填了 cloudflare 但 server.trusted_proxies 里没有 CF 回源网段时，
+    # 启动日志和控制台首页都会告警（此时真实 IP 会退化成 CF 节点 IP，误封一大片）。
+
+engine:
+  mode: "observe"                 # observe：只记录不拦截，上线先跑 3~7 天
+  block_score: 60
+  challenge_score: 30
+  max_body_inspect: 262144        # 256KB，超过不检查 body
+  max_targets: 64
+  regex_timeout_ms: 50
+  rules_file: "rules/builtin.yaml"
+
+guard:
+  global_rps: 0                   # 0 = 不限
+  ip_rps: 30
+  ip_burst: 60
+  ip_per_minute: 600
+  challenge_per_minute: 300
+  ban_per_minute: 600
+  ban_1h_per_minute: 1200
+  ban_ttl: 1h                 # 单次封禁时长
+  ban_max_ttl: 24h            # 时长上限（防止配置写飞）
+  ban_window: 10m             # 统计窗口
+  ban_threshold: 5            # 窗口内命中多少次触发
+  ban_max_strikes: 3          # 连续第几次触发升级为永久，0 = 永不
+  ban_strike_reset: 24h       # 这么久没新命中，连击数清零
+  auto_ban: true
+  whitelist_static: true
+
+admin:
+  allowed_ips: ["127.0.0.1/32"]   # 空数组 = 不限制（仍建议前面挡防火墙）
+  jwt_secret_file: "/www/server/gowaf/data/jwt.key"
+  access_ttl: 2h
+  refresh_ttl: 168h
+  login_max_fail: 5
+  login_lock: 15m
+  cookie_secure: true             # HTTPS 部署后必须 true
+  cookie_domain: ""
+  cors:
+    enabled: true
+    allow_origins: []             # 生产同源，留空即可
+    allow_methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    allow_headers: ["Authorization", "Content-Type", "X-CSRF-Token", "X-Request-ID"]
+    expose_headers: ["X-Request-ID", "X-CSRF-Token"]
+    allow_credentials: true
+    max_age: 12h
+  csrf:
+    enabled: true
+    header: "X-CSRF-Token"
+    cookie_name: "waf_csrf"
+
+demo:
+  enabled: false                  # 演示部署时改 true
+  db_path: "/www/server/gowaf/data/demo.db"
+  username: "demo"
+  password: "demo123"
+  read_only: true
+  mask_ips: true
+  reset_cron: "0 4 * * *"
+  banner: "演示环境：数据为模拟数据，修改操作已禁用"
+
+alert:
+  webhook: ""                     # 企业微信/钉钉机器人地址
+  block_threshold: 500
+  window: 5m
+
+log:
+  level: "info"
+  file: "/www/server/gowaf/logs/waf.log"
+  max_size_mb: 100
+  max_backups: 7

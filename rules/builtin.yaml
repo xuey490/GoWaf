@@ -1,0 +1,570 @@
+# 内置规则库（参考 OWASP CRS 的检测思路，转成本项目的 YAML 格式）
+#
+# 字段说明：
+#   id        唯一标识，建议 "类别-特征" 命名
+#   category  用于面板分类统计：sqli/xss/traversal/rce/scanner/sensitive_file/upload/protocol
+#   score     命中加分，累计 >= block_score 拦截，>= challenge_score 人机校验
+#   targets   检测目标：path/query/body/header/cookie/ua
+#   keywords  AC 预筛关键词（必须能在归一化后的文本里出现，否则规则永不命中）
+#   pattern   RE2 正则，自动加 (?i)；不写则纯关键词匹配
+#
+# 重要：keywords 是性能闸门，写不准会导致规则形同虚设。
+# 例如 SQLi 规则如果关键词写 "union select"（带空格），而 payload 是 union%0aselect，
+# 归一化后变成 "union select" 才命中；但 "union(select" 就漏了。所以关键词要取最短特征词。
+
+# ===== SQL 注入 =====
+- id: sqli-union
+  name: SQL 注入 - UNION 查询
+  category: sqli
+  score: 60
+  targets: [query, body, path]
+  keywords: ["union"]
+  pattern: '\bunion\b[\s\S]{0,25}\bselect\b'
+  action: block
+  priority: 100
+  remark: 覆盖 union select / union all select / union(select)
+
+- id: sqli-boolean
+  name: SQL 注入 - 布尔盲注
+  category: sqli
+  score: 50
+  targets: [query, body]
+  keywords: ["and", "or"]
+  pattern: '\b(and|or)\b\s*[\d''"]+\s*(=|like|>|<)\s*[\d''"]+'
+  action: block
+  priority: 100
+  remark: 覆盖 and 1=1 / or 'a'='a'
+
+- id: sqli-sleep
+  name: SQL 注入 - 时间盲注
+  category: sqli
+  score: 70
+  targets: [query, body]
+  keywords: ["sleep", "benchmark", "pg_sleep", "waitfor"]
+  pattern: '\b(sleep|benchmark|pg_sleep|waitfor\s+delay)\b\s*\('
+  action: block
+  priority: 90
+  remark: sqlmap 默认 payload
+
+- id: sqli-stacked
+  name: SQL 注入 - 堆叠查询
+  category: sqli
+  score: 45
+  targets: [query, body]
+  keywords: [";"]
+  pattern: ';\s*(select|insert|update|delete|drop|alter|create|truncate)\b'
+  action: block
+  priority: 110
+  remark: 分号后接 DML/DDL
+
+- id: sqli-file
+  name: SQL 注入 - 文件读写
+  category: sqli
+  score: 70
+  targets: [query, body]
+  keywords: ["load_file", "outfile", "dumpfile"]
+  pattern: '\b(load_file|into\s+(out|dump)file)\b'
+  action: block
+  priority: 90
+  remark: 读文件/写 webshell
+
+- id: sqli-info
+  name: SQL 注入 - 元数据探测
+  category: sqli
+  score: 40
+  targets: [query, body]
+  keywords: ["information_schema", "sys.tables", "pg_catalog"]
+  pattern: '\b(information_schema|pg_catalog|sys\.(tables|columns))\b'
+  action: block
+  priority: 120
+  remark: 拖库前的探测
+
+# ===== XSS =====
+- id: xss-script
+  name: XSS - script 标签
+  category: xss
+  score: 55
+  targets: [query, body]
+  keywords: ["<script", "</script"]
+  pattern: '<\s*/?\s*script'
+  action: block
+  priority: 100
+  remark: 最基础的 XSS
+
+- id: xss-event
+  name: XSS - 事件处理器
+  category: xss
+  score: 35
+  targets: [query, body]
+  keywords: ["onerror", "onload", "onmouseover", "onclick", "onfocus", "onpointerover"]
+  pattern: '\bon(error|load|mouseover|click|focus|pointerover|animationstart)\s*='
+  action: block
+  priority: 110
+  remark: 图片/标签事件注入
+
+- id: xss-js-uri
+  name: XSS - javascript 伪协议
+  category: xss
+  score: 45
+  targets: [query, body]
+  keywords: ["javascript:", "vbscript:", "data:text/html"]
+  pattern: '(javascript|vbscript)\s*:|data\s*:\s*text/html'
+  action: block
+  priority: 100
+  remark: href/src 注入
+
+- id: xss-dangerous-func
+  name: XSS - 危险函数
+  category: xss
+  score: 40
+  targets: [query, body]
+  keywords: ["eval(", "document.cookie", "document.write", "innerhtml"]
+  pattern: '(\beval\s*\(|document\.(cookie|write|domain)|\.innerhtml\s*=)'
+  action: block
+  priority: 120
+  remark: 窃取 Cookie / DOM 写入
+
+- id: xss-iframe-svg
+  name: XSS - iframe/svg 注入
+  category: xss
+  score: 35
+  targets: [query, body]
+  keywords: ["<iframe", "<svg", "<object", "<embed"]
+  pattern: '<\s*(iframe|svg|object|embed)\b'
+  action: block
+  priority: 130
+  remark: 常用于绕过 script 过滤
+
+# ===== 路径穿越 / 文件包含 =====
+- id: traversal-dotdot
+  name: 路径穿越
+  category: traversal
+  score: 60
+  targets: [path, query, body]
+  keywords: ["../", "..\\"]
+  pattern: '(\.\.[/\\]){1,}'
+  action: block
+  priority: 90
+  remark: ../ 与 ..\ 两种分隔符
+
+- id: traversal-encoded
+  name: 路径穿越 - 编码形式
+  category: traversal
+  score: 60
+  targets: [path, query]
+  keywords: ["%2e%2e", "%252e"]
+  pattern: '%(25)?2e%(25)?2e(%25)?(2f|5c)'
+  action: block
+  priority: 90
+  remark: 双重编码绕过
+
+- id: lfi-etc-passwd
+  name: 文件包含 - 系统文件
+  category: traversal
+  score: 65
+  targets: [path, query, body]
+  keywords: ["/etc/passwd", "/etc/shadow", "c:\\windows"]
+  pattern: '(/etc/(passwd|shadow|hosts)|c:\\+windows)'
+  action: block
+  priority: 80
+  remark: LFI 探测
+
+- id: lfi-proc-self
+  name: 文件包含 - /proc 进程信息
+  category: traversal
+  score: 70
+  targets: [path, query, body]
+  keywords: ["/proc/self/", "/proc/1/", "/proc/0/"]
+  pattern: '/proc/(self|\d{1,5})/(environ|cmdline|fd/|maps|status|root/)'
+  action: block
+  priority: 75
+  remark: 读 environ 可直接拿到数据库口令等环境变量；日志中配合 ../ 与 .%2e 穿越反复探测
+
+- id: lfi-php-filter
+  name: 文件包含 - PHP 伪协议
+  category: traversal
+  score: 60
+  targets: [query, body]
+  keywords: ["php://", "file://", "phar://", "data://"]
+  pattern: '(php|phar|file|data|zip)\s*://'
+  action: block
+  priority: 90
+  remark: 配合 include 拿 shell
+
+# ===== 命令注入 / RCE =====
+- id: rce-shell-meta
+  name: 命令注入 - 管道与反引号
+  category: rce
+  score: 65
+  targets: [query, body]
+  keywords: ['`', '|', '&&', ';']
+  pattern: '(`[^`]+`|\|\s*(id|whoami|uname|cat|ls|curl|wget)\b|&&\s*(id|whoami|cat)\b)'
+  action: block
+  priority: 100
+  remark: 反引号与管道执行
+
+- id: rce-php-func
+  name: RCE - PHP 危险函数
+  category: rce
+  score: 65
+  targets: [query, body]
+  keywords: ["system(", "exec(", "shell_exec", "passthru", "popen", "proc_open"]
+  pattern: '\b(system|exec|shell_exec|passthru|popen|proc_open|assert)\s*\('
+  action: block
+  priority: 90
+  remark: 一句话木马常见形态
+
+- id: rce-thinkphp
+  name: RCE - ThinkPHP 5.x 漏洞
+  category: rce
+  score: 70
+  targets: [path, query]
+  keywords: ["invokefunction", "think\\app", "call_user_func"]
+  pattern: '(invokefunction|think\\\\app|call_user_func(_array)?)'
+  action: block
+  priority: 60
+  remark: 历史高危漏洞特征
+
+- id: rce-log4j
+  name: RCE - Log4j2 JNDI
+  category: rce
+  score: 70
+  targets: [header, ua, query, body]
+  keywords: ["jndi:", "ldap://", "rmi://"]
+  pattern: '\$\{\s*jndi\s*:\s*(ldap|rmi|dns|http)'
+  action: block
+  priority: 60
+  remark: CVE-2021-44228
+
+- id: rce-freemarker
+  name: RCE - 模板注入
+  category: rce
+  score: 55
+  targets: [query, body]
+  keywords: ['freemarker.template', '${', 'getclass()']
+  pattern: '(\$\{[^}]*getclass\(\)|freemarker\.template\.utility)'
+  action: block
+  priority: 100
+  remark: SSTI 探测
+
+# ===== 扫描器与敏感文件 =====
+- id: scanner-ua
+  name: 扫描器 UA 指纹
+  category: scanner
+  score: 62
+  targets: [ua]
+  keywords: ["sqlmap", "nikto", "nmap", "masscan", "acunetix", "awvs", "appscan", "nessus",
+             "zgrab", "wpscan", "dirbuster", "gobuster", "xray", "nuclei", "censysinspect",
+             "infrawatch", "libredtail", "harvest/1.0", "nmap-http-info", "shodan", "zmap",
+             "binaryedge", "internetmeasurement", "expanse"]
+  pattern: '(sqlmap|nikto|nmap|masscan|acunetix|awvs|appscan|nessus|zgrab|wpscan|dirbuster|gobuster|xray|nuclei|censysinspect|infrawatch|libredtail|harvest/1\.0|nmap-http-info|shodan|zmap|binaryedge|internetmeasurement|expanse)'
+  action: block
+  priority: 50
+  remark: 常见扫描工具；UA 命中即确认为自动化扫描，无需再叠加其他规则
+
+- id: sensitive-env
+  name: 敏感文件 - .env
+  category: sensitive_file
+  score: 60
+  targets: [path]
+  keywords: [".env"]
+  pattern: '/\.env(\.|$|/)|^/\.env'
+  action: block
+  priority: 60
+  remark: 泄露数据库口令
+
+- id: sensitive-env-variant
+  name: 敏感文件 - env 变体文件名
+  category: sensitive_file
+  score: 60
+  targets: [path]
+  keywords: [".env"]
+  pattern: '/[\w.-]+\.env([./]|$)'
+  action: block
+  priority: 61
+  remark: 前缀带名字的 env 文件（Laravel/Symfony/邮件服务）。日志中 /secrets.env、/sendgrid.env、/config.env 被反复探测，且都不含 "/.env" 段，原 .env 规则匹配不到
+
+- id: sensitive-git
+  name: 敏感文件 - VCS 目录泄露
+  category: sensitive_file
+  score: 60
+  targets: [path]
+  keywords: [".git", ".svn", ".hg/"]
+  pattern: '/(\.git|\.svn|\.hg)(/|$)|/\.gitconfig'
+  action: block
+  priority: 60
+  remark: 源码泄露；.svn 与 .hg 同属版本库目录，Apache 日志中 /.svn 与 /.git 成对出现
+
+- id: sensitive-backup
+  name: 敏感文件 - 备份与配置
+  category: sensitive_file
+  score: 60
+  targets: [path]
+  keywords: [".bak", ".sql", ".zip", ".tar.gz", ".swp"]
+  pattern: '\.(bak|sql|zip|tar\.gz|tgz|swp|old|orig)(\?|$)'
+  action: block
+  priority: 100
+  remark: 源码/数据库备份
+
+- id: sensitive-admin-path
+  name: 扫描 - 后台路径探测
+  category: scanner
+  score: 50
+  targets: [path]
+  keywords: ["/wp-admin", "/wp-login", "/phpmyadmin", "/adminer", "/manager/html", "/solr/"]
+  pattern: '/(wp-(admin|login)|phpmyadmin|adminer\.php|manager/html|solr/)'
+  action: block
+  priority: 90
+  remark: 批量扫描器高频路径
+
+- id: sensitive-config
+  name: 敏感文件 - 配置文件
+  category: sensitive_file
+  score: 60
+  targets: [path]
+  keywords: ["/config.php", "/web.config", "/.htpasswd", "/database.yml"]
+  pattern: '/(config\.(php|json|ya?ml)|web\.config|\.htpasswd|database\.ya?ml)'
+  action: block
+  priority: 100
+  remark: 配置泄露
+
+# ===== 上传与协议 =====
+- id: upload-php
+  name: 上传 - 可执行脚本
+  category: upload
+  score: 65
+  targets: [body]
+  keywords: ["filename=", ".php", ".jsp", ".asp", "content-disposition"]
+  pattern: 'filename\s*=\s*"?[^";]*\.(php\d?|phtml|phar|jspx?|aspx?|ashx|cer)"?'
+  action: block
+  priority: 85
+  remark: 只匹配 multipart 上传文件名。不能把 path 放进 targets——否则 /index.php 这类正常页面会被整站拦死（实测 403）
+
+- id: upload-shell-path
+  name: 扫描 - 上传目录下的脚本
+  category: upload
+  score: 70
+  targets: [path]
+  keywords: ["/upload", "/attachment", "/files/", "/tmp/"]
+  pattern: '/(uploads?|uploadfiles?|files|attachments?|tmp|temp|images?|assets/uploads?)/([\w.-]+/)*[\w.-]+\.(php\d?|phtml|phar|jspx?|aspx?|ashx|cer|exe)$'
+  action: block
+  priority: 80
+  remark: 上传目录内出现可执行脚本，说明 webshell 已落地或正在验证上传结果
+
+- id: upload-traversal-name
+  name: 上传 - 文件名穿越
+  category: upload
+  score: 45
+  targets: [body]
+  keywords: ["filename"]
+  pattern: 'filename\s*=\s*"[^"]*(\.\.[/\\]|/)'
+  action: block
+  priority: 110
+  remark: multipart 文件名注入
+
+- id: protocol-host-injection
+  name: 协议异常 - Host 头注入
+  category: protocol
+  score: 40
+  targets: [header]
+  keywords: ['host:']
+  pattern: 'host:\s*[^\s]*(%0d|%0a|\r|\n)'
+  action: block
+  priority: 110
+  remark: 缓存投毒/密码重置劫持
+
+- id: protocol-crlf
+  name: 协议异常 - CRLF 注入
+  category: protocol
+  score: 35
+  targets: [query, body]
+  keywords: ['%0d%0a', '%0a', '%0d']
+  pattern: '%0(d|a)(%0(d|a))?'
+  action: block
+  priority: 120
+  remark: 响应拆分
+
+# ===== 凭据与配置泄露（来源：真实访问日志中高频探测）=====
+# 说明：这些路径不是猜的，全部来自 2026-11-01~02 的真实扫描流量。
+
+- id: sensitive-cloud-cred
+  name: 敏感文件 - 云厂商凭据
+  category: sensitive_file
+  score: 70
+  targets: [path]
+  keywords: ["/.aws/", "/.kube/", "/.docker/", ".s3cfg", ".boto", "azureauth"]
+  pattern: '/(\.aws/(credentials|config)|\.kube/config|\.docker/(config\.json|env)|\.s3cfg|\.boto|azureauth\.json)$'
+  action: block
+  priority: 55
+  remark: AWS/GCP/Azure/K8s/Docker 凭据文件，命中即高危
+
+- id: sensitive-ssh-key
+  name: 敏感文件 - SSH 私钥
+  category: sensitive_file
+  score: 75
+  targets: [path]
+  keywords: ["/.ssh/", "id_rsa", "id_dsa", "id_ed25519"]
+  pattern: '/\.ssh/|/(id_(rsa|dsa|ed25519)(\.pub)?)$'
+  action: block
+  priority: 50
+  remark: 日志中 /id_rsa 与 /.ssh/id_rsa 被反复探测
+
+- id: sensitive-vcs-ci
+  name: 敏感文件 - VCS 与 CI 配置
+  category: sensitive_file
+  score: 60
+  targets: [path]
+  keywords: [".git-credentials", ".gitmodules", ".gitlab-ci", ".github/workflows"]
+  pattern: '/(\.git-credentials|\.gitmodules|\.gitlab-ci\.ya?ml|\.github/workflows/)'
+  action: block
+  priority: 60
+  remark: .git-credentials 明文存 Git 口令
+
+- id: sensitive-netrc
+  name: 敏感文件 - npm/netrc 凭据
+  category: sensitive_file
+  score: 60
+  targets: [path]
+  keywords: ["/.npmrc", "/.netrc"]
+  pattern: '/(\.npmrc|\.netrc)$'
+  action: block
+  priority: 60
+  remark: 私有源 token / FTP、SMTP 口令
+
+- id: sensitive-ai-agent
+  name: 敏感文件 - AI 编码助手配置
+  category: sensitive_file
+  score: 60
+  targets: [path]
+  keywords: ["/.claude/", "/.cursor/", "/.continue/", "/.aider"]
+  pattern: '/(\.claude/(settings|settings\.local)\.json|\.cursor/mcp\.json|\.continue/config\.json|\.aider\.conf\.ya?ml)'
+  action: block
+  priority: 60
+  remark: 新型目标：MCP 配置里常带 API Key / 内网地址
+
+- id: sensitive-app-config
+  name: 敏感文件 - 应用运行时配置
+  category: sensitive_file
+  score: 60
+  targets: [path]
+  keywords: ["appsettings", "credentials", "secrets.json", "auth.json", "sentry.properties", "parameters.yml"]
+  pattern: '/(appsettings(\.[\w-]+)?\.json|credentials(\.(json|ini))?|secrets\.json|auth\.json|sentry\.properties|parameters\.ya?ml|env|env\.txt)$'
+  action: block
+  priority: 65
+  remark: 日志里 /credentials、/auth.json、/runtime-config.js 等高频探测
+
+- id: sensitive-runtime-js
+  name: 敏感文件 - 伪静态 JS 配置
+  category: sensitive_file
+  score: 60
+  targets: [path]
+  keywords: ["config.js", "env.js", "aws-exports", "runtime-config", "env-config", "app.config"]
+  pattern: '/([\w.-]*config\.js|[\w.-]*env[\w.-]*\.js|aws-exports\.js|app\.config\.js)$'
+  action: block
+  priority: 66
+  remark: 日志中 /env.js /runtime-config.js /aws-exports.js 被探测；扩展名是 .js 会被静态规则跳过，需单独识别
+
+- id: sensitive-vendor-manifest
+  name: 敏感文件 - 依赖清单枚举
+  category: sensitive_file
+  score: 60
+  targets: [path]
+  keywords: ["installed.json", "composer.lock", "composer.json"]
+  pattern: '/(vendor/composer/installed\.json|composer\.(lock|json))$'
+  action: block
+  priority: 65
+  remark: 实测 /vendor/composer/installed.json 返回 200（39KB），可枚举全部依赖版本
+
+- id: sensitive-wp-config
+  name: 敏感文件 - WordPress 配置与后门
+  category: sensitive_file
+  score: 65
+  targets: [path]
+  keywords: ["wp-config", "wp-content/debug.log", "hellopress", "wp_filemanager"]
+  pattern: '/(wp-config\.php(\.[\w.]+)?|wp-content/(debug\.log|plugins/hellopress/)|wp_filemanager\.php)'
+  action: block
+  priority: 60
+  remark: 覆盖 wp-config.php、调试日志与已知后门文件名
+
+- id: sensitive-app-log
+  name: 敏感文件 - 应用日志泄露
+  category: sensitive_file
+  score: 60
+  targets: [path]
+  keywords: ["storage/logs", "laravel.log", "debug.log"]
+  pattern: '/(storage/logs/|laravel\.log|(^|/)debug\.log)$'
+  action: block
+  priority: 70
+  remark: 日志里含数据库口令与完整堆栈
+
+# ===== 信息泄露端点探测 =====
+
+- id: scanner-exposure-endpoint
+  name: 扫描 - 信息泄露端点
+  category: scanner
+  score: 60
+  targets: [path]
+  keywords: ["/phpinfo", "/server-status", "/server-info", "/actuator/", "/_profiler/", "/owa/auth/", "/developmentserver/"]
+  pattern: '/(phpinfo(\.php)?|info\.php|server-(status|info)|actuator/(env|health|mappings)|_profiler/phpinfo|owa/auth/|developmentserver/metadatauploader)'
+  action: block
+  priority: 80
+  remark: phpinfo / Tomcat status / Spring Actuator / Exchange OWA / 用友 RCE 探测
+
+- id: scanner-mcp-endpoint
+  name: 扫描 - MCP 服务探测
+  category: scanner
+  score: 50
+  targets: [path]
+  keywords: ["/mcp", "/sse"]
+  pattern: '^/(api/)?mcp/?$|^/sse/?$'
+  action: challenge
+  priority: 90
+  remark: 2026 年新增扫描目标，日志中 /mcp、/sse、/api/mcp 被批量探测
+
+# ===== 已知组件 RCE =====
+
+- id: rce-php-cgi-arg
+  name: RCE - PHP-CGI 参数注入
+  category: rce
+  score: 70
+  targets: [query, body, path]
+  keywords: ["allow_url_include", "auto_prepend_file"]
+  pattern: '(allow_url_include|auto_prepend_file)\s*='
+  action: block
+  priority: 75
+  remark: CVE-2024-4577，日志中形如 /?%ADd+allow_url_include%3d1+...
+
+- id: rce-phpunit-eval
+  name: RCE - PHPUnit eval-stdin
+  category: rce
+  score: 75
+  targets: [path]
+  keywords: ["eval-stdin"]
+  pattern: '/vendor/phpunit/.*eval-stdin\.php'
+  action: block
+  priority: 55
+  remark: CVE-2017-9841，可直接执行任意 PHP
+
+- id: rce-apache-cgi
+  name: RCE - Apache cgi-bin 路径穿越
+  category: rce
+  score: 70
+  targets: [path]
+  keywords: ["/cgi-bin/"]
+  pattern: '/cgi-bin/.*(bin/(sh|bash)|\.\.)'
+  action: block
+  priority: 60
+  remark: CVE-2021-41773，日志中 /cgi-bin/.%2e/.../bin/sh
+
+# ===== 挖矿协议探测 =====
+
+- id: protocol-mining
+  name: 协议异常 - 挖矿 Stratum 探测
+  category: protocol
+  score: 70
+  targets: [body, path, query]
+  keywords: ["mining.subscribe", "mining.hello", "eth_submitlogin", "eth_submitwork", "stratum"]
+  pattern: '(mining\.(subscribe|hello|authorize)|eth_submit(login|work)|stratum)'
+  action: block
+  priority: 85
+  remark: 日志中 JSON-RPC 挖矿登录包与 XMRig UA 探测
