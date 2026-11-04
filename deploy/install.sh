@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# GoWAF 一键部署 / 运维脚本（Ubuntu/Debian + 宝塔/1Panel/小皮/原生 Apache 或 Nginx）
+# GoWAF 一键部署 / 运维脚本（全平台：宝塔 / 1Panel / 小皮 / 原生 Nginx·Apache）
 #
 # 核心事实：GoWAF 是「反向代理型」WAF，它必须站在 Web 服务器前面。
 # 所以部署动作只有一件事——把 80/443 交给 gowaf，让后端引擎退到 127.0.0.1:8080。

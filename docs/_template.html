@@ -233,11 +233,11 @@ tbody td code{font-size:12.5px}
     <header class="hero">
       <div class="eyebrow">Technical Design · 2026-11-02</div>
       <h1>Go-WAF 开发方案</h1>
-      <p class="sub">面向宝塔面板 + Apache 多站点架构的反向代理型 WAF 与 Vue3 可视化控制台</p>
+      <p class="sub">全平台、全环境兼容的反向代理型 WAF 与 Vue3 可视化控制台（宝塔 / 1Panel / 小皮 / 原生 Nginx·Apache / IIS）</p>
       <div class="meta">
         <span>Go 1.22+</span><span>Gin</span><span>SQLite WAL</span><span>Vue 3 + Vite</span><span>Element Plus</span><span>ECharts</span><span>systemd</span>
       </div>
-      <div class="callout"><strong>已选定接入方式：</strong>WAF 接管 80 / 443，Apache 后移至 <code>127.0.0.1:8080</code>，原有 vhost 与 8081/8082 后端转发关系保持不变。</div>
+      <div class="callout"><strong>已选定接入方式：</strong>WAF 接管 80 / 443，后端引擎后移至 <code>127.0.0.1:8080</code>，原有站点与内部转发关系保持不变。</div>
     </header>
     $body$
   </main>
