@@ -21,7 +21,7 @@
 #   ./install.sh doctor               # 只体检，不改任何东西
 #
 # 参数：
-#   --binary PATH   指定 gowaf 二进制（默认找脚本同目录的 gowaf-linux-amd64 / bin/gowaf）
+#   --binary PATH   指定 gowaf 二进制（默认找同目录 gowaf-linux-amd64 / gowaf-linux-arm64 / gowaf）
 #   --rules PATH    指定规则文件（不指定则保留服务器上已有的，避免覆盖你的调优）
 #   --upstream-port N   后端引擎回退端口，默认 8080
 #   --http-only     只接管 80，443 完全不动（最保守的上线方式）
@@ -762,22 +762,47 @@ detect_certs() {
   fi
 }
 
+# 把 uname -m 映射到发布包文件名：gowaf-linux-amd64 / gowaf-linux-arm64
+host_linux_arch() {
+  case $(uname -m) in
+    x86_64|amd64)  echo amd64 ;;
+    aarch64|arm64) echo arm64 ;;
+    *)             echo "" ;;
+  esac
+}
+
 find_binary() {
   [[ -n $BINARY_SRC ]] && return
-  local d
+  local d arch cand
   d=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-  for cand in \
-    "${d}/gowaf-linux-amd64" \
-    "${d}/gowaf" \
-    "${d}/../bin/gowaf-linux-amd64" \
-    "${d}/../bin/gowaf"
-  do
-    if [[ -f $cand ]]; then BINARY_SRC="$cand"; return; fi
-  done
-  die "找不到 gowaf 二进制。请先在本机执行 make build-all，把 bin/gowaf-linux-amd64
-    和本脚本一起传到服务器同一目录，或显式指定：--binary /tmp/gowaf"
+  arch=$(host_linux_arch)
 
-  # 说明：不接受「服务器上 go build」，生产容器缺 git/前端产物，构建必失败。
+  local candidates=()
+  # 优先本机架构，避免同目录误拿到另一套二进制
+  [[ -n $arch ]] && candidates+=("${d}/gowaf-linux-${arch}" "${d}/../bin/gowaf-linux-${arch}")
+  local f
+  shopt -s nullglob
+  for f in "${d}"/gowaf-linux-* "${d}/../bin"/gowaf-linux-*; do
+    candidates+=("$f")
+  done
+  shopt -u nullglob
+  candidates+=("${d}/gowaf" "${d}/../bin/gowaf")
+
+  local seen="|"
+  for cand in "${candidates[@]}"; do
+    [[ -f $cand ]] || continue
+    [[ $seen == *"|$cand|"* ]] && continue
+    seen+="${cand}|"
+    BINARY_SRC=$cand
+    if [[ -n $arch && $(basename "$cand") == gowaf-linux-* && $(basename "$cand") != "gowaf-linux-${arch}" ]]; then
+      warn "当前 CPU 是 ${arch}，但找到的是 $(basename "$cand")。若启动时报 Exec format error，请改用对应架构的部署包。"
+    fi
+    return
+  done
+  die "找不到 gowaf 二进制。请把 gowaf-linux-amd64 或 gowaf-linux-arm64 和 install.sh 放在同一目录，
+    或显式指定：--binary /path/to/gowaf
+
+    说明：不接受在服务器上 go build，生产环境缺 git/前端产物必然失败。"
 }
 
 # ---------------------------------------------------------------- 备份

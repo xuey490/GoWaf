@@ -215,4 +215,37 @@ grep -q 'listen 80 default_server' "${AVAIL}/default" \
   || fail "restore 没有把 default 写回 sites-available"
 pass "Debian sites-enabled/default 无后缀 + 符号链接备份还原"
 
+# ---------- 11. 发布包同目录的 gowaf-linux-arm64 能被找到 ----------
+ARMDIR="${WORKDIR}/arm-pack"
+mkdir -p "$ARMDIR"
+cp "${ROOT}/deploy/install.sh" "${ARMDIR}/install.sh"
+: > "${ARMDIR}/gowaf-linux-arm64"
+got=$(bash -c '
+  source "$1"
+  BINARY_SRC=
+  find_binary
+  printf "%s\n" "$BINARY_SRC"
+' _ "${ARMDIR}/install.sh")
+[[ $got == "${ARMDIR}/gowaf-linux-arm64" ]] || fail "arm64 发布包没找到同目录二进制：$got"
+pass "同目录 gowaf-linux-arm64 可被 find_binary 找到"
+
+# 本机架构优先：同目录同时有 amd64 和 arm64 时拿 uname 对应的那份
+: > "${ARMDIR}/gowaf-linux-amd64"
+got=$(bash -c '
+  source "$1"
+  BINARY_SRC=
+  find_binary
+  printf "%s\n" "$BINARY_SRC"
+' _ "${ARMDIR}/install.sh")
+want_arch=$(uname -m)
+case $want_arch in
+  x86_64|amd64)  expect="${ARMDIR}/gowaf-linux-amd64" ;;
+  aarch64|arm64) expect="${ARMDIR}/gowaf-linux-arm64" ;;
+  *) expect="" ;;
+esac
+if [[ -n $expect ]]; then
+  [[ $got == "$expect" ]] || fail "双二进制时没有优先本机架构：got=$got expect=$expect"
+  pass "同目录双架构时优先本机 $(basename "$expect")"
+fi
+
 printf '\n全部适配器单测通过\n'
