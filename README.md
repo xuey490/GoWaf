@@ -1,8 +1,8 @@
 # GoWAF
 
-**跨面板、跨引擎的单二进制反向代理 WAF。**
+**全平台、全环境兼容的单二进制反向代理 WAF。**
 
-GoWAF 不是 Apache / Nginx / IIS 的模块，而是站在 Web 服务器**前面**的一层反向代理：
+支持宝塔、1Panel、小皮、原生 Nginx / Apache、IIS。GoWAF 不是这些 Web 服务器的模块，而是站在它们**前面**的一层反向代理：
 安装脚本自动探测面板与引擎，把 80/443 交给 GoWAF，后端退到 `127.0.0.1:8080`。
 所有公网流量先过检测，干净请求原样转发给上游，恶意请求在到达业务代码之前就被拦截。
 
@@ -62,30 +62,6 @@ flowchart LR
 ```
 
 后端引擎可以是 **Apache、Nginx、OpenResty（1Panel 容器）或 IIS**。WAF 只负责检测与转发，站点内部的 `ProxyPass` / `proxy_pass` / 应用绑定原样保留。
-
-### 请求处理流水线
-
-```mermaid
-flowchart TB
-    REQ[收到请求] --> R1[路由匹配<br/>Host/SNI → 站点]
-    R1 -->|无站点| FB[兜底站点]
-    R1 --> G1[CDN 识别<br/>Cloudflare 网段 → 还原真实 IP]
-    G1 --> G2[IP 封禁 / 白名单检查]
-    G2 -->|命中封禁| BAN[403 拒绝]
-    G2 --> G3[限流器<br/>每站点独立计数]
-    G3 -->|超速| RATE[429 限流]
-    G3 --> D1[规则检测引擎]
-    D1 --> D2[归一化：URL 解码/去混淆]
-    D2 --> D3[AC 自动机关键词预筛]
-    D3 --> D4[RE2 正则精确匹配<br/>50ms 超时熔断]
-    D4 --> S1{累计评分}
-    S1 -->|≥ block_score| ACT[按动作拦截 / 挑战 / 观察 / 即封]
-    S1 -->|≥ challenge_score| CH[人机校验挑战]
-    S1 -->|未命中| PASS[转发上游]
-    ACT --> LOG[(攻击事件入库)]
-    CH --> LOG
-    PASS --> UP[反向代理转发<br/>Host 透传 / WebSocket / 流式]
-```
 
 ### 流量接管方式（部署前后对比）
 
@@ -695,7 +671,7 @@ gowaf/
 - **1Panel 双拓扑**：bridge 走 compose 端口重映射（容器内零侵入）；host 网络无映射可改，
   改为改写宿主挂载的 listen，升级 OpenResty 不回退。
 - **面板兼容**：宝塔/小皮「保存站点」会把 vhost 端口写回 80，自愈定时器每 60 秒检测并纠正，
-  纠正前自动备份。宝塔 Apache 由 SysV 脚本托管，脚本优先走 `/etc/init.d`。
+  纠正前自动备份。宝塔上的 Apache 由 SysV 脚本托管，脚本优先走 `/etc/init.d`。
 - **default_cert 智能选择**：面板证书目录名经常是「站点名」不是域名（甚至可能是 IP），
   脚本读每张证书的真实 SAN，选「覆盖 vhost 域名最多」的一张做 SNI 兜底，
   并给出「无证书覆盖域名」清单（CF 回源会 526 的隐患）。
@@ -709,7 +685,7 @@ gowaf/
 
 1. **单文件交付**：控制台前端 `go:embed` 进二进制，SQLite 零外部依赖，
    纯静态编译（CGO_ENABLED=0）可交叉编译 linux/amd64、linux/arm64、windows/amd64。
-2. **跨面板跨引擎**：宝塔 / 1Panel / 小皮 / 原生 systemd / IIS，Apache · Nginx · OpenResty 全覆盖；
+2. **全平台、全环境兼容**：宝塔 / 1Panel / 小皮 / 原生 systemd / IIS，Apache · Nginx · OpenResty 全覆盖；
    数据面引擎无关，差异全部收敛在部署脚本的适配器里。
 3. **零信任切换**：observe → protect 一条命令；任何时刻 `rollback` 秒回部署前状态，
    `uninstall` 自动还原流量再清理，全程不留后患。

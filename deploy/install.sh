@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 #
-# GoWAF 一键部署 / 运维脚本（Ubuntu + 宝塔 Apache）
+# GoWAF 一键部署 / 运维脚本（全平台：宝塔 / 1Panel / 小皮 / 原生 Nginx·Apache）
 #
 # 核心事实：GoWAF 是「反向代理型」WAF，它必须站在 Web 服务器前面。
-# 所以部署动作只有一件事——把 80/443 交给 gowaf，让 Apache 退到 127.0.0.1:8080。
+# 所以部署动作只有一件事——把 80/443 交给 gowaf，让后端引擎退到 127.0.0.1:8080。
 # 其余都是围绕这件事的安全措施：备份、configtest、失败自动回滚、端口漂移自愈。
 #
 # 用法：
@@ -12,7 +12,7 @@
 #   ./install.sh status               # 状态 + 端口 + 最近日志
 #   ./install.sh observe              # 切观察模式（不拦截）
 #   ./install.sh protect              # 切实时拦截模式
-#   ./install.sh resync               # 修复被宝塔面板改回的 Apache 端口
+#   ./install.sh resync               # 修复被面板改回的引擎端口
 #   ./install.sh cloudflare on|off|update|status   # Cloudflare 回源 IP 识别
 #   ./install.sh console open [--ip 1.2.3.4|all] [--hours 2]   # 临时对外暴露控制台
 #   ./install.sh console close|status              # 立刻收回 / 查看当前状态
@@ -23,7 +23,7 @@
 # 参数：
 #   --binary PATH   指定 gowaf 二进制（默认找脚本同目录的 gowaf-linux-amd64 / bin/gowaf）
 #   --rules PATH    指定规则文件（不指定则保留服务器上已有的，避免覆盖你的调优）
-#   --upstream-port N   Apache 回退端口，默认 8080
+#   --upstream-port N   后端引擎回退端口，默认 8080
 #   --http-only     只接管 80，443 完全不动（最保守的上线方式）
 #   --cloudflare    站点挂在 Cloudflare 小云朵后面：把 CF 回源网段写入 trusted_proxies，
 #                   使限流/封禁/日志按真实访客 IP 计算（否则会按 CF 节点 IP，一封一大片）
