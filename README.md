@@ -2,17 +2,19 @@
 
 **全平台、全环境兼容的单二进制反向代理 WAF。**
 
-支持宝塔、1Panel、小皮、原生 Nginx / Apache、IIS。GoWAF 不是这些 Web 服务器的模块，而是站在它们**前面**的一层反向代理：
+GoWAF 不是 Web 服务器的模块，而是站在它们**前面**的一层反向代理：
 安装脚本自动探测面板与引擎，把 80/443 交给 GoWAF，后端退到 `127.0.0.1:8080`。
 所有公网流量先过检测，干净请求原样转发给上游，恶意请求在到达业务代码之前就被拦截。
 
-| 面板 / 环境 | Apache | Nginx / OpenResty | IIS |
-|---|:---:|:---:|:---:|
-| **宝塔** Linux / Windows | ✓ | ✓ | — |
-| **1Panel** | — | ✓（OpenResty 容器） | — |
-| **小皮** Linux / Windows | ✓ | ✓ | — |
-| **原生** Linux systemd / Windows | ✓ | ✓ | — |
-| **Windows IIS** | — | — | ✓ |
+**Windows 不只是 IIS。** 小皮 Windows、宝塔 Windows、原生 Apache / Nginx 与 IIS 走同一套 `install.ps1`。
+
+| 面板 / 环境 | Linux Apache | Linux Nginx / OpenResty | Windows Apache | Windows Nginx | IIS |
+|---|:---:|:---:|:---:|:---:|:---:|
+| **宝塔** | ✓ | ✓ | ✓ | ✓ | — |
+| **1Panel** | — | ✓（OpenResty 容器） | — | — | — |
+| **小皮** | ✓ | ✓ | ✓ | ✓ | — |
+| **原生**（无面板） | ✓ | ✓ | ✓ | ✓ | — |
+| **IIS** | — | — | — | — | ✓ |
 
 - **单二进制部署**：控制台前端通过 `go:embed` 打进二进制；Linux 一个 `install.sh`，Windows 一个 `install.ps1`
 - **默认观察模式**：首次安装只记录不拦截，观察 3~7 天确认无误杀再切实时拦截
@@ -29,6 +31,7 @@
 
 - [工作原理](#工作原理)
 - [支持的面板与引擎](#支持的面板与引擎)
+- [尚未适配、建议后续加](#尚未适配建议后续加)
 - [功能一览](#功能一览)
 - [界面预览](#界面预览)
 - [技术栈](#技术栈)
@@ -61,7 +64,7 @@ flowchart LR
     W --- DB[(SQLite<br/>事件/规则/站点/任务)]
 ```
 
-后端引擎可以是 **Apache、Nginx、OpenResty（1Panel 容器）或 IIS**。WAF 只负责检测与转发，站点内部的 `ProxyPass` / `proxy_pass` / 应用绑定原样保留。
+后端引擎可以是 **Apache、Nginx、OpenResty（1Panel 容器）或 IIS**（Linux / Windows 均可）。WAF 只负责检测与转发，站点内部的 `ProxyPass` / `proxy_pass` / 应用绑定原样保留。
 
 ### 流量接管方式（部署前后对比）
 
@@ -100,6 +103,8 @@ bash install.sh doctor                        # 只读体检：面板/引擎/站
 
 ### Windows（`deploy/install.ps1`，管理员 PowerShell）
 
+Windows 与 Linux 一样按「面板 × 引擎」探测，**不是只有 IIS**。七种已接组合：
+
 | 环境 | 接管方式 | 说明 |
 |---|---|---|
 | **小皮 Windows + Apache** | vhost + `Listen` 改写 | `phpstudy_pro\Extensions\Apache*\conf\vhosts` |
@@ -129,7 +134,28 @@ Windows 服务模式用 `gowaf svc install|start|stop|uninstall` 实现（单二
 - **IIS 真实 IP**：IIS 无 `mod_remoteip` 等价物，后端应用看到的客户端 IP 是 `127.0.0.1`。WAF 在边缘看到真实 IP，限流/封禁不受影响。
 - **QUIC / HTTP3**：WAF 不接 UDP 443；doctor 会提示，不做自动改写。
 - **IPv6**：暂不接管 IPv6 listen（会注释以免与 WAF 抢端口），IPv6 流量仍直连源站。
-- **cPanel / Plesk**：未适配。适配器接口已留好，需求出现再接。
+- **Windows 无 resync 定时器**：Linux 宝塔/小皮「保存站点」会把端口写回 80，`gowaf-resync.timer` 每 60 秒纠正；Windows 版目前只能再跑一次 `install.ps1 install` 或手工改回。
+
+---
+
+## 尚未适配、建议后续加
+
+数据面本身仍引擎无关，缺的是**部署脚本里的路径探测 + 改写 + 重载**。按国内常见程度排序：
+
+| 优先级 | 环境 | 为什么还没接 | 工作量大致形态 |
+|---|---|---|---|
+| **高** | **LNMP 一键包**（licess `/usr/local/nginx`） | 国内无面板 VPS 很常见；现在只认 Debian `/etc/nginx` 和宝塔 `/www/server/nginx`，这套路径探测不到 | 复用 Nginx 适配器，加一组路径 |
+| **高** | **原生 OpenResty**（`/usr/local/openresty`，非 1Panel 容器） | 1Panel 已接的是 Docker；裸装 OpenResty 不会被当成引擎 | 近似原生 Nginx，路径和 `nginx -s reload` 不同 |
+| **高** | **宝塔 OpenLiteSpeed / OLS** | 宝塔可把网站引擎切到 OLS；配置是 `httpd_config.conf`，不是 Apache/Nginx | 新适配器 |
+| **中** | **Windows 端口漂移自愈** | 宝塔/小皮 Windows 保存站点同样会覆盖 vhost，现在没有 Linux 那套 60 秒 resync | `install.ps1` 加计划任务 |
+| **中** | **Tengine** | Nginx 分支，二进制名和默认前缀不同 | 基本可复用 Nginx 适配器 |
+| **中** | **独立 Docker Nginx**（非 1Panel） | 只适配了 1Panel 的 OpenResty 网站引擎；自己 `docker run nginx` 不会改端口映射 | 接近 1Panel bridge 路线 |
+| **低** | **Caddy** | `Caddyfile` 语法完全不同 | 新适配器 |
+| **低** | **cPanel / Plesk / DirectAdmin / CyberPanel** | 海外面板，国内占比低 | 适配器接口已留 |
+| **低** | **WDCP / AMH / 彩虹等小众国内面板** | 路径各异、用户少 | 需求出现再接 |
+| **不做** | macOS、K8s Ingress、商业 LiteSpeed | 超出当前「单机反向代理接管 80/443」形态 | — |
+
+已经能当「原生 Apache」扫到、但不是一等公民的：**XAMPP / WAMP**（Windows）。aaPanel 国际版目录与宝塔 Linux 同构，现有 `PANEL=bt` 探测大概率能用，但没有单独实验室。
 
 更细的适配评估见 [docs/panel-adaptation-assessment.md](docs/panel-adaptation-assessment.md)。
 
@@ -398,7 +424,7 @@ CF 节点 IP 计算——**一封一大片**。
 
 ### 场景 D：各平台注意点
 
-**宝塔（Apache / Nginx）**
+**宝塔 Linux（Apache / Nginx）**
 
 - Apache 由 SysV 脚本托管（`systemctl` 常显示 `active (exited)`），脚本优先走 `/etc/init.d`
 - 面板「保存站点」会按模板重写 vhost，把端口改回 80/443 —— `gowaf-resync.timer` 每 60 秒纠正
@@ -429,6 +455,7 @@ CF 节点 IP 计算——**一封一大片**。
 
 **小皮 / 宝塔 / 原生 Windows / IIS**
 
+- **不是只有 IIS**：小皮 Apache·Nginx、宝塔 Apache·Nginx、原生 Apache·Nginx、IIS 都走 `install.ps1`
 - 命令相同：`.\install.ps1 doctor` → `.\install.ps1 install`；同机双引擎加 `-Engine`，多面板加 `-Panel`，非默认安装路径加 `-SearchRoot` 或 `-VhostDir`
 - 主目录 `C:\ProgramData\gowaf`（data / logs / configs）
 - 防火墙走 `netsh advfirewall`
@@ -733,7 +760,7 @@ gowaf/
 
 1. **单文件交付**：控制台前端 `go:embed` 进二进制，SQLite 零外部依赖，
    纯静态编译（CGO_ENABLED=0）可交叉编译 linux/amd64、linux/arm64、windows/amd64。
-2. **全平台、全环境兼容**：宝塔 / 1Panel / 小皮 / 原生 Linux 与 Windows / IIS，Apache · Nginx · OpenResty 全覆盖；
+2. **全平台、全环境兼容**：Linux 与 Windows 的宝塔 / 小皮 / 原生 Apache·Nginx，加上 1Panel OpenResty 与 IIS；
    数据面引擎无关，差异全部收敛在部署脚本的适配器里。
 3. **零信任切换**：observe → protect 一条命令；任何时刻 `rollback` 秒回部署前状态，
    `uninstall` 自动还原流量再清理，全程不留后患。
