@@ -223,6 +223,8 @@ make build
 
 ### Linux 服务器
 
+宝塔、1Panel、小皮 Linux、原生 Apache / Nginx **命令相同**：解包后 `doctor` → `install`，脚本自动探测面板与引擎。只有同机同时跑了 Apache 和 Nginx 时才需要 `--engine`。
+
 ```bash
 tar xzf gowaf-deploy-*.tar.gz && cd gowaf-deploy-*
 ./install.sh doctor             # 建议先体检：面板、引擎、站点、证书、端口
@@ -401,14 +403,18 @@ CF 节点 IP 计算——**一封一大片**。
 
 **小皮 Linux**
 
-- 站点配置路径与宝塔同构，探测到后走同一套适配器
+- 官方 xp.cn：`/usr/local/phpstudy/soft/{nginx,apache}/<ver>`，站点 `vhost/{nginx,apache}`，证书 `vhost/cert/<域名>`
+- 部分魔改版仍走 `/www/server/panel/vhost/{apache,nginx}`，脚本两种都认
+- 探测时忽略残留 apt `/etc/nginx`、`/etc/apache2`，避免被误判成双引擎
 - 面板「保存/重定向」同样会覆盖 vhost，依赖 resync 兜底
 
 **原生 Nginx / Apache**
 
-- Nginx：Debian `sites-enabled` 或 `conf.d`；`listen 80` → `listen 127.0.0.1:8080`，IPv6 listen 注释掉
+- 命令与面板环境相同，证书放 `/etc/gowaf/certs/<域名>/`；GoWAF 主目录仍是 `/www/server/gowaf`
+- Nginx：Debian `sites-enabled`（含无后缀 `default`）或 `conf.d`；改写穿过符号链接写回 `sites-available`
+- `listen 80` → `listen 127.0.0.1:8080`，IPv6 listen 注释掉
 - 多个 `default_server` 改到 8080 后会冲突，脚本改写时去掉该标记（未知 Host 由 WAF 兜底站点接管）
-- Apache：系统 `apache2` / `httpd`，`sites-enabled` 改 VirtualHost
+- Apache：系统 `apache2` / `httpd`；Debian 全局 `Listen 80/443` 在 `ports.conf`（不只 `apache2.conf`），脚本会一并注释并纳入 backup / rollback
 
 **小皮 Windows / IIS**
 
