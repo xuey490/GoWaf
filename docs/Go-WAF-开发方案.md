@@ -1760,11 +1760,26 @@ WHERE ts BETWEEN ? AND ?
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
 | GET | `/api/intel/sources` | 订阅源列表 + 运行时条数、上次同步时间与错误 |
-| POST | `/api/intel/sources` | 新增：`{name, url, scope:global\|site, site?, ttlSeconds?, enabled?}` |
-| PUT | `/api/intel/sources/:id` | 修改 |
+| POST | `/api/intel/sources` | 新增：`{name, url, kind:ip\|json, headers, scope:global\|site, site?, ttlSeconds?, enabled?}` |
+| PUT | `/api/intel/sources/:id` | 修改；`headers` 回显时敏感值掩码为 `******`，原样提交即不覆盖 |
 | DELETE | `/api/intel/sources/:id` | 删除并立即重建内存快照（删完最后一个源会清空拦截） |
+| GET | `/api/intel/presets` | 10 个内置公共情报源（含预估条数、误报风险、是否需 Key），附带 `installed` 标记 |
+| POST | `/api/intel/presets` | 一键添加：`{ids:[...], tokens?:{presetId:token}}`；按 URL 去重，需 Key 的源缺 token 会拒绝 |
 | POST | `/api/intel/sync` | 立即拉取所有启用的源；单源失败保留上次数据，不会因为网络抖动把防护清零 |
 | GET | `/api/intel/status` | 只读状态：全局区间数、各源条数、CRS 版本/模式/PL、生效例外数 |
+
+> 自定义 Header：`headers` 支持 JSON 对象或 `Key: Value` 逐行写（`#` 开头为注释），用来打通 AbuseIPDB（`X-Api-Key`）、CrowdSec CTI（`X-Api-Key`）这类需要鉴权的源。`kind=json` 表示返回体是 JSON 列表（AbuseIPDB 的 `data[].ipAddress` 之类），解析走递归遍历，不绑定字段名。
+>
+> 命中即封禁：`intel.ban_on_hit`（默认 `true`）开启后，情报命中的 IP 会写入 `bans` 表（`source=intel`，作用域跟随情报源），可直接在「封禁管理」里查看/释放；`intel.ban_ttl` 控制时长，默认 3600 秒。
+
+#### 告警通知
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| GET | `/api/notify/logs` | 投递日志（最近 100 条）+ 通道配置摘要（收件人数、窗口、冷却）+ 情报封禁开关状态 |
+| POST | `/api/notify/test` | 发一封测试邮件；`{to?}` 可临时覆盖收件人，未启用或 SMTP 未填会直接报错而不静默 |
+
+> 配置项都在 `/api/settings` 里（`notify.enabled`、`notify.email.*`、`notify.window`、`notify.cooldown`、`notify.min_score`），保存即热加载。行为：事件先进内存队列，按 `notify.window`（默认 60 秒）合并成一封摘要邮件，同一 IP 在 `notify.cooldown`（默认 3600 秒）内只报一次；`notify.min_score` 只过滤「有评分」的事件，情报封禁这类 score=0 的事件不会被吞掉。SMTP 密码在 GET 时掩码为 `******`，原样回存即不修改。
 
 #### IP 归属地
 

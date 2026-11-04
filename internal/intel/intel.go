@@ -150,8 +150,13 @@ func New() *Manager {
 
 // Match 判断 IP 是否命中情报。返回命中的源名（空串表示未命中）。
 // 站点级情报优先于全局，便于按站点做差异化封禁。
+//
+// 特殊用途地址直接放行：公共情报源里偶尔会混进 127.0.0.0/8、10.0.0.0/8
+// 这类 bogon（多来源聚合清单尤其是重灾区）。反代型 WAF 里真实客户端 IP 来自
+// X-Forwarded-For，一旦上游没传这个头，所有请求的 clientIP 都会退化成 127.0.0.1，
+// 这时情报若命中回环段就会把整站打成 403——这类自锁必须在匹配层彻底堵死。
 func (m *Manager) Match(addr netip.Addr, site string) string {
-	if m == nil {
+	if m == nil || isSpecialUse(addr) {
 		return ""
 	}
 	m.mu.RLock()
@@ -440,6 +445,40 @@ func walkJSON(v any, set *rangeSet) {
 	}
 }
 
+// specialUsePrefixes 是 netip 没有内置判断、且一旦误判就会造成自锁的保留网段：
+// 运营商级 NAT（100.64/10）、0.0.0.0/8、240/4 保留段。
+// 回环/私网/链路本地/组播/ULA 由 netip 的方法覆盖。
+//
+// 文档示例段（192.0.2/24、198.51.100/24、203.0.113/24、2001:db8::/32）故意不收：
+// 它们不可能出现在真实情报里，过滤它们没有安全收益，反而会误伤单测与演练数据。
+var specialUsePrefixes = []netip.Prefix{
+	netip.MustParsePrefix("0.0.0.0/8"),
+	netip.MustParsePrefix("100.64.0.0/10"),
+	netip.MustParsePrefix("192.0.0.0/24"),
+	netip.MustParsePrefix("198.18.0.0/15"),
+	netip.MustParsePrefix("240.0.0.0/4"),
+}
+
+// isSpecialUse 判断地址是否属于「不可能是公网攻击者」的特殊用途网段。
+// 非法地址也按特殊用途处理（宁可漏拦，不可自锁）。
+func isSpecialUse(addr netip.Addr) bool {
+	if !addr.IsValid() {
+		return true
+	}
+	addr = addr.Unmap()
+	if addr.IsLoopback() || addr.IsPrivate() || addr.IsUnspecified() ||
+		addr.IsMulticast() || addr.IsLinkLocalUnicast() ||
+		addr.IsLinkLocalMulticast() || addr.IsInterfaceLocalMulticast() {
+		return true
+	}
+	for _, p := range specialUsePrefixes {
+		if p.Contains(addr) {
+			return true
+		}
+	}
+	return false
+}
+
 // addToken 把一个可能是 IP / CIDR / a-b 区间的字符串加进集合，非法值静默忽略。
 func addToken(set *rangeSet, line string) {
 	line = strings.TrimSpace(line)
@@ -451,17 +490,28 @@ func addToken(set *rangeSet, line string) {
 		a, err1 := netip.ParseAddr(strings.TrimSpace(parts[0]))
 		b, err2 := netip.ParseAddr(strings.TrimSpace(parts[1]))
 		if err1 == nil && err2 == nil && a.Is4() && b.Is4() {
+			if isSpecialUse(a) && isSpecialUse(b) {
+				return
+			}
 			set.addRange(binary.BigEndian.Uint32(a.AsSlice()), binary.BigEndian.Uint32(b.AsSlice()))
 			return
 		}
 	}
 	if strings.Contains(line, "/") {
 		if p, err := netip.ParsePrefix(line); err == nil {
+			// 只丢弃「整段都是特殊用途」的聚合（如 127.0.0.0/8、10.0.0.0/8）；
+			// 0.0.0.0/1 这类同时覆盖公网的大聚合按原样保留，避免误删真实情报。
+			if p.Bits() >= 8 && isSpecialUse(p.Addr()) {
+				return
+			}
 			set.addPrefix(p)
 		}
 		return
 	}
 	if addr, err := netip.ParseAddr(line); err == nil {
+		if isSpecialUse(addr) {
+			return
+		}
 		bits := 32
 		if !addr.Unmap().Is4() {
 			bits = 128
