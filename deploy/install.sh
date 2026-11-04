@@ -56,6 +56,7 @@ OP1_HOME="/opt/1panel/apps/openresty/openresty"
 OP1_CONF="${OP1_HOME}/conf/nginx.conf"
 OP1_VHOST_DIR="${OP1_HOME}/conf/conf.d"
 OP1_WWW="/opt/1panel/www"
+OP1_DEFAULT_DIR="${OP1_HOME}/conf/default"   # 1Panel 默认站点（listen 80/443 default_server），host 网络模式下必须一并改写
 
 UPSTREAM_PORT=8080
 ADMIN_PORT=8899
@@ -130,9 +131,11 @@ collect_vhost_names() {
   local f
   for f in "$VHOST_DIR"/*.conf; do
     [[ -f $f ]] || continue
-    awk 'tolower($1) ~ /^server(name|alias)$/ { for (i = 2; i <= NF; i++) print tolower($i) }' \
+    # 注意正则：Nginx 是 server_name/server_alias（带下划线），Apache 是 ServerName/ServerAlias
+    # （无下划线）。写成 ^server(name|alias)$ 会漏掉全部 nginx 站点——server 后面是 _name。
+    awk 'tolower($1) ~ /^server(_name|_alias|name|alias)$/ { for (i = 2; i <= NF; i++) print tolower($i) }' \
       "$f" 2>/dev/null || true
-  done | sed -E 's/:[0-9]+$//' | grep -vE '^(_|\*|)$' | LC_ALL=C sort -u | tr '\n' ' ' || true
+  done | sed -E 's/:[0-9]+$//' | tr -d ';' | grep -vE '^(_|\*|)$' | LC_ALL=C sort -u | tr '\n' ' ' || true
 }
 
 # 读一张证书实际覆盖的域名。宝塔的目录名是「站点名」不是域名，
@@ -255,7 +258,10 @@ detect_env() {
   #   b) 已经部署过，引擎正按上次的要求蹲在 8080 上 → 这是稳态，重装时必须放行
   # （重装时最容易被 b 误伤，报「无法作为回退端口」然后让人白停服务）
   if port_listening "$UPSTREAM_PORT"; then
-    if [[ -f /etc/systemd/system/gowaf.service && -f $GW_CONF ]] && port_held_by_web "$UPSTREAM_PORT"; then
+    # 稳态判定：配置已生成且 8080 由 web 引擎持有 = 上次部署让引擎退到这里。
+    # 不再要求 gowaf.service 必须存在——上次安装可能在中断后留下「半安装」状态，
+    # 此时引擎已经蹲在 8080 上等 WAF 接管，把它当占用者拒掉反而装不下去。
+    if [[ -f $GW_CONF ]] && port_held_by_web "$UPSTREAM_PORT"; then
       info "端口 ${UPSTREAM_PORT}：后端引擎已按上次部署退到这里（重装正常态，无需停服务）"
     else
       local who
@@ -287,7 +293,9 @@ ${who}
 
 detect_panel() {
   PANEL=system
-  if [[ -d $BT_PANEL ]]; then
+  # 注意判定顺序：1Panel 会在 /www/server/panel 造一个兼容目录（只有 vhost/pyenv，
+  # 没有 BT-Panel 主程序），所以「目录存在」不足以判定宝塔，必须看面板主程序。
+  if [[ -f "${BT_PANEL}/BT-Panel" || -d "${BT_PANEL}/class" ]]; then
     PANEL=bt
     info "面板：宝塔（${BT_PANEL}）"
   elif [[ -d /opt/1panel ]]; then
@@ -400,7 +408,15 @@ detect_env_nginx() {
   # 主配置
   if [[ -f $OP1_CONF ]]; then
     NGINX_CONF="$OP1_CONF"
-    VHOST_DIR="$OP1_VHOST_DIR"
+    # 1Panel 版本不同，站点 conf.d 挂载位置不同：新版 /opt/1panel/www/conf.d，旧版 app 目录下的 conf.d。
+    # 取「真的有站点配置」的那个，两个都没有时默认新路径。
+    if compgen -G "${OP1_WWW}/conf.d/*.conf" >/dev/null; then
+      VHOST_DIR="${OP1_WWW}/conf.d"
+    elif compgen -G "${OP1_VHOST_DIR}/*.conf" >/dev/null; then
+      VHOST_DIR="${OP1_VHOST_DIR}"
+    else
+      VHOST_DIR="${OP1_WWW}/conf.d"
+    fi
   elif [[ -f /etc/nginx/nginx.conf ]]; then
     NGINX_CONF="/etc/nginx/nginx.conf"
     if [[ -d /etc/nginx/sites-enabled && -n "$(ls /etc/nginx/sites-enabled/*.conf 2>/dev/null || ls /etc/nginx/sites-enabled/ 2>/dev/null)" ]]; then
@@ -464,11 +480,20 @@ detect_env_nginx() {
 op1_container() {
   local c=""
   if [[ -f "${OP1_HOME}/.env" ]]; then
-    c=$(grep -E '^CONTAINER_NAME=' "${OP1_HOME}/.env" | head -1 | cut -d= -f2- | tr -d '"' || true)
+    c=$(grep -E '^CONTAINER_NAME=' "${OP1_HOME}/.env" | head -1 | cut -d= -f2- | tr -d "\"'" || true)
   fi
   [[ -z $c ]] && c=$(docker ps --format '{{.Names}}' 2>/dev/null | grep -iE 'openresty' | head -1 || true)
   [[ -n $c ]] || die "找不到 1Panel OpenResty 容器（docker ps 里没有 openresty）"
   printf '%s' "$c"
+}
+
+# 1Panel OpenResty 的网络模式：host（容器直接绑宿主端口，无端口映射）或 bridge（端口发布映射）
+op1_network_mode() {
+  docker inspect "$(op1_container)" --format '{{.HostConfig.NetworkMode}}' 2>/dev/null || printf 'unknown'
+}
+
+op1_is_host_network() {
+  [[ $(op1_network_mode) == host ]]
 }
 
 # 容器内跑 nginx 命令；非容器环境原样执行
@@ -535,6 +560,11 @@ backup_apache() {
   else
     cp -a "$NGINX_CONF" "${BK_DIR}/" 2>/dev/null || true
     [[ $PANEL == 1panel && -f "${OP1_HOME}/docker-compose.yml" ]] && cp -a "${OP1_HOME}/docker-compose.yml" "${BK_DIR}/" 2>/dev/null || true
+    # host 网络模式会改写 1Panel 默认站点文件，一并备份
+    if [[ $PANEL == 1panel && -d $OP1_DEFAULT_DIR ]]; then
+      mkdir -p "${BK_DIR}/default"
+      cp -a "${OP1_DEFAULT_DIR}/." "${BK_DIR}/default/" 2>/dev/null || true
+    fi
   fi
   if [[ -d $VHOST_DIR ]]; then
     mkdir -p "${BK_DIR}/vhost"
@@ -927,6 +957,9 @@ restore_web_from() {
     mainconf="$APACHE_CONF"; svcname="$APACHE_SVC"
   else
     mainconf="$NGINX_CONF"; svcname="$NGINX_SVC"
+    # 1Panel 容器引擎没有 NGINX_SVC（服务名记在 WEB_SVC 的 docker:xxx 里），
+    # 用 WEB_SVC 兜底，否则回滚会因「参数不完整」被拒，站点无法恢复。
+    [[ -z $svcname && -n $WEB_SVC ]] && svcname="$WEB_SVC"
   fi
   if [[ -z $mainconf || -z $VHOST_DIR || -z $svcname ]]; then
     warn "还原参数不完整：mainconf=[$mainconf] VHOST_DIR=[$VHOST_DIR] svc=[$svcname]"
@@ -944,6 +977,9 @@ restore_web_from() {
   fi
   if [[ -d "${bd}/vhost" ]]; then
     cp -a "${bd}/vhost/." "$VHOST_DIR/" || return 1
+  fi
+  if [[ -d "${bd}/default" && -d $OP1_DEFAULT_DIR ]]; then
+    cp -a "${bd}/default/." "$OP1_DEFAULT_DIR/" || return 1
   fi
   if web_test; then
     web_reload
@@ -1106,14 +1142,20 @@ nginx_inject_realip() {
   if [[ $PANEL == 1panel ]]; then
     trust="127.0.0.1 172.16.0.0/12 10.0.0.0/8"
   fi
-  awk -v trust="$trust" '
+  # set_real_ip_from 每条只接受一个网段，必须逐行输出；
+  # 合并成一行（"127.0.0.1 10.0.0.0/8"）会 emerg：invalid number of arguments。
+  local trust_lines="" c
+  for c in $trust; do
+    trust_lines+="    set_real_ip_from ${c};\n"
+  done
+  awk -v trust_lines="$trust_lines" '
     !done && /^[[:space:]]*http[[:space:]]*\{/ {
       print
       print ""
       print "    # ===== GOWAF-MANAGED BEGIN ====="
       print "    # 由 gowaf 部署脚本写入。手工修改会在 gowaf resync 时被覆盖。"
       print "    # WAF 同机转发，真实访客 IP 在 X-Forwarded-For 里"
-      print "    set_real_ip_from " trust ";"
+      printf "%s", trust_lines
       print "    real_ip_header X-Forwarded-For;"
       print "    real_ip_recursive on;"
       print "    # TLS 已在 WAF 终止；站点内 $server_port/$scheme 类判断请看 gowaf 文档"
@@ -1161,8 +1203,24 @@ patch_nginx() {
   before=$(nginx_fingerprint)
 
   if [[ $PANEL == 1panel ]]; then
-    # 容器路线：compose 端口重映射，容器内 listen 一字不改（升级 OpenResty 不回退）
-    nginx_1panel_remap
+    if op1_is_host_network; then
+      # host 网络模式：容器直接绑宿主 80/443，没有端口映射可改，
+      # 与原生 nginx 同构 —— 直接改写宿主挂载的 listen 文件（含 1Panel 默认站点）。
+      # 容器内配置靠宿主挂载，重启容器即生效，升级 OpenResty 不回退。
+      local f changed=0
+      nginx_retarget_file "$NGINX_CONF" "$TAKE_443" && changed=$((changed + 1))
+      for f in "$VHOST_DIR"/*.conf "$OP1_DEFAULT_DIR"/*.conf; do
+        [[ -f $f ]] || continue
+        nginx_retarget_file "$f" "$TAKE_443" && changed=$((changed + 1))
+      done
+      [[ $changed -gt 0 ]] && ok "改写 ${changed} 个配置文件的 listen（host 网络模式）" || info "所有 listen 已就位"
+      if [[ $TAKE_443 -eq 1 ]]; then
+        nginx_fix_https_loop
+      fi
+    else
+      # bridge 模式（端口发布映射）：compose 端口重映射，容器内 listen 一字不改
+      nginx_1panel_remap
+    fi
   else
     local f changed=0
     for f in "$VHOST_DIR"/*.conf; do
@@ -1230,10 +1288,12 @@ nginx_start_and_verify() {
 # resync 漂移检测（nginx 版）：站点文件出现未注释的 listen 80 / [::]:80，
 # 或 1Panel 的 compose 被面板改回 80:80。443 仅在接管 443 的部署里检查。
 nginx_drift_detected() {
-  if [[ $PANEL == 1panel ]]; then
+  if [[ $PANEL == 1panel ]] && ! op1_is_host_network; then
+    # bridge 模式：只看 compose 是否被面板改回 80:80
     grep -qE "^[[:space:]]*-?[[:space:]]*\"?80:80\"?" "${OP1_HOME}/docker-compose.yml" 2>/dev/null && return 0
     return 1
   fi
+  # 原生 nginx / 1Panel host 模式：检查 listen 是否被面板改回 80/443
   if grep -lE '^[[:space:]]*listen[[:space:]]+((\*|0\.0\.0\.0):)?80([[:space:]][^;]*)?[[:space:]]*;' \
        "$VHOST_DIR"/*.conf 2>/dev/null | grep -q .; then
     return 0
@@ -1664,10 +1724,31 @@ switch_mode() {
   need_root
   [[ -f $GW_CONF ]] || die "配置不存在，请先 install"
   sed -i -E "s/^  mode: .*/  mode: \"${mode}\"/" "$GW_CONF"
+  # 运行时优先读 DB settings 表（控制台改的设置优先于配置文件），只改 yaml
+  # 会出现「文件已是 protect、运行时仍是 observe」的假切换。两边必须同步。
   if [[ $mode == "observe" ]]; then
     sed -i -E 's/^  ip_rps: .*/  ip_rps: 500/; s/^  ip_burst: .*/  ip_burst: 1000/; s/^  ip_per_minute: .*/  ip_per_minute: 0/; s/^  auto_ban: .*/  auto_ban: false/' "$GW_CONF"
+    local db_rps=500 db_burst=1000 db_ipm=0 db_ban=false
   else
     sed -i -E 's/^  ip_rps: .*/  ip_rps: 50/; s/^  ip_burst: .*/  ip_burst: 100/; s/^  ip_per_minute: .*/  ip_per_minute: 2000/; s/^  auto_ban: .*/  auto_ban: true/' "$GW_CONF"
+    local db_rps=50 db_burst=100 db_ipm=2000 db_ban=true
+  fi
+  local db="${GW_HOME}/data/waf.db"
+  if command -v sqlite3 >/dev/null 2>&1 && [[ -f $db ]]; then
+    local ts
+    ts=$(date +%s%3N)
+    if ! sqlite3 "$db" "PRAGMA busy_timeout=3000;
+INSERT INTO settings(key,value,version,updated_at) VALUES
+  ('engine.mode','${mode}',1,${ts}),
+  ('guard.ip_rps','${db_rps}',1,${ts}),
+  ('guard.ip_burst','${db_burst}',1,${ts}),
+  ('guard.ip_per_minute','${db_ipm}',1,${ts}),
+  ('guard.auto_ban','${db_ban}',1,${ts})
+ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at;" 2>/dev/null; then
+      warn "无法更新 settings 表（DB 结构不同或被锁？），运行时模式可能不变；请在控制台里切换模式"
+    fi
+  else
+    warn "服务器没有 sqlite3，无法同步 settings 表；请在控制台里切换模式"
   fi
   "$GW_BIN" -t -c "$GW_CONF" >/dev/null || die "配置校验失败，未重启"
   systemctl restart gowaf
@@ -2144,7 +2225,10 @@ healthcheck() {
   # 拿它做 SNI 会匹配不到任何证书，反而误报失败。
   host=${SELFCHECK_HOST:-}
   [[ -z $host ]] && host=${DEFAULT_DOMAIN:-}
-  [[ -z $host ]] && host=$(awk '/^  - name:/{print $3; exit}' "$GW_CONF" | tr -d '"')
+  # 未安装时 config.yaml 不存在，awk 会 fatal——兜底跳过自检而不是报错
+  if [[ -z $host && -f $GW_CONF ]]; then
+    host=$(awk '/^  - name:/{print $3; exit}' "$GW_CONF" | tr -d '"')
+  fi
 
   if [[ -n $host ]]; then
     # curl -w 在连接失败时自己也输出 000，所以不能再 || echo 000（会拼成 000000）
@@ -2264,7 +2348,19 @@ do_doctor() {
 
   # ---------------- 当前部署形态：直接回答「有没有用 --http-only」
   step "当前部署形态（只读）"
-  info "环境：面板=$( [[ $PANEL == bt ]] && echo 宝塔 || [[ $PANEL == 1panel ]] && echo 1Panel || [[ $PANEL == phpstudy ]] && echo 小皮 || echo 无面板 )，引擎=$([[ $ENGINE == apache ]] && echo Apache || echo Nginx)，站点目录=${VHOST_DIR}"
+  local panel_name engine_name
+  case $PANEL in
+    bt)       panel_name=宝塔 ;;
+    1panel)   panel_name=1Panel ;;
+    phpstudy) panel_name=小皮 ;;
+    *)        panel_name=无面板 ;;
+  esac
+  case $ENGINE in
+    apache) engine_name=Apache ;;
+    nginx)  engine_name=Nginx ;;
+    *)      engine_name=$ENGINE ;;
+  esac
+  info "环境：面板=${panel_name}，引擎=${engine_name}，站点目录=${VHOST_DIR}"
   local installed=0 tls_on=0 holders=""
   # 一律用 if，不用 [[ ]] && x=1：条件不成立时 && 列表返回 1，
   # 在 set -e 下有静默退出的风险（本项目已踩过，见 cmd_console 里的注释）。
@@ -2276,7 +2372,7 @@ do_doctor() {
     if [[ -n $CERT_NAMES ]]; then
       info "按当前证书情况，install 会接管 80 + 443（HTTPS 也经过 WAF）"
     else
-      info "证书目录为空，install 只会接管 80（HTTPS 直连 Apache，不过 WAF）"
+      info "证书目录为空，install 只会接管 80（HTTPS 直连后端引擎，不过 WAF）"
     fi
   else
     info "已安装：${GW_CONF}"
@@ -2349,6 +2445,8 @@ do_doctor() {
 
   # 站点 → 具体哪张证书。直接回答「服务器上到底几个站点、每个站点用哪张证书」，
   # 省得对着上面两张表自己配对。
+  # doctor 路径不经过 detect_certs，VHOST_NAMES 需要在这里现收一次。
+  [[ -n $VHOST_NAMES ]] || VHOST_NAMES=$(collect_vhost_names)
   local vh hit all_total real_total
   all_total=$(printf '%s\n' $VHOST_NAMES | grep -c . || true)
   # 先滤掉空行再统计：VHOST_NAMES 为空时 printf 会吐一个空行，
@@ -2400,7 +2498,7 @@ do_doctor() {
     fi
   done
   if port_listening 80 && [[ ! -f $GW_CONF ]]; then
-    warn "80 现在由 Apache 占用是正常的（还没部署）；install 会先让 Apache 停到 ${UPSTREAM_PORT}"
+    warn "80 现在由引擎（${ENGINE}）占用是正常的（还没部署）；install 会先让引擎退到 ${UPSTREAM_PORT}"
   fi
 
   step "只读体检"
