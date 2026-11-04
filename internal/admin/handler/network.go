@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"fmt"
 	"net/netip"
 	"strconv"
 	"strings"
@@ -14,12 +15,53 @@ import (
 	"gowaf/internal/store/model"
 )
 
+// 作用域取值：ip_rules 与 bans 共用。
+const (
+	scopeGlobal = "global"
+	scopeSite   = "site"
+)
+
+// normalizeScope 校验并归一化作用域。
+//
+// 规则：scope=site 必须带一个真实存在的站点名；scope=global 忽略站点。
+// 只传 site 不传 scope 时按 site 处理，兼容老前端/脚本调用。
+func (s *Server) normalizeScope(scope, site string) (string, string, error) {
+	scope = strings.TrimSpace(scope)
+	site = strings.TrimSpace(site)
+	if scope == "" {
+		if site != "" {
+			scope = scopeSite
+		} else {
+			scope = scopeGlobal
+		}
+	}
+	switch scope {
+	case scopeGlobal:
+		return scopeGlobal, "", nil
+	case scopeSite:
+		if site == "" {
+			return "", "", fmt.Errorf("按站点作用域必须选择站点")
+		}
+		var n int64
+		if err := s.Store.Gorm().Model(&model.Site{}).Where("name = ?", site).
+			Count(&n).Error; err != nil {
+			return "", "", err
+		}
+		if n == 0 {
+			return "", "", fmt.Errorf("站点不存在: %s", site)
+		}
+		return scopeSite, site, nil
+	}
+	return "", "", fmt.Errorf("scope 只能是 global 或 site")
+}
+
 // ipRuleDTO IP 名单返回结构。
 type ipRuleDTO struct {
 	ID        uint   `json:"id"`
 	IP        string `json:"ip"`
 	Kind      string `json:"kind"`
 	Scope     string `json:"scope"`
+	Site      string `json:"site"`
 	Reason    string `json:"reason"`
 	ExpiresAt int64  `json:"expiresAt"`
 	CreatedBy string `json:"createdBy"`
@@ -31,10 +73,14 @@ func (s *Server) IPList(c *gin.Context) {
 	current, size := pageParams(c)
 	kind := c.Query("kind")
 	kw := strings.TrimSpace(c.Query("keyword"))
+	site := strings.TrimSpace(c.Query("site"))
 
 	q := s.Store.Gorm().Model(&model.IPRule{})
 	if kind != "" {
 		q = q.Where("kind = ?", kind)
+	}
+	if site != "" {
+		q = q.Where("site = ?", site)
 	}
 	if kw != "" {
 		q = q.Where("ip LIKE ?", "%"+kw+"%")
@@ -52,7 +98,7 @@ func (s *Server) IPList(c *gin.Context) {
 	list := make([]ipRuleDTO, 0, len(rows))
 	for _, r := range rows {
 		list = append(list, ipRuleDTO{
-			ID: r.ID, IP: r.IP, Kind: r.Kind, Scope: r.Scope, Reason: r.Reason,
+			ID: r.ID, IP: r.IP, Kind: r.Kind, Scope: r.Scope, Site: r.Site, Reason: r.Reason,
 			ExpiresAt: r.ExpiresAt, CreatedBy: r.CreatedBy, CreatedAt: r.CreatedAt,
 		})
 	}
@@ -65,6 +111,7 @@ type ipRuleInput struct {
 	IPs       []string `json:"ips"`
 	Kind      string   `json:"kind"`
 	Scope     string   `json:"scope"`
+	Site      string   `json:"site"`
 	Reason    string   `json:"reason"`
 	ExpiresAt int64    `json:"expiresAt"`
 }
@@ -88,8 +135,10 @@ func (s *Server) IPCreate(c *gin.Context) {
 		response.BadRequest(c, "kind 只能是 black 或 white")
 		return
 	}
-	if in.Scope == "" {
-		in.Scope = "global"
+	scope, site, err := s.normalizeScope(in.Scope, in.Site)
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
 	}
 
 	operator := c.GetString(middleware.CtxUserName)
@@ -105,11 +154,11 @@ func (s *Server) IPCreate(c *gin.Context) {
 			return
 		}
 		row := model.IPRule{
-			IP: raw, Kind: in.Kind, Scope: in.Scope, Reason: in.Reason,
+			IP: raw, Kind: in.Kind, Scope: scope, Site: site, Reason: in.Reason,
 			ExpiresAt: in.ExpiresAt, CreatedBy: operator, CreatedAt: now,
 		}
 		// 唯一索引冲突时视为已存在，跳过
-		if err := s.Store.Gorm().Where(model.IPRule{IP: raw, Kind: in.Kind, Scope: in.Scope}).
+		if err := s.Store.Gorm().Where(model.IPRule{IP: raw, Kind: in.Kind, Scope: scope, Site: site}).
 			FirstOrCreate(&row).Error; err != nil {
 			s.failDB(c, err)
 			return
@@ -155,6 +204,16 @@ func (s *Server) IPUpdate(c *gin.Context) {
 	if in.Reason != "" {
 		updates["reason"] = in.Reason
 	}
+	if in.Scope != "" || in.Site != "" {
+		// 编辑弹窗总会带上作用域；改成全局时顺便把 site 清空，避免留下孤儿关联
+		scope, site, err := s.normalizeScope(in.Scope, in.Site)
+		if err != nil {
+			response.BadRequest(c, err.Error())
+			return
+		}
+		updates["scope"] = scope
+		updates["site"] = site
+	}
 	if in.ExpiresAt >= 0 {
 		updates["expires_at"] = in.ExpiresAt
 	}
@@ -199,8 +258,10 @@ func (s *Server) IPDelete(c *gin.Context) {
 // IPImport 批量导入，每行一个 IP/CIDR，可带 # 注释。
 func (s *Server) IPImport(c *gin.Context) {
 	var in struct {
-		Text string `json:"text"`
-		Kind string `json:"kind"`
+		Text  string `json:"text"`
+		Kind  string `json:"kind"`
+		Scope string `json:"scope"`
+		Site  string `json:"site"`
 	}
 	if err := c.ShouldBindJSON(&in); err != nil || strings.TrimSpace(in.Text) == "" {
 		response.BadRequest(c, "text 不能为空")
@@ -209,6 +270,11 @@ func (s *Server) IPImport(c *gin.Context) {
 	kind := in.Kind
 	if kind != "black" && kind != "white" {
 		kind = "black"
+	}
+	scope, site, err := s.normalizeScope(in.Scope, in.Site)
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
 	}
 
 	operator := c.GetString(middleware.CtxUserName)
@@ -226,9 +292,9 @@ func (s *Server) IPImport(c *gin.Context) {
 			skipped++
 			continue
 		}
-		row := model.IPRule{IP: line, Kind: kind, Scope: "global", Reason: "批量导入",
-			CreatedBy: operator, CreatedAt: now}
-		res := s.Store.Gorm().Where(model.IPRule{IP: line, Kind: kind, Scope: "global"}).
+		row := model.IPRule{IP: line, Kind: kind, Scope: scope, Site: site,
+			Reason: "批量导入", CreatedBy: operator, CreatedAt: now}
+		res := s.Store.Gorm().Where(model.IPRule{IP: line, Kind: kind, Scope: scope, Site: site}).
 			FirstOrCreate(&row)
 		if res.Error != nil || res.RowsAffected == 0 {
 			skipped++
@@ -261,11 +327,15 @@ func validIPCandidate(s string) bool {
 func (s *Server) BanList(c *gin.Context) {
 	current, size := pageParams(c)
 	active := c.DefaultQuery("active", "1") == "1"
+	site := strings.TrimSpace(c.Query("site"))
 
 	q := s.Store.Gorm().Model(&model.Ban{})
 	if active {
 		now := store.NowMS()
 		q = q.Where("released_at = 0 AND (expires_at = 0 OR expires_at > ?)", now)
+	}
+	if site != "" {
+		q = q.Where("site = ?", site)
 	}
 	var total int64
 	if err := q.Count(&total).Error; err != nil {
@@ -285,6 +355,7 @@ func (s *Server) BanList(c *gin.Context) {
 		}
 		list = append(list, gin.H{
 			"id": r.ID, "ip": ip, "reason": r.Reason, "source": r.Source,
+			"scope": r.Scope, "site": r.Site,
 			"hitCount": r.HitCount, "createdAt": r.CreatedAt,
 			"expiresAt": r.ExpiresAt, "releasedAt": r.ReleasedAt,
 		})
@@ -292,12 +363,14 @@ func (s *Server) BanList(c *gin.Context) {
 	response.OK(c, response.NewPage(list, current, size, total))
 }
 
-// BanCreate 手动封禁。
+// BanCreate 手动封禁。scope=site 时只对指定站点生效，默认全局。
 func (s *Server) BanCreate(c *gin.Context) {
 	var in struct {
 		IP       string `json:"ip"`
 		Duration int64  `json:"duration"` // 秒，0 表示永久
 		Reason   string `json:"reason"`
+		Scope    string `json:"scope"`
+		Site     string `json:"site"`
 	}
 	if err := c.ShouldBindJSON(&in); err != nil || in.IP == "" {
 		response.BadRequest(c, "ip 不能为空")
@@ -312,6 +385,11 @@ func (s *Server) BanCreate(c *gin.Context) {
 		response.BadRequest(c, "封禁仅支持单个 IP，网段请加到黑名单")
 		return
 	}
+	scope, site, err := s.normalizeScope(in.Scope, in.Site)
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
 
 	now := store.NowMS()
 	expires := int64(0)
@@ -321,22 +399,22 @@ func (s *Server) BanCreate(c *gin.Context) {
 	operator := c.GetString(middleware.CtxUserName)
 
 	row := model.Ban{
-		IP: in.IP, Reason: in.Reason, Source: "manual",
+		IP: in.IP, Reason: in.Reason, Source: "manual", Scope: scope, Site: site,
 		HitCount: 1, CreatedAt: now, ExpiresAt: expires,
 	}
 	if err := s.Store.Gorm().Create(&row).Error; err != nil {
 		s.failDB(c, err)
 		return
 	}
-	s.RT.Bans.Ban(in.IP, expires)
+	s.RT.Bans.Ban(in.IP, site, expires)
 	metrics.BannedGauge.Set(float64(s.RT.Bans.Size()))
 
 	c.Set(middleware.CtxAuditObj, "ban")
 	c.Set(middleware.CtxAuditID, strconv.FormatUint(uint64(row.ID), 10))
-	response.OK(c, gin.H{"id": row.ID, "expiresAt": expires, "operator": operator})
+	response.OK(c, gin.H{"id": row.ID, "expiresAt": expires, "scope": scope, "site": site, "operator": operator})
 }
 
-// BanDelete 解封。
+// BanDelete 解封。只解这个作用域，其他站点的同类封禁不受影响。
 func (s *Server) BanDelete(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
@@ -353,17 +431,24 @@ func (s *Server) BanDelete(c *gin.Context) {
 		s.failDB(c, err)
 		return
 	}
-	s.RT.Bans.Unban(row.IP)
+	site := ""
+	if row.Scope == scopeSite {
+		site = row.Site
+	}
+	s.RT.Bans.Unban(row.IP, site)
 	// 手动解封 = 给一次干净的机会：把这个 IP 名下所有未释放的自动封禁记录一起释放，
 	// 连击数按「released_at = 0 的 auto 记录」统计，于是自然归零。
 	// （只释放这一条的话，前两次的旧记录还留着，下次命中立刻又判永久，救不回来。）
-	if err := s.Store.Gorm().Model(&model.Ban{}).
-		Where("ip = ? AND source = ? AND released_at = 0", row.IP, "auto").
-		Update("released_at", store.NowMS()).Error; err != nil {
-		s.failDB(c, err)
-		return
+	// 站点封禁不碰自动封禁的账：自动封禁是全局的，解掉一个站点的封禁不该洗白连击数。
+	if row.Scope != scopeSite {
+		if err := s.Store.Gorm().Model(&model.Ban{}).
+			Where("ip = ? AND source = ? AND released_at = 0", row.IP, "auto").
+			Update("released_at", store.NowMS()).Error; err != nil {
+			s.failDB(c, err)
+			return
+		}
+		s.RT.Hits.Reset(row.IP)
 	}
-	s.RT.Hits.Reset(row.IP)
 	metrics.BannedGauge.Set(float64(s.RT.Bans.Size()))
 
 	c.Set(middleware.CtxAuditObj, "ban")

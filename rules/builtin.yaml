@@ -231,11 +231,11 @@
 - id: rce-log4j
   name: RCE - Log4j2 JNDI
   category: rce
-  score: 70
+  score: 95
   targets: [header, ua, query, body]
   keywords: ["jndi:", "ldap://", "rmi://"]
   pattern: '\$\{\s*jndi\s*:\s*(ldap|rmi|dns|http)'
-  action: block
+  action: ban
   priority: 60
   remark: CVE-2021-44228
 
@@ -571,3 +571,1489 @@
   action: block
   priority: 85
   remark: 日志中 JSON-RPC 挖矿登录包与 XMRig UA 探测
+
+# =====================================================================
+# 扩展规则库（v2）：覆盖 OWASP CRS 的主要攻击族，共 150+ 条。
+# 设计原则：keywords 只放最短特征词保证 AC 命中率，pattern 用 RE2 精确化，
+# 宁可多拦（配合例外机制）也不放过。
+# =====================================================================
+
+# ===== SQL 注入（扩展）=====
+- id: sqli-order-by
+  name: SQL 注入 - ORDER BY 探测
+  category: sqli
+  score: 45
+  targets: [query, body]
+  keywords: ["order by", "order/**/by"]
+  pattern: '\border\s+by\s+\d+'
+  action: block
+  priority: 105
+  group: sqli
+  remark: 列数探测，扫描器高频特征
+
+- id: sqli-union-hex
+  name: SQL 注入 - 十六进制 UNION
+  category: sqli
+  score: 60
+  targets: [query, body]
+  keywords: ["0x", "union"]
+  pattern: '\bunion\b[\s\S]{0,20}\bselect\b|0x[0-9a-f]{4,}'
+  action: block
+  priority: 100
+  group: sqli
+
+- id: sqli-comment-bypass
+  name: SQL 注入 - 注释截断
+  category: sqli
+  score: 50
+  targets: [query, body]
+  keywords: ["--", "#"]
+  pattern: '(--|#)\s*$|/\*!\d*'
+  action: block
+  priority: 110
+  group: sqli
+  remark: 登录绕过经典手法 admin'--
+
+- id: sqli-into-outfile
+  name: SQL 注入 - 写入文件
+  category: sqli
+  score: 80
+  targets: [query, body]
+  keywords: ["into outfile", "into dumpfile"]
+  pattern: 'into\s+(out|dump)file'
+  action: ban
+  priority: 80
+  group: sqli
+  remark: 直接写 webshell，命中即封
+
+- id: sqli-information-schema
+  name: SQL 注入 - information_schema
+  category: sqli
+  score: 55
+  targets: [query, body]
+  keywords: ["information_schema"]
+  pattern: 'information_schema\.(tables|columns|schemata)'
+  action: block
+  priority: 95
+  group: sqli
+
+- id: sqli-mysql-func
+  name: SQL 注入 - MySQL 危险函数
+  category: sqli
+  score: 60
+  targets: [query, body]
+  keywords: ["extractvalue", "updatexml", "geometrycollection"]
+  pattern: '\b(extractvalue|updatexml|geometrycollection|polygon)\s*\('
+  action: block
+  priority: 90
+  group: sqli
+  remark: 报错注入三件套
+
+- id: sqli-mssql
+  name: SQL 注入 - MSSQL 特征
+  category: sqli
+  score: 65
+  targets: [query, body]
+  keywords: ["waitfor", "xp_cmdshell", "openrowset"]
+  pattern: '\b(waitfor\s+delay|xp_cmdshell|openrowset|sp_executesql)\b'
+  action: block
+  priority: 90
+  group: sqli
+
+- id: sqli-pg
+  name: SQL 注入 - PostgreSQL 特征
+  category: sqli
+  score: 60
+  targets: [query, body]
+  keywords: ["pg_sleep", "copy ", "lo_import"]
+  pattern: '\b(pg_sleep|pg_read_file|lo_import|copy\s+\w+\s+to\s+program)\b'
+  action: block
+  priority: 90
+  group: sqli
+
+- id: sqli-oracle
+  name: SQL 注入 - Oracle 特征
+  category: sqli
+  score: 60
+  targets: [query, body]
+  keywords: ["utl_http", "utl_inaddr", "dbms_pipe"]
+  pattern: '\b(utl_http|utl_inaddr|dbms_pipe|dbms_lock)\b'
+  action: block
+  priority: 90
+  group: sqli
+
+- id: sqli-having
+  name: SQL 注入 - HAVING/GROUP 探测
+  category: sqli
+  score: 40
+  targets: [query, body]
+  keywords: ["having", "group by"]
+  pattern: '\b(having|group\s+by)\b\s+\d'
+  action: block
+  priority: 110
+  group: sqli
+
+- id: sqli-hex-encode
+  name: SQL 注入 - 十六进制编码
+  category: sqli
+  score: 35
+  targets: [query, body]
+  keywords: ["0x"]
+  pattern: '0x[0-9a-f]{8,}'
+  action: log
+  priority: 130
+  group: sqli
+  remark: 单凭长十六进制串不够定罪，先观察
+
+- id: sqli-tautology
+  name: SQL 注入 - 恒真条件
+  category: sqli
+  score: 55
+  targets: [query, body]
+  keywords: [" or ", " and "]
+  pattern: '\b(or|and)\b\s*(1\s*=\s*1|''1''\s*=\s*''1''|[a-z]\s*=\s*[a-z])'
+  action: block
+  priority: 100
+  group: sqli
+
+# ===== XSS（扩展）=====
+- id: xss-script-tag
+  name: XSS - script 标签
+  category: xss
+  score: 60
+  targets: [query, body, header]
+  keywords: ["<script"]
+  pattern: '<\s*script[^>]*>'
+  action: block
+  priority: 90
+  group: xss
+
+- id: xss-event-handler
+  name: XSS - 事件处理器
+  category: xss
+  score: 50
+  targets: [query, body]
+  keywords: ["onerror", "onload", "onclick", "onmouseover", "onfocus"]
+  pattern: '\bon(error|load|click|mouseover|focus|submit|input|change)\s*='
+  action: block
+  priority: 95
+  group: xss
+
+- id: xss-javascript-uri
+  name: XSS - javascript 伪协议
+  category: xss
+  score: 55
+  targets: [query, body]
+  keywords: ["javascript:", "vbscript:", "data:text/html"]
+  pattern: '(javascript|vbscript)\s*:|data\s*:\s*text/html'
+  action: block
+  priority: 95
+  group: xss
+
+- id: xss-img-svg
+  name: XSS - 图片/SVG 载荷
+  category: xss
+  score: 50
+  targets: [query, body]
+  keywords: ["<img", "<svg", "<iframe"]
+  pattern: '<\s*(img|svg|iframe|object|embed)[^>]*(src|data|onerror|onload)'
+  action: block
+  priority: 100
+  group: xss
+
+- id: xss-document-cookie
+  name: XSS - cookie 窃取
+  category: xss
+  score: 65
+  targets: [query, body]
+  keywords: ["document.cookie", "document.domain", "window.location"]
+  pattern: 'document\s*\.\s*(cookie|domain)|window\s*\.\s*location'
+  action: block
+  priority: 90
+  group: xss
+
+- id: xss-alert
+  name: XSS - alert/prompt 探测
+  category: xss
+  score: 30
+  targets: [query, body]
+  keywords: ["alert(", "prompt(", "confirm("]
+  pattern: '\b(alert|prompt|confirm)\s*\('
+  action: log
+  priority: 130
+  group: xss
+  remark: 单独出现可能是正常代码，先观察
+
+- id: xss-html-entity-tag
+  name: XSS - 编码标签
+  category: xss
+  score: 55
+  targets: [query, body]
+  keywords: ["&lt;", "%3c"]
+  pattern: '&lt;\s*(script|img|svg|iframe)'
+  action: block
+  priority: 95
+  group: xss
+
+- id: xss-style-expression
+  name: XSS - CSS expression
+  category: xss
+  score: 60
+  targets: [query, body]
+  keywords: ["expression(", "behavior:", "-moz-binding"]
+  pattern: '(expression\s*\(|behavior\s*:|-moz-binding)'
+  action: block
+  priority: 95
+  group: xss
+
+- id: xss-form-action
+  name: XSS - 表单劫持
+  category: xss
+  score: 45
+  targets: [query, body]
+  keywords: ["<form", "formaction"]
+  pattern: '<\s*form[^>]*action\s*=|formaction\s*='
+  action: block
+  priority: 110
+  group: xss
+
+- id: xss-base64-payload
+  name: XSS - Base64 载荷
+  category: xss
+  score: 40
+  targets: [query, body]
+  keywords: ["atob(", "eval("]
+  pattern: '(eval|atob|fromcharcode)\s*\('
+  action: log
+  priority: 120
+  group: xss
+
+- id: xss-srcdoc
+  name: XSS - iframe srcdoc
+  category: xss
+  score: 55
+  targets: [query, body]
+  keywords: ["srcdoc"]
+  pattern: 'srcdoc\s*='
+  action: block
+  priority: 100
+  group: xss
+
+- id: xss-angular-template
+  name: XSS - 前端模板注入
+  category: xss
+  score: 40
+  targets: [query, body]
+  keywords: ["{{", "ng-app", "v-html"]
+  pattern: '\{\{[\s\S]{0,40}\}\}|ng-app|v-html\s*='
+  action: log
+  priority: 130
+  group: xss
+  remark: 中文业务里 {{ }} 常见，默认只记录
+
+- id: xss-inline-handler-attr
+  name: XSS - 内联事件属性
+  category: xss
+  score: 45
+  targets: [query, body]
+  keywords: ["javascript&colon;", "&#x6a;avascript"]
+  pattern: '(java|vb)script\s*&?:|&#x?6a;avascript'
+  action: block
+  priority: 100
+  group: xss
+
+- id: xss-meta-refresh
+  name: XSS - meta 跳转
+  category: xss
+  score: 45
+  targets: [query, body]
+  keywords: ["http-equiv"]
+  pattern: '<meta[^>]+http-equiv'
+  action: block
+  priority: 110
+  group: xss
+
+# ===== 路径穿越 / LFI =====
+- id: trav-dotdot
+  name: 路径穿越 - ../ 遍历
+  category: traversal
+  score: 60
+  targets: [path, query, body]
+  keywords: ["../", "..\\"]
+  pattern: '(\.\./|\.\.\\){1,}'
+  action: block
+  priority: 90
+  group: traversal
+
+- id: trav-encoded
+  name: 路径穿越 - 编码绕过
+  category: traversal
+  score: 60
+  targets: [path, query, body]
+  keywords: ["%2e%2e", "..%2f", "%252e"]
+  pattern: '(%2e%2e|%252e%252e|\.\.%2f|%2e%2e%2f)'
+  action: block
+  priority: 90
+  group: traversal
+
+- id: trav-etc-passwd
+  name: 路径穿越 - 读取系统文件
+  category: traversal
+  score: 80
+  targets: [path, query, body]
+  keywords: ["/etc/passwd", "/etc/shadow", "boot.ini", "win.ini"]
+  pattern: '(/etc/(passwd|shadow|hosts|group)|c:\\windows\\win\.ini|boot\.ini)'
+  action: ban
+  priority: 80
+  group: traversal
+
+- id: trav-proc-self
+  name: 路径穿越 - /proc 探测
+  category: traversal
+  score: 70
+  targets: [path, query]
+  keywords: ["/proc/self", "/proc/1/"]
+  pattern: '/proc/(self|\d+)/(environ|cmdline|maps|root)'
+  action: block
+  priority: 85
+  group: traversal
+
+- id: trav-file-scheme
+  name: 路径穿越 - file 协议
+  category: traversal
+  score: 65
+  targets: [query, body]
+  keywords: ["file://"]
+  pattern: 'file\s*://'
+  action: block
+  priority: 90
+  group: traversal
+
+- id: trav-log-poison
+  name: 路径穿越 - 日志包含
+  category: traversal
+  score: 55
+  targets: [query, body]
+  keywords: ["access.log", "error.log"]
+  pattern: '(/var/log/|\baccess\.log\b|\berror\.log\b)'
+  action: block
+  priority: 100
+  group: traversal
+
+- id: trav-truncate
+  name: 路径穿越 - 截断符
+  category: traversal
+  score: 50
+  targets: [path, query, body]
+  keywords: ["%00"]
+  pattern: '%00'
+  action: block
+  priority: 95
+  group: traversal
+
+- id: trav-tomcat
+  name: 路径穿越 - Tomcat 经典
+  category: traversal
+  score: 70
+  targets: [path]
+  keywords: ["/web-inf", "/meta-inf"]
+  pattern: '/(web-inf|meta-inf)/'
+  action: block
+  priority: 90
+  group: traversal
+
+# ===== 命令执行 / 注入 =====
+- id: rce-shell-sep
+  name: 命令执行 - 分隔符拼接
+  category: rce
+  score: 60
+  targets: [query, body]
+  keywords: ["|", "&&", ";"]
+  pattern: '(\|\s*(cat|ls|id|whoami|curl|wget|nc|bash|sh)\b|;\s*(cat|ls|id|whoami|uname)\b)'
+  action: block
+  priority: 90
+  group: rce
+
+- id: rce-reverse-shell
+  name: 命令执行 - 反弹 shell
+  category: rce
+  score: 90
+  targets: [query, body]
+  keywords: ["/dev/tcp", "bash -i", "nc -e", "socat "]
+  pattern: '(/dev/tcp/|bash\s+-i|nc\s+-e|socat\s+.*exec|mkfifo)'
+  action: ban
+  priority: 70
+  group: rce
+
+- id: rce-powershell
+  name: 命令执行 - PowerShell
+  category: rce
+  score: 75
+  targets: [query, body, header]
+  keywords: ["powershell", "-encodedcommand", "invoke-expression"]
+  pattern: '(powershell(\.exe)?\s+(-\w+\s+)*-|invoke-expression|iex\s*\()'
+  action: block
+  priority: 85
+  group: rce
+
+- id: rce-curl-pipe
+  name: 命令执行 - 远程脚本落地
+  category: rce
+  score: 80
+  targets: [query, body]
+  keywords: ["curl ", "wget ", "| sh", "| bash"]
+  pattern: '(curl|wget)\s+[^\s|]{4,}\s*\|?\s*(sh|bash|python|perl)'
+  action: block
+  priority: 85
+  group: rce
+
+- id: rce-system-func
+  name: 命令执行 - 系统函数
+  category: rce
+  score: 65
+  targets: [query, body]
+  keywords: ["system(", "exec(", "shell_exec", "passthru", "popen("]
+  pattern: '\b(system|exec|shell_exec|passthru|popen|proc_open|pcntl_exec)\s*\('
+  action: block
+  priority: 95
+  group: rce
+
+- id: rce-java-runtime
+  name: 命令执行 - Java Runtime
+  category: rce
+  score: 70
+  targets: [query, body]
+  keywords: ["runtime.getruntime", "processbuilder"]
+  pattern: '(runtime\s*\.\s*getruntime|processbuilder|java\.lang\.runtime)'
+  action: block
+  priority: 90
+  group: rce
+
+
+- id: rce-spring4shell
+  name: 命令执行 - Spring4Shell
+  category: rce
+  score: 90
+  targets: [query, body]
+  keywords: ["class.module.classloader"]
+  pattern: 'class\.module\.classloader'
+  action: ban
+  priority: 60
+  group: rce
+
+- id: rce-fastjson
+  name: 命令执行 - Fastjson 反序列化
+  category: rce
+  score: 90
+  targets: [body]
+  keywords: ["@type", "templatesimpl", "jndiexploit"]
+  pattern: '("@type"\s*:\s*"(java|com\.sun|org\.apache)|templatesimpl|jndiexploit)'
+  action: ban
+  priority: 65
+  group: rce
+
+- id: rce-weblogic
+  name: 命令执行 - WebLogic 漏洞
+  category: rce
+  score: 85
+  targets: [path, query, body]
+  keywords: ["/console/login", "wl_meta", "bea_wls"]
+  pattern: '(/console/login/|_async/|bea_wls_internal)'
+  action: block
+  priority: 85
+  group: rce
+
+- id: rce-struts2
+  name: 命令执行 - Struts2 OGNL
+  category: rce
+  score: 85
+  targets: [query, body]
+  keywords: ["ognl", "#context[", "#_memberaccess"]
+  pattern: '(ognl|#context\[|#_memberaccess)'
+  action: block
+  priority: 85
+  group: rce
+
+- id: rce-shellshock
+  name: 命令执行 - Shellshock
+  category: rce
+  score: 85
+  targets: [header, ua, cookie]
+  keywords: ["() {", "(){"]
+  pattern: '\(\s*\)\s*\{\s*:?\s*;'
+  action: block
+  priority: 80
+  group: rce
+
+- id: rce-python-exec
+  name: 命令执行 - Python/Perl 载荷
+  category: rce
+  score: 70
+  targets: [query, body]
+  keywords: ["os.system", "subprocess", "__import__", "perl -e"]
+  pattern: '(os\.system|subprocess\.|__import__\s*\(|perl\s+-e\s+)'
+  action: block
+  priority: 90
+  group: rce
+
+- id: rce-ssrf-internal
+  name: 命令执行 - SSRF 内网探测
+  category: rce
+  score: 55
+  targets: [query, body]
+  keywords: ["127.0.0.1", "localhost", "169.254.169.254", "0.0.0.0"]
+  pattern: '(https?://(127\.0\.0\.1|localhost|0\.0\.0\.0|169\.254\.169\.254|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.))'
+  action: block
+  priority: 100
+  group: rce
+  remark: 云主机元数据接口是最常见的 SSRF 目标
+
+- id: rce-ssrf-scheme
+  name: 命令执行 - 危险协议
+  category: rce
+  score: 65
+  targets: [query, body]
+  keywords: ["gopher://", "dict://", "ldap://", "ftp://"]
+  pattern: '(gopher|dict|ldap|ftp)\s*://'
+  action: block
+  priority: 95
+  group: rce
+
+# ===== 扫描器 / 自动化工具 =====
+- id: scan-sqlmap
+  name: 扫描器 - sqlmap
+  category: scanner
+  score: 70
+  targets: [ua, query, body]
+  keywords: ["sqlmap"]
+  pattern: 'sqlmap'
+  action: ban
+  priority: 80
+  group: scanner
+
+- id: scan-nikto
+  name: 扫描器 - Nikto
+  category: scanner
+  score: 70
+  targets: [ua]
+  keywords: ["nikto"]
+  pattern: 'nikto'
+  action: ban
+  priority: 80
+  group: scanner
+
+- id: scan-nmap
+  name: 扫描器 - Nmap/NSE
+  category: scanner
+  score: 70
+  targets: [ua]
+  keywords: ["nmap", "nse"]
+  pattern: 'nmap|nmap scripting engine|nse/'
+  action: ban
+  priority: 80
+  group: scanner
+
+- id: scan-dirsearch
+  name: 扫描器 - dirsearch/gobuster
+  category: scanner
+  score: 65
+  targets: [ua]
+  keywords: ["dirsearch", "gobuster", "feroxbuster"]
+  pattern: '(dirsearch|gobuster|feroxbuster)'
+  action: ban
+  priority: 80
+  group: scanner
+
+- id: scan-nuclei
+  name: 扫描器 - Nuclei
+  category: scanner
+  score: 70
+  targets: [ua, header]
+  keywords: ["nuclei"]
+  pattern: 'nuclei'
+  action: ban
+  priority: 80
+  group: scanner
+
+- id: scan-masscan
+  name: 扫描器 - Masscan/Zmap
+  category: scanner
+  score: 65
+  targets: [ua]
+  keywords: ["masscan", "zmap", "zgrab"]
+  pattern: '(masscan|zmap|zgrab)'
+  action: ban
+  priority: 80
+  group: scanner
+
+- id: scan-awvs
+  name: 扫描器 - AWVS/AppScan
+  category: scanner
+  score: 70
+  targets: [ua]
+  keywords: ["acunetix", "appscan", "netsparker"]
+  pattern: '(acunetix|appscan|netsparker|wvs)'
+  action: ban
+  priority: 80
+  group: scanner
+
+- id: scan-xray
+  name: 扫描器 - Xray/Goby
+  category: scanner
+  score: 70
+  targets: [ua]
+  keywords: ["xray", "goby"]
+  pattern: '(xray|goby)' 
+  action: ban
+  priority: 80
+  group: scanner
+
+- id: scan-wpscan
+  name: 扫描器 - WPScan
+  category: scanner
+  score: 65
+  targets: [ua]
+  keywords: ["wpscan"]
+  pattern: 'wpscan'
+  action: ban
+  priority: 80
+  group: scanner
+
+- id: scan-ffuf
+  name: 扫描器 - ffuf/wfuzz
+  category: scanner
+  score: 65
+  targets: [ua]
+  keywords: ["ffuf", "wfuzz", "dirbuster"]
+  pattern: '(ffuf|wfuzz|dirbuster)'
+  action: ban
+  priority: 80
+  group: scanner
+
+- id: scan-nikto-header
+  name: 扫描器 - 探测头
+  category: scanner
+  score: 40
+  targets: [header]
+  keywords: ["x-scanner", "acunetix-safe"]
+  pattern: '(x-scanner|acunetix)'
+  action: block
+  priority: 100
+  group: scanner
+
+- id: scan-empty-ua
+  name: 扫描器 - 空 UA 访问动态接口
+  category: scanner
+  score: 35
+  targets: [ua]
+  keywords: ["python-requests", "go-http-client", "java/", "okhttp"]
+  pattern: '(python-requests|go-http-client|java/\d|okhttp|libwww-perl|winhttp)'
+  action: log
+  priority: 130
+  group: scanner
+  remark: 正常回调也可能是这些 UA，先记录
+
+- id: scan-nikto-path
+  name: 扫描器 - 常见探测路径
+  category: scanner
+  score: 45
+  targets: [path]
+  keywords: ["/phpmyadmin", "/pma/", "/mysqladmin", "/adminer"]
+  pattern: '/(phpmyadmin|pma|mysqladmin|adminer)'
+  action: block
+  priority: 95
+  group: scanner
+
+- id: scan-cms-probe
+  name: 扫描器 - CMS 后台探测
+  category: scanner
+  score: 45
+  targets: [path]
+  keywords: ["/wp-login.php", "/wp-admin", "/administrator/", "/user/login"]
+  pattern: '/(wp-login\.php|wp-admin|administrator/index\.php|xmlrpc\.php)'
+  action: block
+  priority: 95
+  group: scanner
+
+- id: scan-nuclei-path
+  name: 扫描器 - Nuclei 指纹路径
+  category: scanner
+  score: 50
+  targets: [path]
+  keywords: ["/.well-known/security.txt", "/trace.axd", "/elmah.axd"]
+  pattern: '(/\.well-known/security\.txt|/(trace|elmah)\.axd|/actuator/health)'
+  action: block
+  priority: 100
+  group: scanner
+
+- id: scan-webshell-path
+  name: 扫描器 - webshell 探测
+  category: scanner
+  score: 65
+  targets: [path]
+  keywords: ["/shell.php", "/cmd.php", "/1.php", "/upload.php"]
+  pattern: '/(shell|cmd|c99|r57|webshell|backdoor)\.(php|jsp|asp|aspx)'
+  action: ban
+  priority: 80
+  group: scanner
+
+# ===== 敏感文件 / 信息泄露 =====
+- id: sens-git
+  name: 敏感文件 - .git 泄露
+  category: sensitive_file
+  score: 70
+  targets: [path]
+  keywords: ["/.git/", "/.gitignore"]
+  pattern: '/\.git/(config|head|index|logs|refs)|/\.gitignore'
+  action: block
+  priority: 85
+  group: sensitive_file
+
+- id: sens-svn
+  name: 敏感文件 - .svn/.hg
+  category: sensitive_file
+  score: 65
+  targets: [path]
+  keywords: ["/.svn/", "/.hg/"]
+  pattern: '/\.(svn|hg)/(entries|wc\.db|dirstate)'
+  action: block
+  priority: 85
+  group: sensitive_file
+
+- id: sens-env
+  name: 敏感文件 - .env 配置
+  category: sensitive_file
+  score: 80
+  targets: [path]
+  keywords: ["/.env"]
+  pattern: '/\.env(\.|$|/|%00)'
+  action: block
+  priority: 80
+  group: sensitive_file
+
+- id: sens-dotfiles
+  name: 敏感文件 - 点文件泄露
+  category: sensitive_file
+  score: 55
+  targets: [path]
+  keywords: ["/.ds_store", "/.bash_history", "/.ssh/", "/.htpasswd"]
+  pattern: '/(\.ds_store|\.bash_history|\.zsh_history|\.ssh/|\.htpasswd|\.htaccess\.bak)'
+  action: block
+  priority: 90
+  group: sensitive_file
+
+- id: sens-backup
+  name: 敏感文件 - 备份文件
+  category: sensitive_file
+  score: 60
+  targets: [path]
+  keywords: [".bak", ".old", ".swp", ".save", ".backup", "~"]
+  pattern: '\.(bak|old|swp|swo|save|backup|orig|copy|tmp)$|~$'
+  action: block
+  priority: 95
+  group: sensitive_file
+
+- id: sens-sql-dump
+  name: 敏感文件 - 数据库导出
+  category: sensitive_file
+  score: 75
+  targets: [path]
+  keywords: [".sql", ".dump", ".db"]
+  pattern: '\.(sql|dump|mdb|sqlite|db)$'
+  action: block
+  priority: 90
+  group: sensitive_file
+
+- id: sens-archive
+  name: 敏感文件 - 压缩包
+  category: sensitive_file
+  score: 50
+  targets: [path]
+  keywords: [".zip", ".rar", ".tar.gz", ".7z"]
+  pattern: '\.(zip|rar|tar|tgz|7z|gz)$'
+  action: log
+  priority: 130
+  group: sensitive_file
+  remark: 下载站会误报，只记录
+
+- id: sens-web-config
+  name: 敏感文件 - 站点配置
+  category: sensitive_file
+  score: 75
+  targets: [path]
+  keywords: ["web.config", "web.xml", "appsettings.json"]
+  pattern: '/(web\.config|web\.xml|appsettings(\.\w+)?\.json|\.user\.ini)$'
+  action: block
+  priority: 85
+  group: sensitive_file
+
+- id: sens-phpinfo
+  name: 敏感文件 - phpinfo
+  category: sensitive_file
+  score: 60
+  targets: [path, query]
+  keywords: ["phpinfo", "/info.php", "/test.php"]
+  pattern: '/(phpinfo|info|test|php_info)\.php'
+  action: block
+  priority: 95
+  group: sensitive_file
+
+- id: sens-spring-actuator
+  name: 敏感文件 - Spring Actuator
+  category: sensitive_file
+  score: 70
+  targets: [path]
+  keywords: ["/actuator", "/env", "/heapdump", "/jolokia"]
+  pattern: '/actuator/(env|heapdump|jolokia|beans|configprops|mappings)'
+  action: block
+  priority: 85
+  group: sensitive_file
+
+- id: sens-swagger
+  name: 敏感文件 - 接口文档暴露
+  category: sensitive_file
+  score: 40
+  targets: [path]
+  keywords: ["/swagger-ui", "/v2/api-docs", "/openapi.json"]
+  pattern: '/(swagger-ui|v2/api-docs|v3/api-docs|openapi\.json)'
+  action: log
+  priority: 120
+  group: sensitive_file
+  remark: 不少业务默认开着，先记录
+
+- id: sens-druid
+  name: 敏感文件 - Druid 监控台
+  category: sensitive_file
+  score: 70
+  targets: [path]
+  keywords: ["/druid/"]
+  pattern: '/druid/(index|sql|websession|api)'
+  action: block
+  priority: 85
+  group: sensitive_file
+
+- id: sens-server-status
+  name: 敏感文件 - 服务器状态页
+  category: sensitive_file
+  score: 55
+  targets: [path]
+  keywords: ["server-status", "server-info"]
+  pattern: '/(server-status|server-info)'
+  action: block
+  priority: 90
+  group: sensitive_file
+
+- id: sens-idea-vscode
+  name: 敏感文件 - IDE 配置
+  category: sensitive_file
+  score: 50
+  targets: [path]
+  keywords: ["/.idea/", "/.vscode/"]
+  pattern: '/\.(idea|vscode)/(workspace\.xml|launch\.json|settings\.json)'
+  action: block
+  priority: 95
+  group: sensitive_file
+
+- id: sens-composer
+  name: 敏感文件 - 依赖清单
+  category: sensitive_file
+  score: 35
+  targets: [path]
+  keywords: ["composer.lock", "composer.json", "package.json", "yarn.lock"]
+  pattern: '/(composer\.(lock|json)|package\.json|yarn\.lock)$'
+  action: log
+  priority: 130
+  group: sensitive_file
+
+- id: sens-aws-cred
+  name: 敏感文件 - 云凭据
+  category: sensitive_file
+  score: 90
+  targets: [path]
+  keywords: ["/.aws/credentials", "id_rsa", ".pem"]
+  pattern: '/(\.aws/credentials|id_rsa|id_dsa|\.pem)$'
+  action: ban
+  priority: 70
+  group: sensitive_file
+
+- id: sens-php-backup
+  name: 敏感文件 - PHP 源码备份
+  category: sensitive_file
+  score: 70
+  targets: [path]
+  keywords: [".php.bak", ".php~", ".php.swp", ".php.old"]
+  pattern: '\.php(\.(bak|old|swp|save|txt|zip)|~)$'
+  action: block
+  priority: 85
+  group: sensitive_file
+
+- id: sens-config-leak
+  name: 敏感文件 - 配置泄露
+  category: sensitive_file
+  score: 70
+  targets: [path]
+  keywords: ["config.php", "database.yml", "settings.py", "application.properties"]
+  pattern: '/(config\.(php|inc|json|ya?ml)|database\.yml|settings\.py|application(-[\w]+)?\.properties)$'
+  action: block
+  priority: 90
+  group: sensitive_file
+
+- id: sens-log-leak
+  name: 敏感文件 - 日志泄露
+  category: sensitive_file
+  score: 55
+  targets: [path]
+  keywords: [".log"]
+  pattern: '\.log$'
+  action: log
+  priority: 130
+  group: sensitive_file
+
+- id: sens-crossdomain
+  name: 敏感文件 - crossdomain.xml
+  category: sensitive_file
+  score: 35
+  targets: [path]
+  keywords: ["crossdomain.xml", "clientaccesspolicy.xml"]
+  pattern: '/(crossdomain|clientaccesspolicy)\.xml'
+  action: log
+  priority: 130
+  group: sensitive_file
+
+- id: sens-dsstore
+  name: 敏感文件 - mac 元数据
+  category: sensitive_file
+  score: 40
+  targets: [path]
+  keywords: [".ds_store"]
+  pattern: '\.ds_store'
+  action: block
+  priority: 100
+  group: sensitive_file
+
+- id: sens-nginx-conf
+  name: 敏感文件 - nginx/apache 配置
+  category: sensitive_file
+  score: 65
+  targets: [path]
+  keywords: ["nginx.conf", "httpd.conf", ".htaccess"]
+  pattern: '/(nginx\.conf|httpd\.conf|\.htaccess|\.htpasswd)$'
+  action: block
+  priority: 90
+  group: sensitive_file
+
+- id: sens-docker
+  name: 敏感文件 - 容器编排文件
+  category: sensitive_file
+  score: 55
+  targets: [path]
+  keywords: ["docker-compose", "dockerfile", "k8s"]
+  pattern: '/(docker-compose\.ya?ml|dockerfile|\.kube/config)$'
+  action: log
+  priority: 120
+  group: sensitive_file
+
+- id: sens-package-lock
+  name: 敏感文件 - 前端构建产物
+  category: sensitive_file
+  score: 30
+  targets: [path]
+  keywords: [".map"]
+  pattern: '\.js\.map$'
+  action: log
+  priority: 140
+  group: sensitive_file
+
+- id: sens-shell-history
+  name: 敏感文件 - 终端历史
+  category: sensitive_file
+  score: 50
+  targets: [path]
+  keywords: [".bash_history", ".zsh_history", ".mysql_history"]
+  pattern: '\.(bash|zsh|mysql|psql)_history'
+  action: block
+  priority: 95
+  group: sensitive_file
+
+- id: sens-vpn-config
+  name: 敏感文件 - VPN/证书
+  category: sensitive_file
+  score: 60
+  targets: [path]
+  keywords: [".ovpn", ".p12", ".pfx", ".key"]
+  pattern: '\.(ovpn|p12|pfx|key|jks)$'
+  action: block
+  priority: 95
+  group: sensitive_file
+
+- id: sens-git-config
+  name: 敏感文件 - git 配置
+  category: sensitive_file
+  score: 60
+  targets: [path]
+  keywords: ["/.git/config", "/.git/head"]
+  pattern: '/\.git/(config|head)$'
+  action: block
+  priority: 85
+  group: sensitive_file
+
+- id: sens-backup-zip
+  name: 敏感文件 - 站点打包
+  category: sensitive_file
+  score: 70
+  targets: [path]
+  keywords: ["www.zip", "web.zip", "backup.zip", "site.zip"]
+  pattern: '(www|web|backup|site|htdocs|public_html)\.(zip|tar\.gz|rar|7z)'
+  action: ban
+  priority: 75
+  group: sensitive_file
+
+# ===== 恶意上传 / Webshell =====
+- id: up-php-tag
+  name: 恶意上传 - PHP 短标签
+  category: upload
+  score: 75
+  targets: [body]
+  keywords: ["<?php", "<?="]
+  pattern: '<\?(php|=)'
+  action: block
+  priority: 85
+  group: upload
+
+- id: up-eval
+  name: 恶意上传 - eval/assert
+  category: upload
+  score: 80
+  targets: [body, query]
+  keywords: ["eval(", "assert(", "create_function"]
+  pattern: '\b(eval|assert|create_function|preg_replace)\s*\(\s*[""'']'
+  action: block
+  priority: 85
+  group: upload
+
+- id: up-base64-decode
+  name: 恶意上传 - 编码免杀
+  category: upload
+  score: 70
+  targets: [body]
+  keywords: ["base64_decode", "str_rot13", "gzinflate", "gzuncompress"]
+  pattern: '\b(base64_decode|str_rot13|gzinflate|gzuncompress|strrev)\s*\('
+  action: block
+  priority: 90
+  group: upload
+
+- id: up-webshell-func
+  name: 恶意上传 - 一句话木马
+  category: upload
+  score: 85
+  targets: [body]
+  keywords: ["$_post[", "$_get[", "$_request["]
+  pattern: '\$_(post|get|request|cookie)\s*\[[^\]]*\]\s*\(?'
+  action: block
+  priority: 80
+  group: upload
+  remark: 一句话木马的典型形态
+
+- id: up-jsp-runtime
+  name: 恶意上传 - JSP 命令执行
+  category: upload
+  score: 85
+  targets: [body]
+  keywords: ["runtime.getruntime", "processbuilder"]
+  pattern: '(runtime\s*\.\s*getruntime|processbuilder)'
+  action: block
+  priority: 85
+  group: upload
+
+- id: up-asp-eval
+  name: 恶意上传 - ASP 执行
+  category: upload
+  score: 80
+  targets: [body]
+  keywords: ["execute(", "eval request", "server.createobject"]
+  pattern: '(execute\s*\(|eval\s+request|server\.createobject)'
+  action: block
+  priority: 85
+  group: upload
+
+- id: up-double-ext
+  name: 恶意上传 - 双扩展名
+  category: upload
+  score: 55
+  targets: [path, query]
+  keywords: [".php.", ".jsp.", ".asp."]
+  pattern: '\.(php|jsp|asp|aspx|exe|dll)\.(jpg|png|gif|txt|zip)'
+  action: block
+  priority: 95
+  group: upload
+
+- id: up-null-byte
+  name: 恶意上传 - 空字节截断
+  category: upload
+  score: 70
+  targets: [path, query, body]
+  keywords: ["%00.", "\x00."]
+  pattern: '%00\.(php|jsp|asp)'
+  action: block
+  priority: 90
+  group: upload
+
+- id: up-svg-script
+  name: 恶意上传 - SVG 内嵌脚本
+  category: upload
+  score: 60
+  targets: [body]
+  keywords: ["<svg", "onload="]
+  pattern: '<svg[^>]*onload\s*='
+  action: block
+  priority: 95
+  group: upload
+
+- id: up-htaccess
+  name: 恶意上传 - .htaccess 覆盖
+  category: upload
+  score: 70
+  targets: [path, body]
+  keywords: ["addtype application", "php_value", "auto_prepend_file"]
+  pattern: '(addtype\s+application|php_value|auto_prepend_file|auto_append_file)'
+  action: block
+  priority: 85
+  group: upload
+
+- id: up-coldfusion
+  name: 恶意上传 - CFM 执行
+  category: upload
+  score: 75
+  targets: [body]
+  keywords: ["<cfexecute", "<cfscript"]
+  pattern: '<cf(execute|script|object)'
+  action: block
+  priority: 90
+  group: upload
+
+- id: up-python-pickle
+  name: 恶意上传 - 反序列化载荷
+  category: upload
+  score: 70
+  targets: [body]
+  keywords: ["!!python/object", "cos\\nsystem", "gASV"]
+  pattern: '(!!python/object|cos\\nsystem|gASV[a-z0-9+/]{10,})'
+  action: block
+  priority: 90
+  group: upload
+
+- id: up-phar
+  name: 恶意上传 - PHAR 反序列化
+  category: upload
+  score: 75
+  targets: [body, query]
+  keywords: ["phar://"]
+  pattern: 'phar\s*://'
+  action: block
+  priority: 90
+  group: upload
+
+- id: up-image-php
+  name: 恶意上传 - 图片木马
+  category: upload
+  score: 65
+  targets: [body]
+  keywords: ["gif89a", "<?php"]
+  pattern: '(gif89a|bm)[\s\S]{0,100}<\?php'
+  action: block
+  priority: 90
+  group: upload
+
+- id: up-elf-binary
+  name: 恶意上传 - ELF 可执行体
+  category: upload
+  score: 60
+  targets: [body]
+  keywords: ["\x7felf", "mz"]
+  pattern: '\x7felf|^mz'
+  action: log
+  priority: 130
+  group: upload
+  remark: 正常文件上传也可能是二进制，先记录
+
+# ===== 协议异常 / 绕过 =====
+- id: proto-crlf
+  name: 协议异常 - CRLF 注入
+  category: protocol
+  score: 65
+  targets: [query, body, header]
+  keywords: ["%0d%0a", "%0a%0d"]
+  pattern: '(%0d%0a|%0a%0d|%0d|%0a)\s*(set-cookie|location|content-length)'
+  action: block
+  priority: 85
+  group: protocol
+
+- id: proto-host-header
+  name: 协议异常 - Host 头注入
+  category: protocol
+  score: 55
+  targets: [header]
+  keywords: ["x-forwarded-host", "x-host", "forwarded:"]
+  pattern: '(x-forwarded-host|x-host|forwarded)\s*:'
+  action: log
+  priority: 130
+  group: protocol
+  remark: 反向代理链正常也会带，先记录
+
+- id: proto-double-encode
+  name: 协议异常 - 双重编码
+  category: protocol
+  score: 45
+  targets: [path, query]
+  keywords: ["%25"]
+  pattern: '%25(2e|2f|3c|3e|27|22|7b|7d)'
+  action: block
+  priority: 100
+  group: protocol
+
+
+- id: proto-null
+  name: 协议异常 - 空字节
+  category: protocol
+  score: 60
+  targets: [path, query, body]
+  keywords: ["%00"]
+  pattern: '%00'
+  action: block
+  priority: 95
+  group: protocol
+
+- id: proto-webdav
+  name: 协议异常 - WebDAV 方法
+  category: protocol
+  score: 65
+  targets: [header]
+  keywords: ["put ", "delete ", "propfind", "mkcol"]
+  pattern: '(^|\s)(put|delete|propfind|mkcol|copy|move)\s+/'
+  action: block
+  priority: 95
+  group: protocol
+
+- id: proto-trace
+  name: 协议异常 - TRACE 探测
+  category: protocol
+  score: 50
+  targets: [header]
+  keywords: ["trace ", "track "]
+  pattern: '(^|\s)(trace|track)\s+/'
+  action: block
+  priority: 100
+  group: protocol
+
+- id: proto-content-type
+  name: 协议异常 - 畸形 Content-Type
+  category: protocol
+  score: 35
+  targets: [header]
+  keywords: ["content-type: application/x-www-form-urlencoded;"]
+  pattern: 'content-type\s*:.*;\s*(boundary|charset)\s*=?\s*$'
+  action: log
+  priority: 140
+  group: protocol
+
+- id: proto-multipart-bypass
+  name: 协议异常 - multipart 绕过
+  category: protocol
+  score: 55
+  targets: [body]
+  keywords: ["filename=", "../"]
+  pattern: 'filename\s*=\s*["''][^"'']*(\.\./|/etc/|\.php|\.jsp)'
+  action: block
+  priority: 90
+  group: protocol
+
+- id: proto-http-smuggling
+  name: 协议异常 - 请求走私
+  category: protocol
+  score: 80
+  targets: [header]
+  keywords: ["transfer-encoding: chunked", "content-length:"]
+  pattern: 'transfer-encoding\s*:\s*chunked[\s\S]*content-length\s*:'
+  action: block
+  priority: 85
+  group: protocol
+
+- id: proto-xml-entity
+  name: 协议异常 - XXE 实体
+  category: protocol
+  score: 85
+  targets: [body]
+  keywords: ["<!doctype", "<!entity"]
+  pattern: '<!doctype[^>]*\[[\s\S]*<!entity'
+  action: block
+  priority: 80
+  group: protocol
+
+- id: proto-xxe-system
+  name: 协议异常 - XXE 外部实体
+  category: protocol
+  score: 90
+  targets: [body]
+  keywords: ["system \"file", "system 'file", "system \"http"]
+  pattern: 'system\s*["''](file|http|ftp)'
+  action: ban
+  priority: 75
+  group: protocol
+
+- id: proto-jndi-header
+  name: 协议异常 - 头部 JNDI
+  category: protocol
+  score: 90
+  targets: [header, ua]
+  keywords: ["jndi:"]
+  pattern: 'jndi\s*:\s*(ldap|rmi|dns)'
+  action: ban
+  priority: 65
+  group: protocol
+
+- id: proto-ssti
+  name: 协议异常 - 模板注入
+  category: protocol
+  score: 60
+  targets: [query, body]
+  keywords: ["{{", "${", "<%= "]
+  pattern: '(\{\{[\s\S]{0,30}(config|self|_class|__class__)|\$\{[\s\S]{0,30}(jndi|runtime|class)})'
+  action: block
+  priority: 95
+  group: protocol
+
+# ===== 爬虫 / 恶意机器人 =====
+- id: bot-scrapy
+  name: 恶意机器人 - 采集器
+  category: scanner
+  score: 40
+  targets: [ua]
+  keywords: ["scrapy", "python-urllib", "aiohttp", "httpx"]
+  pattern: '(scrapy|python-urllib|aiohttp|httpx/\d)'
+  action: log
+  priority: 130
+  group: scanner
+
+- id: bot-headless
+  name: 恶意机器人 - 无头浏览器
+  category: scanner
+  score: 45
+  targets: [ua]
+  keywords: ["headlesschrome", "phantomjs", "selenium", "puppeteer"]
+  pattern: '(headlesschrome|phantomjs|selenium|puppeteer)'
+  action: block
+  priority: 110
+  group: scanner
+
+- id: bot-crawler-abuse
+  name: 恶意机器人 - 伪装搜索引擎
+  category: scanner
+  score: 50
+  targets: [ua]
+  keywords: ["baiduspider", "googlebot"]
+  pattern: '(baiduspider|googlebot|bingbot)'
+  action: log
+  priority: 140
+  group: scanner
+  remark: 正常爬虫也会命中，需配合 rDNS 校验再决定封禁
+
+- id: bot-cli-tool
+  name: 恶意机器人 - 命令行工具
+  category: scanner
+  score: 35
+  targets: [ua]
+  keywords: ["curl/", "wget/", "httpie", "postmanruntime"]
+  pattern: '(curl/|wget/|httpie|postmanruntime)'
+  action: log
+  priority: 140
+  group: scanner
+
+- id: bot-nikto-ua
+  name: 恶意机器人 - 漏洞利用框架
+  category: scanner
+  score: 80
+  targets: [ua]
+  keywords: ["metasploit", "exploit", "cobalt strike", "beacon"]
+  pattern: '(metasploit|exploit\/|cobaltstrike|cobalt strike)'
+  action: ban
+  priority: 70
+  group: scanner
+
+# ===== 其他高危 =====
+- id: misc-shell-upload
+  name: 其他高危 - 上传目录执行
+  category: upload
+  score: 70
+  targets: [path]
+  keywords: ["/upload/", "/uploads/", "/files/"]
+  pattern: '/(upload|uploads|files|attachment)s?/[\w\-]+\.(php|jsp|asp|aspx|exe)'
+  action: block
+  priority: 90
+  group: upload
+
+- id: misc-debug-endpoint
+  name: 其他高危 - 调试接口
+  category: sensitive_file
+  score: 55
+  targets: [path]
+  keywords: ["/debug", "/console", "/jmx", "/management"]
+  pattern: '/(debug|console|jmx-console|management/health|_profiler)'
+  action: block
+  priority: 100
+  group: sensitive_file
+
+- id: misc-graphql-introspect
+  name: 其他高危 - GraphQL 内省
+  category: sensitive_file
+  score: 40
+  targets: [body]
+  keywords: ["__schema", "introspectionquery"]
+  pattern: '(__schema|introspectionquery)'
+  action: log
+  priority: 130
+  group: sensitive_file
+
+- id: misc-ldap-inject
+  name: 其他高危 - LDAP 注入
+  category: protocol
+  score: 55
+  targets: [query, body]
+  keywords: [")(|", "objectclass="]
+  pattern: '(\(\s*\|.*objectclass|\(\s*&.*objectclass)'
+  action: block
+  priority: 100
+  group: protocol
+
+- id: misc-nosql-inject
+  name: 其他高危 - NoSQL 注入
+  category: protocol
+  score: 55
+  targets: [query, body]
+  keywords: ["$ne", "$gt", "$where", "$regex"]
+  pattern: '"\$(ne|gt|gte|lt|lte|where|regex|exists)"\s*:'
+  action: block
+  priority: 100
+  group: protocol
+
+- id: misc-crlf-location
+  name: 其他高危 - 开放重定向
+  category: protocol
+  score: 45
+  targets: [query]
+  keywords: ["redirect=", "returnurl=", "next="]
+  pattern: '(redirect|returnurl|next|url)\s*=\s*(https?:)?//'
+  action: log
+  priority: 130
+  group: protocol
+
+- id: misc-jwt-none
+  name: 其他高危 - JWT 空算法
+  category: protocol
+  score: 60
+  targets: [header]
+  keywords: ["eyjhbgcioijiuzi1niisinr5cci6ikp1vcj9"]
+  pattern: 'eyj[a-z0-9_\-]{10,}\.eyj[a-z0-9_\-]{10,}\.'
+  action: log
+  priority: 130
+  group: protocol
+  remark: JWT 本身正常，仅记录便于溯源

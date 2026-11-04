@@ -27,6 +27,9 @@ type builtinRule struct {
 	Action   string   `yaml:"action"`
 	Priority int      `yaml:"priority"`
 	Remark   string   `yaml:"remark"`
+	Group    string   `yaml:"group"`
+	Mode     string   `yaml:"mode"`
+	Version  string   `yaml:"version"`
 }
 
 // AllButtons 是权限按钮全集，管理员默认全给，viewer/demo 只读。
@@ -201,12 +204,25 @@ func (s *Store) ImportBuiltinRules(path string) error {
 		if priority == 0 {
 			priority = 100
 		}
+		group := r.Group
+		if group == "" {
+			group = r.Category
+		}
+		mode := r.Mode
+		if mode == "" {
+			mode = "inherit"
+		}
+		version := r.Version
+		if version == "" {
+			version = "2"
+		}
 
 		if old, ok := byID[r.ID]; ok {
 			// 只在内容变化时写库，避免每次启动都刷 updated_at
 			if old.Score == r.Score && old.Pattern == r.Pattern && old.Keywords == string(kws) &&
 				old.Targets == targets && old.Name == r.Name && old.Category == r.Category &&
-				old.Action == action && old.Priority == priority {
+				old.Action == action && old.Priority == priority &&
+				old.Group == group && old.Mode == mode {
 				continue
 			}
 			err := s.gorm.Model(&model.Rule{}).Where("id = ?", r.ID).Updates(map[string]any{
@@ -219,6 +235,9 @@ func (s *Store) ImportBuiltinRules(path string) error {
 				"action":     action,
 				"priority":   priority,
 				"remark":     r.Remark,
+				"rule_group": group,
+				"mode":       mode,
+				"version":    version,
 				"updated_at": now,
 			}).Error
 			if err != nil {
@@ -241,6 +260,11 @@ func (s *Store) ImportBuiltinRules(path string) error {
 			Priority:  priority,
 			Remark:    r.Remark,
 			UpdatedAt: now,
+			Source:    "builtin",
+			Vendor:    "gowaf",
+			Version:   version,
+			Group:     group,
+			Mode:      mode,
 		}
 		if err := s.gorm.Create(&rule).Error; err != nil {
 			return err

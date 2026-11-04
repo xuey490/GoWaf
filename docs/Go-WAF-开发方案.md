@@ -1701,36 +1701,79 @@ WHERE ts BETWEEN ? AND ?
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
-| GET | `/api/events` | 分页查询，支持 site/action/category/ip/path/from/to |
-| GET | `/api/events/:id` | 详情（含原始请求头、命中证据） |
-| GET | `/api/events/export` | 导出 CSV（上限 5 万行） |
+| GET | `/api/events` | 分页查询，支持 site/action/category/ip/keyword；每条带 `country`（IP 属地） |
+| GET | `/api/events/:id` | 详情（含原始请求头、命中证据、IP 属地） |
+| GET | `/api/events/export` | 导出 CSV（上限 5 万行，含 IP 属地列） |
 | GET | `/api/stream/events` | SSE 实时事件流 |
 
 #### IP 与封禁
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
-| GET | `/api/ips?kind=black&keyword=` | 名单列表 |
-| POST | `/api/ips` | 新增（支持 CIDR、批量数组） |
-| PUT | `/api/ips/:id` | 修改 |
+| GET | `/api/ips?kind=black&keyword=&site=` | 名单列表 |
+| POST | `/api/ips` | 新增（支持 CIDR、批量数组；`scope=site` 时必须带 `site`） |
+| PUT | `/api/ips/:id` | 修改（含作用域，改回 global 会清空 site） |
 | DELETE | `/api/ips/:id` | 删除 |
-| POST | `/api/ips/import` | 批量导入（文本，每行一个） |
-| GET | `/api/bans?active=1` | 当前封禁列表 |
-| POST | `/api/bans` | 手动封禁（ip、时长、原因） |
-| DELETE | `/api/bans/:id` | 解封 |
+| POST | `/api/ips/import` | 批量导入（文本，每行一个；同样支持 `scope`/`site`） |
+| GET | `/api/bans?active=1&site=` | 当前封禁列表（返回 `scope`、`site`） |
+| POST | `/api/bans` | 手动封禁（ip、时长、原因、`scope`/`site`；省略 scope 即全局） |
+| DELETE | `/api/bans/:id` | 解封（只解该作用域；站点封禁不影响全局连击数） |
 | DELETE | `/api/bans` | 清空所有临时封禁（panic 按钮） |
 
 #### 规则
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
-| GET | `/api/rules?category=&enabled=` | 规则列表 |
+| GET | `/api/rules?category=&enabled=&group=&source=` | 规则列表（`group` 为规则包分组，如 `sqli`/`xss`） |
 | POST | `/api/rules` | 新增自定义规则 |
 | PUT | `/api/rules/:id` | 修改 |
 | DELETE | `/api/rules/:id` | 删除（内置规则不可删，只能停用） |
 | PATCH | `/api/rules/:id/toggle` | 启用/停用 |
 | POST | `/api/rules/test` | 规则测试器：传入样例请求，返回命中与评分 |
 | POST | `/api/rules/reload` | 重新编译规则（校验失败返回错误详情） |
+
+#### 规则运营（P0 规则包 / P4 闭环）
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| GET | `/api/rules/groups` | 按 `source + group` 聚合的规则组统计（总数/启用数/模式），驱动面板整组启停 |
+| POST | `/api/rules/batch` | 批量操作：`{ids[] 或 group+source, op, value?, number?}`；op ∈ enable/disable/observe/protect/score/priority/action/group/delete。**无 ids 且无 group 时直接拒绝**，防止误伤全表 |
+| GET | `/api/rules/export?group=&source=` | 导出 YAML 规则包（含 source/vendor/version/group/mode 元信息，可回灌第三方） |
+| POST | `/api/rules/import` | 导入 YAML：`{text, mode:merge\|replace, dryRun, vendor}`；逐条编译校验，`replace` 会清理上一批 `source=imported` 的规则 |
+| GET | `/api/rules/stats?hours=24` | 命中统计：`top`（累计命中最多）、`dead`（启用但零命中）、`recent`（近 N 小时事件中真实出现的规则号） |
+| GET | `/api/rules/:id/samples?limit=10` | 该规则最近命中的真实事件样本，用于判断是不是误报 |
+
+#### 规则例外（P4 误报闭环）
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| GET | `/api/exceptions?site=&keyword=` | 例外列表（按站点查时同时返回全局例外） |
+| POST | `/api/exceptions` | 新增：`{site?, ruleId?, category?, pathPrefix?, param?, note?}`，**至少填一项**，全空等于全站关闭检测 |
+| PUT | `/api/exceptions/:id` | 修改（改完立即热加载，自研引擎与 CRS 同时生效） |
+| PATCH | `/api/exceptions/:id/toggle` | 启用/停用 |
+| DELETE | `/api/exceptions/:id` | 删除 |
+
+> 匹配语义：已设置的维度必须全部命中，未设置的维度视为通配。只填 `site + pathPrefix` 等价于「这个路径不检测」；同时填 `ruleId + pathPrefix` 才是「只放过这条规则的这个路径」，是处理误报的推荐姿势。例外同时作用于内嵌 CRS 引擎（`detect.Engine.FilterByException`），否则「标记误报」之后仍会被 CRS 拦下。
+
+#### 威胁情报（P3）
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| GET | `/api/intel/sources` | 订阅源列表 + 运行时条数、上次同步时间与错误 |
+| POST | `/api/intel/sources` | 新增：`{name, url, scope:global\|site, site?, ttlSeconds?, enabled?}` |
+| PUT | `/api/intel/sources/:id` | 修改 |
+| DELETE | `/api/intel/sources/:id` | 删除并立即重建内存快照（删完最后一个源会清空拦截） |
+| POST | `/api/intel/sync` | 立即拉取所有启用的源；单源失败保留上次数据，不会因为网络抖动把防护清零 |
+| GET | `/api/intel/status` | 只读状态：全局区间数、各源条数、CRS 版本/模式/PL、生效例外数 |
+
+#### IP 归属地
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| GET | `/api/geo/status` | 离线库是否就绪、区间数、几个样例 IP 的解析结果 |
+| POST | `/api/geo/backfill?limit=5000` | 给历史事件补齐 `country`（分批，返回 updated/remaining/done） |
+
+> 归属地走内置离线库（ip2region 派生，gzip 后约 1.4MB 嵌入二进制，21.6 万区间二分查找），不依赖外部 API，无出网、无限速。回环 → `本机`，私网 → `内网`，IPv6 → `IPv6`。攻击事件列表与详情抽屉直接展示该列，CSV 导出同步带上。
 
 #### 站点
 

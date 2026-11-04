@@ -6,14 +6,19 @@ package runtime
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"time"
 
 	"gowaf/internal/config"
 	"gowaf/internal/detect"
+	"gowaf/internal/geo"
 	"gowaf/internal/guard"
+	"gowaf/internal/intel"
+	"gowaf/internal/notify"
 	"gowaf/internal/proxy"
 	"gowaf/internal/store"
 	"gowaf/internal/store/model"
@@ -34,6 +39,32 @@ const (
 	KeyBanTTL         = "guard.ban_ttl"
 	KeyBanMaxStrikes  = "guard.ban_max_strikes"
 	KeyBanStrikeReset = "guard.ban_strike_reset"
+
+	// CRS 第二引擎（OWASP CRS / Coraza）。
+	KeyCRSEnabled  = "engine.crs.enabled"
+	KeyCRSMode     = "engine.crs.mode"
+	KeyCRSParanoia = "engine.crs.paranoia"
+
+	// 威胁情报命中后的处置。
+	// ban_on_hit=true 时把命中 IP 写进封禁表（source=intel），
+	// 好处是封禁管理里能统一看到/解封，坏处是 bans 表会长得快，
+	// 所以做成开关，默认开、TTL 默认 1 小时。
+	KeyIntelBanOnHit = "intel.ban_on_hit"
+	KeyIntelBanTTL   = "intel.ban_ttl"
+
+	// 告警通知（当前只实现邮件，其余渠道预留）。
+	KeyNotifyEnabled = "notify.enabled"
+	KeyNotifyHost    = "notify.email.host"
+	KeyNotifyPort    = "notify.email.port"
+	KeyNotifyUser    = "notify.email.user"
+	KeyNotifyPass    = "notify.email.pass"
+	KeyNotifyFrom    = "notify.email.from"
+	KeyNotifyTo      = "notify.email.to"
+	KeyNotifyTLS     = "notify.email.tls"
+	KeyNotifySubject = "notify.email.subject"
+	KeyNotifyMinScore  = "notify.min_score"
+	KeyNotifyWindow    = "notify.window"
+	KeyNotifyCooldown  = "notify.cooldown"
 )
 
 // Runtime 聚合所有共享组件。
@@ -49,6 +80,12 @@ type Runtime struct {
 	Certs     *proxy.CertManager
 	Events    *store.EventWriter
 	Version   string
+
+	// Geo 离线 IP 归属地，Intel 威胁情报 IP 库，Notify 告警通知。
+	Geo    *geo.DB
+	Intel  *intel.Manager
+	Notify *notify.Notifier
+	crs    atomic.Pointer[detect.CRSEngine]
 
 	// siteLimiters 站点自定义限流器集合（Reload 时重建）。
 	// key=SiteID。启用自定义防护的站点用独立实例，计数互不挤占。
@@ -75,6 +112,8 @@ func New(cfg *config.Config, st *store.Store, certs *proxy.CertManager, version 
 		Hits:      guard.NewHitTracker(),
 		Upstreams: proxy.NewUpstreams(),
 		Certs:     certs,
+		Geo:       geo.Default(),
+		Intel:     intel.New(),
 		Version:   version,
 		started:   time.Now(),
 	}
@@ -85,7 +124,46 @@ func New(cfg *config.Config, st *store.Store, certs *proxy.CertManager, version 
 
 	secret := []byte(cfg.Admin.JWTSecretFile)
 	r.Chall = guard.NewChallenger(secret, 30*time.Minute)
+
+	// 告警通知器：配置每次发送前现读，改完设置立即生效，不需要重启。
+	r.Notify = notify.New(r.NotifyConfig, func(lg model.NotifyLog) {
+		if err := st.Gorm().Create(&lg).Error; err != nil {
+			log.Printf("[notify] 写通知记录失败: %v", err)
+		}
+	})
 	return r, nil
+}
+
+// NotifyConfig 从设置快照组装通知配置。
+func (r *Runtime) NotifyConfig() notify.Config {
+	port := r.SettingInt(KeyNotifyPort, 465)
+	if port <= 0 {
+		port = 465
+	}
+	return notify.Config{
+		Enabled:  r.SettingBool(KeyNotifyEnabled, false),
+		Host:     strings.TrimSpace(r.Setting(KeyNotifyHost, "")),
+		Port:     port,
+		User:     strings.TrimSpace(r.Setting(KeyNotifyUser, "")),
+		Pass:     r.Setting(KeyNotifyPass, ""),
+		From:     strings.TrimSpace(r.Setting(KeyNotifyFrom, "")),
+		To:       splitList(r.Setting(KeyNotifyTo, "")),
+		TLS:      strings.TrimSpace(r.Setting(KeyNotifyTLS, "ssl")),
+		Subject:  strings.TrimSpace(r.Setting(KeyNotifySubject, "")),
+		MinScore: r.SettingInt(KeyNotifyMinScore, 0),
+		Window:   time.Duration(r.SettingInt(KeyNotifyWindow, 60)) * time.Second,
+		Cooldown: time.Duration(r.SettingInt(KeyNotifyCooldown, 3600)) * time.Second,
+	}
+}
+
+// splitList 拆分逗号/分号/空白分隔的列表（收件人用）。
+func splitList(s string) []string {
+	if strings.TrimSpace(s) == "" {
+		return nil
+	}
+	return strings.FieldsFunc(s, func(c rune) bool {
+		return c == ',' || c == ';' || c == ' ' || c == '\n' || c == '\r' || c == '，'
+	})
 }
 
 // StartedAt 返回启动时间。
@@ -170,6 +248,19 @@ func (r *Runtime) Reload(ctx context.Context) error {
 		return err
 	}
 
+	var exceptions []model.RuleException
+	if err := r.Store.Gorm().WithContext(ctx).Where("enabled = 1").Find(&exceptions).Error; err != nil {
+		return err
+	}
+	exList := make([]detect.Exception, 0, len(exceptions))
+	for _, e := range exceptions {
+		exList = append(exList, detect.Exception{
+			Site: e.Site, RuleID: e.RuleID, Category: e.Category,
+			PathPrefix: e.PathPrefix, Param: e.Param,
+		})
+	}
+	r.Engine.SetExceptions(exList)
+
 	var settings []model.Setting
 	if err := r.Store.Gorm().WithContext(ctx).Find(&settings).Error; err != nil {
 		return err
@@ -233,10 +324,75 @@ func (r *Runtime) Reload(ctx context.Context) error {
 	r.siteLimiters.Store(&slg)
 
 	r.Engine.SetMode(r.settingFrom(sm, KeyMode, r.Cfg.Engine.Mode))
+	r.reloadCRS(sm)
 
-	log.Printf("[runtime] 重载完成: 站点 %d, 规则 %d, IP 名单 %d, 封禁 %d, 模式 %s",
-		router.Count(), r.Engine.Info().Rules, countIPs(ipRules), len(bans), r.Engine.Mode())
+	log.Printf("[runtime] 重载完成: 站点 %d, 规则 %d, 例外 %d, IP 名单 %d, 封禁 %d, 模式 %s, CRS %s",
+		router.Count(), r.Engine.Info().Rules, len(exList), countIPs(ipRules), len(bans),
+		r.Engine.Mode(), r.crsLabel())
 	return nil
+}
+
+// CRS 返回当前 CRS 引擎（未启用时为 nil）。
+func (r *Runtime) CRS() *detect.CRSEngine { return r.crs.Load() }
+
+func (r *Runtime) crsLabel() string {
+	c := r.crs.Load()
+	if c == nil {
+		return "off"
+	}
+	return fmt.Sprintf("%s/PL%d", c.Mode(), c.Paranoia())
+}
+
+// reloadCRS 按设置重建 CRS 引擎。加载约 70ms，只在设置里真的变了才重建。
+func (r *Runtime) reloadCRS(sm map[string]string) {
+	enabled := true
+	if v, ok := sm[KeyCRSEnabled]; ok && v != "" {
+		enabled = v == "true" || v == "1"
+	}
+	mode := r.settingFrom(sm, KeyCRSMode, "block")
+	pl := 1
+	if v, ok := sm[KeyCRSParanoia]; ok && v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			pl = n
+		}
+	}
+	if !enabled {
+		r.crs.Store(nil)
+		return
+	}
+	if cur := r.crs.Load(); cur != nil && cur.Mode() == mode && cur.Paranoia() == pl {
+		return
+	}
+	eng, err := detect.NewCRSEngine(detect.CRSOptions{Mode: mode, Paranoia: pl})
+	if err != nil {
+		log.Printf("[runtime] CRS 加载失败，本次仍用自研规则: %v", err)
+		return
+	}
+	r.crs.Store(eng)
+}
+
+// ReloadIntel 拉取情报源并重建快照。网络失败不影响主流程。
+func (r *Runtime) ReloadIntel(ctx context.Context) []intel.SyncResult {
+	var rows []model.IntelSource
+	if err := r.Store.Gorm().WithContext(ctx).Where("enabled = 1").Find(&rows).Error; err != nil {
+		log.Printf("[intel] 读取情报源失败: %v", err)
+		return nil
+	}
+	// 注意：即使没有启用的源也必须走一次 Sync，否则删掉/停用最后一个源之后，
+	// 内存里的区间快照不会被清空，已删除的情报会一直拦下去。
+	res := r.Intel.Sync(ctx, rows)
+	now := store.NowMS()
+	for _, item := range res {
+		updates := map[string]any{"last_sync_at": now, "last_count": item.Count}
+		if item.Error != "" {
+			updates["last_error"] = item.Error
+		} else {
+			updates["last_error"] = ""
+		}
+		r.Store.Gorm().Model(&model.IntelSource{}).Where("id = ?", item.ID).Updates(updates)
+	}
+	log.Printf("[intel] 同步完成: %d 个源，全局区间 %d", len(res), r.Intel.GlobalCount())
+	return res
 }
 
 func (r *Runtime) settingFrom(m map[string]string, key, fallback string) string {
@@ -307,5 +463,19 @@ func DefaultSettings(cfg *config.Config) map[string]string {
 		KeyBanTTL:         strconv.Itoa(int(cfg.Guard.BanTTL.Duration() / time.Second)),
 		KeyBanMaxStrikes:  strconv.Itoa(cfg.Guard.BanMaxStrikes),
 		KeyBanStrikeReset: strconv.Itoa(int(cfg.Guard.BanStrikeReset.Duration() / time.Second)),
+		KeyCRSEnabled:     "true",
+		KeyCRSMode:        "block",
+		KeyCRSParanoia:    "1",
+
+		KeyIntelBanOnHit: "true",
+		KeyIntelBanTTL:   "3600",
+
+		// 告警默认关闭：没配 SMTP 就发不出去，开着只会一直刷失败日志。
+		KeyNotifyEnabled:  "false",
+		KeyNotifyPort:     "465",
+		KeyNotifyTLS:      "ssl",
+		KeyNotifyMinScore: "60",
+		KeyNotifyWindow:   "60",
+		KeyNotifyCooldown: "3600",
 	}
 }

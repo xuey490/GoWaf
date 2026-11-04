@@ -17,12 +17,14 @@ import (
 	"net"
 	"net/http"
 	"net/netip"
+	"net/url"
 	"strings"
 	"time"
 
 	"gowaf/internal/detect"
 	"gowaf/internal/guard"
 	"gowaf/internal/metrics"
+	"gowaf/internal/notify"
 	"gowaf/internal/proxy"
 	"gowaf/internal/runtime"
 	"gowaf/internal/store"
@@ -75,21 +77,48 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 1) 黑名单：直接拒绝，不读 body
-	if h.rt.IPList().IsBlacklisted(clientIP) {
+	// 观察模式：整条拦截链路退化为"只看不拦"。
+	//
+	// 这是"只记录不拦截"的字面语义。之前这里只放宽了规则判定，而黑名单、
+	// 封禁、情报仍然照拦——用户切到观察模式后站点还是一片 403，非常反直觉
+	// （线上真实踩过：一次误报触发自动封禁，切成观察模式后依然全站 403）。
+	// 现在观察模式下这三种"前置拦截"全部跳过，请求继续走到检测环节，
+	// 命中规则照样落事件，只是不处置。
+	observe := h.rt.Engine.Mode() == "observe"
+
+	// 1) 黑名单：直接拒绝，不读 body（全局名单 + 本站点名单）
+	if !observe && h.rt.IPList().IsBlacklisted(clientIP, route.SiteName) {
 		h.reject(w, r, route, clientIP, reqID, start, "block", "ip_blacklist", 403, nil)
 		return
 	}
 
-	// 2) 内存封禁
-	if h.rt.Bans.Banned(clientIP.String(), store.NowMS()) {
+	// 2) 内存封禁（全局封禁 + 本站点封禁）
+	if !observe && h.rt.Bans.Banned(clientIP.String(), route.SiteName, store.NowMS()) {
 		h.reject(w, r, route, clientIP, reqID, start, "block", "ip_banned", 403, nil)
 		return
 	}
 
 	// 3) 白名单：完全跳过检测与限流
-	if h.rt.IPList().IsWhitelisted(clientIP) {
+	if h.rt.IPList().IsWhitelisted(clientIP, route.SiteName) {
 		h.forward(w, r, route, clientIP, reqID, start, nil)
+		return
+	}
+
+	// 3.5) 威胁情报：已知恶意 IP 直接拒绝，不进规则引擎。
+	// 白名单在上面已放行，所以「自己人」不会被情报误伤。
+	if hit := h.rt.Intel.Match(clientIP, route.SiteName); !observe && hit != "" {
+		// 命中即写封禁（可关）：这样封禁管理里能统一看到、能手动解封，
+		// 而不是只在事件列表里留一条"情报拦截"。
+		banID := h.banFromIntel(clientIP, route.SiteName, hit)
+		h.rejectWithBody(w, r, route, clientIP, reqID, start, "block", "intel",
+			http.StatusForbidden, "来源 IP 命中威胁情报（"+hit+"）")
+		if banID > 0 {
+			h.notifyBan(notify.Event{
+				IP: clientIP.String(), Site: route.SiteName, Country: h.countryOf(clientIP),
+				Source: "intel", Reason: "来源 IP 命中威胁情报（" + hit + "）",
+				Method: r.Method, Path: r.URL.Path, At: start,
+			})
+		}
 		return
 	}
 
@@ -127,11 +156,27 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var result detect.Result
 	if !skipDetect && !skipBody && route.DetectBody {
 		in := buildInput(r, body)
+		in.Site = route.SiteName
 		result = h.rt.Engine.Inspect(&in)
+
+		// CRS 第二引擎：覆盖通用攻击特征。两个引擎分数相加后再判动作，
+		// 这样「自研规则 30 分 + CRS 一条 error 45 分」也能累计到拦截阈值。
+		if crs := h.rt.CRS(); crs != nil && result.Action != "ban" {
+			cres := crs.Inspect(&in)
+			// 例外对第二引擎同样生效，否则「标记误报」之后照样被拦。
+			h.rt.Engine.FilterByException(&cres, route.SiteName, in.Path, in.Params)
+			mergeResult(&result, &cres)
+		}
+
 		// 站点自定义防护：阈值/模式与全局不同，用站点生效值重判动作。
 		// action=ban 是规则的显式动作（命中即封），不参与分数重判。
-		if route.Guard != nil && result.Action != "ban" {
-			result.Action = decideByGuard(result.Score, route.Guard, h.rt.Engine.Mode())
+		if result.Action != "ban" {
+			if route.Guard != nil {
+				result.Action = decideByGuard(result.Score, route.Guard, h.rt.Engine.Mode())
+			} else {
+				block, challenge := h.rt.Engine.Scores()
+				result.Action = detect.Decide(result.Score, block, challenge, h.rt.Engine.Mode())
+			}
 		}
 		metrics.DetectDuration.Observe(float64(result.ElapsedUS) / 1e6)
 		for _, hit := range result.Hits {
@@ -142,11 +187,11 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch result.Action {
 	case "ban":
 		// 高危规则一次即封：不进频次统计，命中这条本身就是证据。
-		h.recordDirectBan(clientIP.String(), &result)
+		h.recordDirectBan(clientIP.String(), &result, route.SiteName, r.Method, r.URL.Path)
 		h.reject(w, r, route, clientIP, reqID, start, "ban", "rule", http.StatusForbidden, &result)
 		return
 	case "block":
-		h.recordAutoBan(clientIP.String())
+		h.recordAutoBan(clientIP.String(), route.SiteName, r.Method, r.URL.Path)
 		h.reject(w, r, route, clientIP, reqID, start, "block", "rule", http.StatusForbidden, &result)
 		return
 	case "challenge":
@@ -219,7 +264,72 @@ func buildInput(r *http.Request, body []byte) detect.Input {
 		Referer: r.Referer(),
 		Headers: headers,
 		Cookies: cookies,
+		Params:  collectParams(r, body),
 	}
+}
+
+// mergeResult 把 CRS 结果并入自研引擎结果。
+func mergeResult(dst, src *detect.Result) {
+	if src == nil || (len(src.Hits) == 0 && src.Score == 0) {
+		return
+	}
+	dst.Score += src.Score
+	dst.Hits = append(dst.Hits, src.Hits...)
+	seenRule := make(map[string]struct{}, len(dst.RuleIDs))
+	for _, id := range dst.RuleIDs {
+		seenRule[id] = struct{}{}
+	}
+	for _, id := range src.RuleIDs {
+		if _, ok := seenRule[id]; ok {
+			continue
+		}
+		seenRule[id] = struct{}{}
+		dst.RuleIDs = append(dst.RuleIDs, id)
+	}
+	for _, c := range src.Categories {
+		found := false
+		for _, existing := range dst.Categories {
+			if existing == c {
+				found = true
+				break
+			}
+		}
+		if !found {
+			dst.Categories = append(dst.Categories, c)
+		}
+	}
+	dst.ElapsedUS += src.ElapsedUS
+}
+
+// collectParams 收集 query 与 form 表单的参数名，供规则例外按参数匹配。
+func collectParams(r *http.Request, body []byte) []string {
+	limit := 64
+	out := make([]string, 0, 16)
+	seen := make(map[string]struct{}, 16)
+	add := func(k string) {
+		if k == "" || len(out) >= limit {
+			return
+		}
+		if _, ok := seen[k]; ok {
+			return
+		}
+		seen[k] = struct{}{}
+		out = append(out, k)
+	}
+	if q := r.URL.Query(); len(q) > 0 {
+		for k := range q {
+			add(k)
+		}
+	}
+	ct := r.Header.Get("Content-Type")
+	if strings.HasPrefix(ct, "application/x-www-form-urlencoded") && len(body) > 0 {
+		if v, err := url.ParseQuery(string(body)); err == nil {
+			for k := range v {
+				add(k)
+			}
+		}
+	}
+	return out
 }
 
 // readBody 读取并回填请求体。
@@ -378,7 +488,8 @@ func (h *Handler) rejectWithBody(w http.ResponseWriter, r *http.Request, route *
 //	两次触发之间超过 ban_strike_reset 秒没有任何命中，连击数清零
 //
 // 连击数存库（bans 表 source='auto' 的记录数），所以重启、升级都不会丢。
-func (h *Handler) recordAutoBan(ip string) {
+// 自动封禁一律全局：扫描器/爆破往往同时打多个站点，按站点封容易顾此失彼。
+func (h *Handler) recordAutoBan(ip, site, method, path string) {
 	if !h.rt.SettingBool(runtime.KeyAutoBan, h.rt.Cfg.Guard.AutoBan) {
 		return
 	}
@@ -406,7 +517,7 @@ func (h *Handler) recordAutoBan(ip string) {
 	}
 	expires, reason, permanent := policy.decide(strikes, store.NowMS())
 
-	h.rt.Bans.Ban(ip, expires)
+	h.rt.Bans.Ban(ip, "", expires)
 	metrics.BannedGauge.Set(float64(h.rt.Bans.Size()))
 
 	// 同步落库：下一次触发要靠这条记录算连击数，异步写会数漏
@@ -414,6 +525,7 @@ func (h *Handler) recordAutoBan(ip string) {
 		IP:        ip,
 		Reason:    reason,
 		Source:    "auto",
+		Scope:     "global",
 		HitCount:  threshold,
 		CreatedAt: store.NowMS(),
 		ExpiresAt: expires,
@@ -424,6 +536,10 @@ func (h *Handler) recordAutoBan(ip string) {
 	if permanent {
 		log.Printf("[edge] %s 连续 %d 次触发，已永久封禁", ip, strikes)
 	}
+	h.notifyBan(notify.Event{
+		IP: ip, Site: site, Country: h.countryOfString(ip),
+		Source: "auto", Reason: reason, Method: method, Path: path, At: time.Now(),
+	})
 }
 
 // recordDirectBan action=ban 规则专用：命中即封，一次都不给尝试机会。
@@ -431,7 +547,7 @@ func (h *Handler) recordAutoBan(ip string) {
 // 与 recordAutoBan（N 次阈值 + 连击升级）不同，这里不做任何频次累计——
 // 规则本身被标记为高危（如扫描器 UA、爆破端点），触发这一次就该走。
 // 封禁时长沿用 ban_ttl 设置，source 记为 rule_ban，面板上一眼可辨。
-func (h *Handler) recordDirectBan(ip string, result *detect.Result) {
+func (h *Handler) recordDirectBan(ip string, result *detect.Result, site, method, path string) {
 	cfg := h.rt.Cfg.Guard
 	ttlSec := h.rt.SettingInt(runtime.KeyBanTTL, int(cfg.BanTTL.Duration()/time.Second))
 	if ttlSec <= 0 {
@@ -439,7 +555,7 @@ func (h *Handler) recordDirectBan(ip string, result *detect.Result) {
 	}
 	expires := store.NowMS() + int64(ttlSec)*1000
 
-	h.rt.Bans.Ban(ip, expires)
+	h.rt.Bans.Ban(ip, "", expires)
 	metrics.BannedGauge.Set(float64(h.rt.Bans.Size()))
 
 	ids := "unknown"
@@ -450,6 +566,7 @@ func (h *Handler) recordDirectBan(ip string, result *detect.Result) {
 		IP:        ip,
 		Reason:    fmt.Sprintf("命中高危规则（一次封禁）：%s", ids),
 		Source:    "rule_ban",
+		Scope:     "global",
 		HitCount:  1,
 		CreatedAt: store.NowMS(),
 		ExpiresAt: expires,
@@ -458,6 +575,66 @@ func (h *Handler) recordDirectBan(ip string, result *detect.Result) {
 		log.Printf("[edge] 写高危规则封禁记录失败: %v", err)
 	}
 	log.Printf("[edge] %s 命中 action=ban 规则(%s)，已封禁 %d 秒", ip, ids, ttlSec)
+
+	ev := notify.Event{
+		IP: ip, Site: site, Country: h.countryOfString(ip),
+		Source: "rule_ban", Reason: ban.Reason, Method: method, Path: path, At: time.Now(),
+	}
+	if result != nil {
+		ev.Score = result.Score
+		ev.RuleIDs = result.RuleIDs
+	}
+	h.notifyBan(ev)
+}
+
+// banFromIntel 把情报命中的 IP 写进封禁表，返回封禁记录 ID（未启用或写库失败返回 0）。
+//
+// 只在「首次命中」写入：调用前已经过 Bans.Banned 判定，能走到这里说明内存里还没有
+// 这条封禁，因此不会每个请求都插一行。作用域跟随情报源——站点级情报只封该站点，
+// 全局情报封全局，这样封禁管理里的「作用域」列能真实反映拦截范围。
+func (h *Handler) banFromIntel(ip netip.Addr, site, hit string) uint {
+	if !h.rt.SettingBool(runtime.KeyIntelBanOnHit, true) {
+		return 0
+	}
+	ttl := h.rt.SettingInt(runtime.KeyIntelBanTTL, 3600)
+	if ttl <= 0 {
+		ttl = 3600
+	}
+	scope, banSite := "global", ""
+	if strings.HasPrefix(hit, "站点") {
+		scope, banSite = "site", site
+	}
+	expires := store.NowMS() + int64(ttl)*1000
+
+	h.rt.Bans.Ban(ip.String(), banSite, expires)
+	metrics.BannedGauge.Set(float64(h.rt.Bans.Size()))
+
+	ban := model.Ban{
+		IP: ip.String(), Reason: "威胁情报：" + hit, Source: "intel",
+		Scope: scope, Site: banSite, HitCount: 1,
+		CreatedAt: store.NowMS(), ExpiresAt: expires,
+	}
+	if err := h.rt.Store.Gorm().Create(&ban).Error; err != nil {
+		log.Printf("[edge] 写情报封禁记录失败: %v", err)
+		return 0
+	}
+	return ban.ID
+}
+
+// notifyBan 投递封禁告警。去重与聚合都在通知器内部完成，这里只管调用。
+func (h *Handler) notifyBan(ev notify.Event) {
+	if h.rt.Notify == nil {
+		return
+	}
+	h.rt.Notify.Send(ev)
+}
+
+// countryOfString 与 countryOf 同义，供只拿到字符串 IP 的调用点使用。
+func (h *Handler) countryOfString(ip string) string {
+	if h.rt.Geo == nil {
+		return ""
+	}
+	return h.rt.Geo.LookupString(ip)
 }
 
 // autoBanStrikes 统计该 IP 在 resetMS 内被自动封禁过几次（不含本次）。
@@ -507,6 +684,7 @@ func (h *Handler) recordEvent(route *proxy.Route, ip netip.Addr, reqID string, s
 		TS:         start.UnixMilli(),
 		Site:       route.SiteName,
 		ClientIP:   ip.String(),
+		Country:    h.countryOf(ip),
 		Method:     r.Method,
 		Host:       r.Host,
 		Path:       truncate(r.URL.Path, maxFieldLog),
@@ -529,6 +707,7 @@ func (h *Handler) recordEvent(route *proxy.Route, ip netip.Addr, reqID string, s
 			TS:         start.UnixMilli(),
 			Site:       route.SiteName,
 			ClientIP:   ip.String(),
+			Country:    h.countryOf(ip),
 			Method:     r.Method,
 			Host:       r.Host,
 			Path:       truncate(r.URL.Path, maxFieldLog),
@@ -543,6 +722,14 @@ func (h *Handler) recordEvent(route *proxy.Route, ip netip.Addr, reqID string, s
 			LatencyUS:  latencyUS,
 		})
 	}
+}
+
+// countryOf 查归属地。查询是纯内存二分，失败返回空串不影响事件落库。
+func (h *Handler) countryOf(ip netip.Addr) string {
+	if h.rt.Geo == nil {
+		return ""
+	}
+	return h.rt.Geo.Lookup(ip)
 }
 
 // shouldSample 拦截/挑战全量记录，正常请求按采样率。

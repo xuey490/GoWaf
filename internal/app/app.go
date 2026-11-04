@@ -276,12 +276,63 @@ func (a *App) Start() error {
 	go a.maintenance()
 	go a.streamLoop()
 	go a.tasks.Loop()
+	go a.intelLoop()
+	go a.ruleHitsLoop()
+	if a.rt.Notify != nil {
+		a.rt.Notify.Start()
+	}
 
 	select {
 	case err := <-errCh:
 		return err
 	case <-time.After(300 * time.Millisecond):
 		return nil
+	}
+}
+
+// intelLoop 定时同步威胁情报。启动后先等 5 秒，避免和监听抢时间。
+func (a *App) intelLoop() {
+	select {
+	case <-a.stopCh:
+		return
+	case <-time.After(5 * time.Second):
+	}
+	a.rt.ReloadIntel(context.Background())
+
+	ticker := time.NewTicker(3 * time.Hour)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-a.stopCh:
+			return
+		case <-ticker.C:
+			a.rt.ReloadIntel(context.Background())
+		}
+	}
+}
+
+// ruleHitsLoop 定期把内存里的规则命中计数刷进库。
+//
+// 命中统计走在热路径上，不能每个请求写库；这里每 60 秒批量落一次，
+// 面板上的「命中次数 / 最后命中时间」最多滞后一分钟，足够做规则取舍。
+func (a *App) ruleHitsLoop() {
+	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-a.stopCh:
+			return
+		case <-ticker.C:
+			stats := a.rt.Engine.DrainHits()
+			if len(stats) == 0 {
+				continue
+			}
+			for _, st := range stats {
+				a.rt.Store.Gorm().Exec(
+					`UPDATE rules SET hits = hits + ?, last_hit_at = ? WHERE id = ?`,
+					st.Count, st.LastMS, st.RuleID)
+			}
+		}
 	}
 }
 
@@ -375,6 +426,10 @@ func (a *App) hourly() {
 func (a *App) Shutdown(ctx context.Context) error {
 	a.stopOnce.Do(func() { close(a.stopCh) })
 	a.tasks.Stop()
+	// 通知器先停：它持有独立的发送协程，关库前必须收干净
+	if a.rt.Notify != nil {
+		a.rt.Notify.Stop()
+	}
 
 	var errs []error
 	if a.httpsSrv != nil {

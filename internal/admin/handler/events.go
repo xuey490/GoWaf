@@ -21,6 +21,7 @@ type eventDTO struct {
 	TS         int64    `json:"ts"`
 	Site       string   `json:"site"`
 	ClientIP   string   `json:"clientIp"`
+	Country    string   `json:"country"`
 	Method     string   `json:"method"`
 	Host       string   `json:"host"`
 	Path       string   `json:"path"`
@@ -53,7 +54,7 @@ func (s *Server) toDTO(e model.Event) eventDTO {
 		ip = maskIP(ip)
 	}
 	return eventDTO{
-		ID: e.ID, TS: e.TS, Site: e.Site, ClientIP: ip, Method: e.Method, Host: e.Host,
+		ID: e.ID, TS: e.TS, Site: e.Site, ClientIP: ip, Country: e.Country, Method: e.Method, Host: e.Host,
 		Path: e.Path, Query: e.Query, Status: e.Status, Action: e.Action, Score: e.Score,
 		Categories: cats, RuleIDs: rules, UA: e.UA, Referer: e.Referer, ReqID: e.ReqID,
 		LatencyUS: e.LatencyUS, Upstream: e.Upstream,
@@ -136,7 +137,7 @@ func (s *Server) EventExport(c *gin.Context) {
 	_, _ = c.Writer.Write([]byte{0xEF, 0xBB, 0xBF})
 
 	w := csv.NewWriter(c.Writer)
-	_ = w.Write([]string{"时间", "站点", "客户端IP", "方法", "Host", "路径", "查询", "状态码",
+	_ = w.Write([]string{"时间", "站点", "客户端IP", "IP属地", "方法", "Host", "路径", "查询", "状态码",
 		"动作", "评分", "类型", "命中规则", "UA", "请求ID", "耗时(us)"})
 
 	exported := 0
@@ -149,7 +150,7 @@ func (s *Server) EventExport(c *gin.Context) {
 			d := s.toDTO(r)
 			_ = w.Write([]string{
 				time.UnixMilli(d.TS).Format("2006-01-02 15:04:05"),
-				d.Site, d.ClientIP, d.Method, d.Host, d.Path, d.Query,
+				d.Site, d.ClientIP, d.Country, d.Method, d.Host, d.Path, d.Query,
 				strconv.Itoa(d.Status), d.Action, strconv.Itoa(d.Score),
 				strings.Join(d.Categories, "|"), strings.Join(d.RuleIDs, "|"),
 				d.UA, d.ReqID, strconv.FormatInt(d.LatencyUS, 10),

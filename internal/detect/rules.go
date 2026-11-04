@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -64,7 +65,10 @@ type Rule struct {
 	Keywords []string
 	Action   string
 	Priority int
-	re       *regexp.Regexp
+	// LogOnly 为 true 时命中只记录、不计分（面板上的「观察」模式），
+	// 用来先跑一段时间看误报，再决定是否真正拦截。
+	LogOnly bool
+	re      *regexp.Regexp
 }
 
 // ruleSet 是编译后的不可变快照。
@@ -112,6 +116,9 @@ func Compile(rows []model.Rule) (*ruleSet, error) {
 		}
 		if rule.Score <= 0 {
 			rule.Score = 30
+		}
+		if strings.EqualFold(strings.TrimSpace(r.Mode), "log") {
+			rule.LogOnly = true
 		}
 
 		if r.Keywords != "" {
@@ -219,6 +226,10 @@ type Input struct {
 	Referer string
 	Headers string
 	Cookies string
+	// Site 是命中的站点名，供规则例外按站点匹配。
+	Site string
+	// Params 是 query/body 里出现过的参数名，供例外按参数名匹配。
+	Params []string
 }
 
 // Engine 持有不可变规则快照，读路径无锁。
@@ -227,6 +238,8 @@ type Engine struct {
 	mode           atomic.Value // string
 	blockScore     atomic.Int32
 	challengeScore atomic.Int32
+	exceptions     atomic.Pointer[exceptionSet]
+	hits           sync.Map // ruleID -> *hitStat
 }
 
 // NewEngine 创建引擎。
@@ -236,6 +249,7 @@ func NewEngine(blockScore, challengeScore int, mode string) *Engine {
 	e.challengeScore.Store(int32(challengeScore))
 	e.mode.Store(mode)
 	e.rules.Store(&ruleSet{byTarget: map[Target][]int{}})
+	e.exceptions.Store(&exceptionSet{})
 	return e
 }
 
@@ -301,6 +315,7 @@ func (e *Engine) Inspect(in *Input) Result {
 		TargetUA:     Normalize(in.UA),
 	}
 
+	ex := e.exceptions.Load()
 	matched := make(map[string]struct{}, 4)
 	for t, text := range texts {
 		if text == "" {
@@ -317,6 +332,20 @@ func (e *Engine) Inspect(in *Input) Result {
 				continue
 			}
 			matched[rule.ID] = struct{}{}
+			if ex.Match(in.Site, in.Path, rule.ID, rule.Category, in.Params) {
+				continue
+			}
+			e.recordHit(rule.ID, time.Now().UnixMilli())
+			if rule.LogOnly {
+				// 观察中的规则：记录命中但不计分，避免影响处置动作。
+				res.Hits = append(res.Hits, Hit{
+					RuleID: rule.ID, Name: rule.Name, Category: rule.Category,
+					Score: 0, Target: targetLabel(t), Evidence: evidence,
+				})
+				res.RuleIDs = append(res.RuleIDs, rule.ID)
+				res.Categories = appendUnique(res.Categories, rule.Category)
+				continue
+			}
 			res.Score += rule.Score
 			if rule.Action == "ban" {
 				// 高危规则：命中即封。只打标记，最终动作在下面统一决定
@@ -421,19 +450,28 @@ func (r *Rule) match(text string) (string, bool) {
 
 // decide 依据评分与模式给出动作。
 func (e *Engine) decide(score int) string {
+	return Decide(score, int(e.blockScore.Load()), int(e.challengeScore.Load()), e.Mode())
+}
+
+// Decide 是评分→动作的纯函数，数据面合并多个引擎的分数后也用它重判。
+func Decide(score, block, challenge int, mode string) string {
 	if score <= 0 {
 		return "pass"
 	}
-	verdict := "pass"
-	switch {
-	case score >= int(e.blockScore.Load()):
-		verdict = "block"
-	case score >= int(e.challengeScore.Load()):
-		verdict = "challenge"
-	default:
-		verdict = "log"
+	if block <= 0 {
+		block = 60
 	}
-	if e.Mode() == "observe" {
+	if challenge <= 0 || challenge >= block {
+		challenge = block / 2
+	}
+	verdict := "log"
+	switch {
+	case score >= block:
+		verdict = "block"
+	case score >= challenge:
+		verdict = "challenge"
+	}
+	if mode == "observe" {
 		// 观察模式：只记录不拦截。这是上线前 3~7 天的保命开关。
 		return "log"
 	}

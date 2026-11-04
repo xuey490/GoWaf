@@ -29,6 +29,13 @@ type ruleDTO struct {
 	Builtin  int      `json:"builtin"`
 	Priority int      `json:"priority"`
 	Remark   string   `json:"remark"`
+	Source   string   `json:"source"`
+	Vendor   string   `json:"vendor"`
+	Version  string   `json:"version"`
+	Group    string   `json:"group"`
+	Mode     string   `json:"mode"`
+	Hits     int64    `json:"hits"`
+	LastHit  int64    `json:"lastHitAt"`
 }
 
 func toRuleDTO(r model.Rule) ruleDTO {
@@ -45,6 +52,8 @@ func toRuleDTO(r model.Rule) ruleDTO {
 		ID: r.ID, Name: r.Name, Category: r.Category, Score: r.Score,
 		Targets: targets, Keywords: kws, Pattern: r.Pattern, Action: r.Action,
 		Enabled: r.Enabled, Builtin: r.Builtin, Priority: r.Priority, Remark: r.Remark,
+		Source: r.Source, Vendor: r.Vendor, Version: r.Version, Group: r.Group,
+		Mode: r.Mode, Hits: r.Hits, LastHit: r.LastHitAt,
 	}
 }
 
@@ -60,6 +69,13 @@ func (s *Server) RuleList(c *gin.Context) {
 	}
 	if enabled == "0" || enabled == "1" {
 		q = q.Where("enabled = ?", enabled)
+	}
+	// 规则包分组过滤：前端左侧分组面板点击后只显示该组
+	if group := strings.TrimSpace(c.Query("group")); group != "" {
+		q = q.Where("rule_group = ?", group)
+	}
+	if source := strings.TrimSpace(c.Query("source")); source != "" {
+		q = q.Where("source = ?", source)
 	}
 	if kw := strings.TrimSpace(c.Query("keyword")); kw != "" {
 		q = q.Where("id LIKE ? OR name LIKE ?", "%"+kw+"%", "%"+kw+"%")
@@ -95,6 +111,8 @@ type ruleInput struct {
 	Action   string   `json:"action"`
 	Priority int      `json:"priority"`
 	Remark   string   `json:"remark"`
+	Group    string   `json:"group"`
+	Mode     string   `json:"mode"`
 }
 
 // validateRule 编译校验，避免把编译不过的规则写进库导致全量重载失败。
@@ -113,6 +131,9 @@ func validateRule(in *ruleInput) string {
 	}
 	if in.Action != "" && in.Action != "block" && in.Action != "challenge" && in.Action != "log" && in.Action != "ban" {
 		return "action 只能是 block/challenge/log/ban"
+	}
+	if in.Mode != "" && in.Mode != "inherit" && in.Mode != "log" && in.Mode != "block" {
+		return "mode 只能是 inherit/log/block"
 	}
 	for _, t := range in.Targets {
 		switch strings.ToLower(strings.TrimSpace(t)) {
@@ -152,11 +173,20 @@ func (s *Server) RuleCreate(c *gin.Context) {
 	}
 
 	kws, _ := json.Marshal(in.Keywords)
+	group := in.Group
+	if group == "" {
+		group = "custom"
+	}
+	mode := in.Mode
+	if mode == "" {
+		mode = "inherit"
+	}
 	row := model.Rule{
 		ID: in.ID, Name: in.Name, Category: in.Category, Score: in.Score,
 		Targets: strings.Join(in.Targets, ","), Keywords: string(kws), Pattern: in.Pattern,
 		Action: in.Action, Enabled: 1, Builtin: 0, Priority: in.Priority,
 		Remark: in.Remark, UpdatedAt: store.NowMS(),
+		Source: "custom", Vendor: "gowaf", Version: "1", Group: group, Mode: mode,
 	}
 	if err := s.Store.Gorm().Create(&row).Error; err != nil {
 		response.Fail(c, 409, response.CodeConflict, "规则 ID 已存在")
@@ -202,6 +232,12 @@ func (s *Server) RuleUpdate(c *gin.Context) {
 	}
 	if in.Priority > 0 {
 		row.Priority = in.Priority
+	}
+	if in.Mode != "" {
+		row.Mode = in.Mode
+	}
+	if in.Group != "" {
+		row.Group = in.Group
 	}
 	row.Remark = in.Remark
 	row.UpdatedAt = store.NowMS()

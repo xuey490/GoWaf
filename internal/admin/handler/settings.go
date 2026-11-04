@@ -29,6 +29,25 @@ var allowedSettingKeys = map[string]struct{}{
 	runtime.KeyBanTTL:         {},
 	runtime.KeyBanMaxStrikes:  {},
 	runtime.KeyBanStrikeReset: {},
+	runtime.KeyCRSEnabled:     {},
+	runtime.KeyCRSMode:        {},
+	runtime.KeyCRSParanoia:    {},
+
+	runtime.KeyIntelBanOnHit: {},
+	runtime.KeyIntelBanTTL:   {},
+
+	runtime.KeyNotifyEnabled:  {},
+	runtime.KeyNotifyHost:     {},
+	runtime.KeyNotifyPort:     {},
+	runtime.KeyNotifyUser:     {},
+	runtime.KeyNotifyPass:     {},
+	runtime.KeyNotifyFrom:     {},
+	runtime.KeyNotifyTo:       {},
+	runtime.KeyNotifyTLS:      {},
+	runtime.KeyNotifySubject:  {},
+	runtime.KeyNotifyMinScore: {},
+	runtime.KeyNotifyWindow:   {},
+	runtime.KeyNotifyCooldown: {},
 }
 
 // SettingsGet 返回全部设置。
@@ -37,6 +56,10 @@ func (s *Server) SettingsGet(c *gin.Context) {
 	out := make(map[string]string, len(sm))
 	for k, v := range sm {
 		out[k] = v
+	}
+	// SMTP 密码不回显明文：面板只显示掩码，保存时留空/保持掩码即不修改。
+	if out[runtime.KeyNotifyPass] != "" {
+		out[runtime.KeyNotifyPass] = "******"
 	}
 	// 补上只读展示项
 	out[runtime.KeyMode] = s.RT.Engine.Mode()
@@ -64,6 +87,10 @@ func (s *Server) SettingsUpdate(c *gin.Context) {
 		if _, ok := allowedSettingKeys[k]; !ok {
 			response.BadRequest(c, "不支持的设置项: "+k)
 			return
+		}
+		// 密码框拿到的是掩码，说明用户没动过这一项
+		if k == runtime.KeyNotifyPass && v == "******" {
+			continue
 		}
 		if msg := validateSetting(k, v); msg != "" {
 			response.BadRequest(c, msg)
@@ -116,9 +143,45 @@ func validateSetting(key, value string) string {
 		if err != nil || n < 0 {
 			return key + " 必须是非负整数"
 		}
+	case runtime.KeyCRSEnabled:
+		if value != "true" && value != "false" {
+			return "engine.crs.enabled 只能是 true 或 false"
+		}
+	case runtime.KeyCRSMode:
+		if value != "block" && value != "log" {
+			return "engine.crs.mode 只能是 block 或 log"
+		}
+	case runtime.KeyCRSParanoia:
+		n, err := strconv.Atoi(value)
+		if err != nil || n < 1 || n > 4 {
+			return "engine.crs.paranoia 只能是 1~4"
+		}
 	case runtime.KeyAutoBan:
 		if value != "true" && value != "false" {
 			return "guard.auto_ban 只能是 true/false"
+		}
+	case runtime.KeyIntelBanOnHit, runtime.KeyNotifyEnabled:
+		if value != "true" && value != "false" {
+			return key + " 只能是 true 或 false"
+		}
+	case runtime.KeyIntelBanTTL:
+		n, err := strconv.Atoi(value)
+		if err != nil || n < 60 || n > 604800 {
+			return "intel.ban_ttl 必须是 60~604800 秒"
+		}
+	case runtime.KeyNotifyPort:
+		n, err := strconv.Atoi(value)
+		if err != nil || n <= 0 || n > 65535 {
+			return "notify.email.port 必须是 1~65535"
+		}
+	case runtime.KeyNotifyTLS:
+		if value != "none" && value != "starttls" && value != "ssl" {
+			return "notify.email.tls 只能是 none / starttls / ssl"
+		}
+	case runtime.KeyNotifyMinScore, runtime.KeyNotifyWindow, runtime.KeyNotifyCooldown:
+		n, err := strconv.Atoi(value)
+		if err != nil || n < 0 {
+			return key + " 必须是非负整数"
 		}
 	}
 	return ""

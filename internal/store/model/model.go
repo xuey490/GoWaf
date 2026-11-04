@@ -180,17 +180,82 @@ type Rule struct {
 	Priority  int    `gorm:"column:priority;not null;default:100" json:"priority"`
 	Remark    string `gorm:"column:remark;size:255" json:"remark"`
 	UpdatedAt int64  `gorm:"column:updated_at" json:"updatedAt"`
+
+	// 规则包字段：来源 / 维护方 / 版本 / 分组，支持按来源整组启停与升级对比。
+	Source  string `gorm:"column:source;size:16;not null;default:builtin" json:"source"`
+	Vendor  string `gorm:"column:vendor;size:32;not null;default:gowaf" json:"vendor"`
+	Version string `gorm:"column:version;size:32;not null;default:1" json:"version"`
+	// Group 列名避开 SQL 关键字 group。
+	Group string `gorm:"column:rule_group;size:64;not null;default:base" json:"group"`
+	// Mode: inherit（跟随引擎）/ log（只记录不计分）/ block
+	Mode string `gorm:"column:mode;size:16;not null;default:inherit" json:"mode"`
+
+	// 命中统计由后台任务定期回写，用于判断规则是否还有价值。
+	Hits      int64 `gorm:"column:hits;not null;default:0" json:"hits"`
+	LastHitAt int64 `gorm:"column:last_hit_at;not null;default:0" json:"lastHitAt"`
 }
+
+// RuleException 规则例外：误报治理。
+//
+// 匹配语义（全部为空 = 全站全规则生效，谨慎使用）：
+//   - Site 为空表示所有站点；
+//   - RuleID 为空表示该路径/参数下的所有规则都跳过；
+//   - PathPrefix 按前缀匹配请求路径；
+//   - Param 命中参数名（query/body 的 key）时跳过。
+type RuleException struct {
+	ID         uint   `gorm:"primaryKey;autoIncrement" json:"id"`
+	Site       string `gorm:"column:site;size:64;not null" json:"site"`
+	RuleID     string `gorm:"column:rule_id;size:64;not null" json:"ruleId"`
+	Category   string `gorm:"column:category;size:32;not null" json:"category"`
+	PathPrefix string `gorm:"column:path_prefix;size:255;not null" json:"pathPrefix"`
+	Param      string `gorm:"column:param;size:64;not null" json:"param"`
+	Note       string `gorm:"column:note;size:255;not null" json:"note"`
+	Enabled    int    `gorm:"column:enabled;not null;default:1" json:"enabled"`
+	CreatedBy  string `gorm:"column:created_by;size:64;not null" json:"createdBy"`
+	CreatedAt  int64  `gorm:"column:created_at;not null;default:0" json:"createdAt"`
+}
+
+// TableName 显式表名。
+func (RuleException) TableName() string { return "rule_exceptions" }
+
+// IntelSource 威胁情报源：定时拉取 IP/CIDR 列表并落进封禁表。
+//
+// Kind=ip 时按纯文本列表解析（每行一条，支持 # 注释）；
+// Kind=json 时抓 JSON 并递归提取其中的 IP/CIDR 字段（AbuseIPDB、CrowdSec CTI 等）。
+// Headers 是随请求发送的自定义头，用来放 API Key；Scope=site 时只对指定站点生效。
+type IntelSource struct {
+	ID         uint   `gorm:"primaryKey;autoIncrement" json:"id"`
+	Name       string `gorm:"column:name;size:64;not null" json:"name"`
+	URL        string `gorm:"column:url;size:512;not null" json:"url"`
+	Kind       string `gorm:"column:kind;size:16;not null;default:ip" json:"kind"`
+	Headers    string `gorm:"column:headers;not null;default:''" json:"headers"`
+	Scope      string `gorm:"column:scope;size:16;not null;default:global" json:"scope"`
+	Site       string `gorm:"column:site;size:64;not null" json:"site"`
+	TTLSeconds int64  `gorm:"column:ttl_seconds;not null;default:0" json:"ttlSeconds"`
+	Enabled    int    `gorm:"column:enabled;not null;default:1" json:"enabled"`
+	LastSyncAt int64  `gorm:"column:last_sync_at;not null;default:0" json:"lastSyncAt"`
+	LastCount  int    `gorm:"column:last_count;not null;default:0" json:"lastCount"`
+	LastError  string `gorm:"column:last_error;size:255;not null" json:"lastError"`
+	CreatedAt  int64  `gorm:"column:created_at;not null;default:0" json:"createdAt"`
+}
+
+// TableName 显式表名。
+func (IntelSource) TableName() string { return "intel_sources" }
 
 // TableName 显式表名。
 func (IPRule) TableName() string { return "ip_rules" }
 
 // IPRule IP 黑白名单。
+//
+// Scope=global 时 Site 为空、对所有站点生效；Scope=site 时只在 Site 指定站点生效。
+// Site 存站点名（events.site 同样存名字，数据面直接按 Route.SiteName 比对），
+// 站点改名由 SiteUpdate 级联更新。
 type IPRule struct {
 	ID        uint   `gorm:"primaryKey;autoIncrement" json:"id"`
 	IP        string `gorm:"column:ip;size:64;not null" json:"ip"`
 	Kind      string `gorm:"column:kind;size:16;not null" json:"kind"` // black/white
 	Scope     string `gorm:"column:scope;size:64;not null;default:global" json:"scope"`
+	Site      string `gorm:"column:site;size:64;not null" json:"site"`
 	Reason    string `gorm:"column:reason;size:255" json:"reason"`
 	ExpiresAt int64  `gorm:"column:expires_at;not null;default:0" json:"expiresAt"`
 	CreatedBy string `gorm:"column:created_by;size:64" json:"createdBy"`
@@ -201,11 +266,16 @@ type IPRule struct {
 func (Ban) TableName() string { return "bans" }
 
 // Ban 封禁记录。
+//
+// Scope=global 时 Site 为空，命中任何站点都拒绝；Scope=site 时只拒绝该站点。
+// 自动封禁（auto）与高危规则封禁（rule_ban）一律全局，手动封禁可指定站点。
 type Ban struct {
 	ID         uint   `gorm:"primaryKey;autoIncrement" json:"id"`
 	IP         string `gorm:"column:ip;size:64;not null;index" json:"ip"`
 	Reason     string `gorm:"column:reason;size:255" json:"reason"`
 	Source     string `gorm:"column:source;size:16;not null" json:"source"` // auto/manual/rule
+	Scope      string `gorm:"column:scope;size:16;not null;default:global" json:"scope"`
+	Site       string `gorm:"column:site;size:64;not null" json:"site"`
 	HitCount   int    `gorm:"column:hit_count;not null;default:1" json:"hitCount"`
 	CreatedAt  int64  `gorm:"column:created_at;not null" json:"createdAt"`
 	ExpiresAt  int64  `gorm:"column:expires_at;not null" json:"expiresAt"`
@@ -235,7 +305,7 @@ type Event struct {
 	ReqID      string `gorm:"column:req_id;size:64" json:"reqId"`
 	LatencyUS  int64  `gorm:"column:latency_us" json:"latencyUs"`
 	Upstream   string `gorm:"column:upstream;size:255" json:"upstream"`
-	Country    string `gorm:"column:country;size:8" json:"country"`
+	Country    string `gorm:"column:country;size:64" json:"country"`
 	Bytes      int64  `gorm:"column:bytes" json:"bytes"`
 }
 
@@ -304,3 +374,22 @@ type ConfigVersion struct {
 	Remark    string `gorm:"column:remark;size:255" json:"remark"`
 	CreatedAt int64  `gorm:"column:created_at" json:"createdAt"`
 }
+
+// NotifyLog 告警通知发送记录。
+//
+// 只记「发了什么、发给谁、成没成」，不存完整正文（邮件正文可能含大量 IP，
+// 存库收益低）。Channel 预留 email/feishu/sms/wecom，方便后续扩展多渠道。
+type NotifyLog struct {
+	ID        uint   `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
+	Channel   string `gorm:"column:channel;size:16;not null;default:email" json:"channel"`
+	Target    string `gorm:"column:target;size:255;not null" json:"target"`
+	Subject   string `gorm:"column:subject;size:255;not null" json:"subject"`
+	Summary   string `gorm:"column:summary;not null" json:"summary"`
+	Count     int    `gorm:"column:count;not null;default:0" json:"count"`
+	Status    string `gorm:"column:status;size:16;not null;default:ok" json:"status"`
+	Error     string `gorm:"column:error;not null" json:"error"`
+	CreatedAt int64  `gorm:"column:created_at;not null;default:0" json:"createdAt"`
+}
+
+// TableName 显式表名。
+func (NotifyLog) TableName() string { return "notify_logs" }

@@ -181,6 +181,7 @@ func (s *Server) SiteUpdate(c *gin.Context) {
 
 	hosts, _ := json.Marshal(normalizeHosts(in.Hosts))
 	wl, _ := json.Marshal(in.Whitelist)
+	oldName := row.Name
 	row.Name = in.Name
 	row.Hosts = string(hosts)
 	row.Upstream = in.Upstream
@@ -211,6 +212,19 @@ func (s *Server) SiteUpdate(c *gin.Context) {
 		s.failDB(c, err)
 		return
 	}
+	// 黑白名单与按站点封禁存的是站点名，改名必须级联，否则这些规则会静默失效
+	if oldName != row.Name && oldName != "" {
+		if err := s.Store.Gorm().Model(&model.IPRule{}).Where("site = ?", oldName).
+			Update("site", row.Name).Error; err != nil {
+			s.failDB(c, err)
+			return
+		}
+		if err := s.Store.Gorm().Model(&model.Ban{}).Where("site = ?", oldName).
+			Update("site", row.Name).Error; err != nil {
+			s.failDB(c, err)
+			return
+		}
+	}
 	if err := s.reloadRuntime(c); err != nil {
 		response.Internal(c, "已保存但重载失败: "+err.Error())
 		return
@@ -227,7 +241,23 @@ func (s *Server) SiteDelete(c *gin.Context) {
 		response.BadRequest(c, "id 非法")
 		return
 	}
+	var row model.Site
+	if err := s.Store.Gorm().First(&row, id).Error; err != nil {
+		response.NotFound(c, "站点不存在")
+		return
+	}
 	if err := s.Store.Gorm().Delete(&model.Site{}, id).Error; err != nil {
+		s.failDB(c, err)
+		return
+	}
+	// 站点没了，挂在它身上的名单和封禁就是死数据，一并清掉免得列表里出现幽灵站点
+	if err := s.Store.Gorm().Where("site = ?", row.Name).Delete(&model.IPRule{}).Error; err != nil {
+		s.failDB(c, err)
+		return
+	}
+	if err := s.Store.Gorm().Model(&model.Ban{}).
+		Where("site = ? AND released_at = 0", row.Name).
+		Update("released_at", store.NowMS()).Error; err != nil {
 		s.failDB(c, err)
 		return
 	}

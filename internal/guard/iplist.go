@@ -12,30 +12,97 @@ import (
 	"gowaf/internal/store/model"
 )
 
-// IPList 是不可变的 IP 名单快照。
-type IPList struct {
+// ipSet 是单一作用域（全局或某个站点）下的 IP 集合。
+type ipSet struct {
 	whiteExact map[netip.Addr]struct{}
 	blackExact map[netip.Addr]struct{}
 	whiteNet   []netip.Prefix
 	blackNet   []netip.Prefix
 }
 
+func newIPSet() *ipSet {
+	return &ipSet{
+		whiteExact: map[netip.Addr]struct{}{},
+		blackExact: map[netip.Addr]struct{}{},
+	}
+}
+
+func (s *ipSet) add(addr netip.Addr, isWhite bool) {
+	if isWhite {
+		s.whiteExact[addr] = struct{}{}
+		return
+	}
+	s.blackExact[addr] = struct{}{}
+}
+
+func (s *ipSet) white(addr netip.Addr) bool {
+	if s == nil {
+		return false
+	}
+	if _, ok := s.whiteExact[addr]; ok {
+		return true
+	}
+	for _, p := range s.whiteNet {
+		if p.Contains(addr) {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *ipSet) black(addr netip.Addr) bool {
+	if s == nil {
+		return false
+	}
+	if _, ok := s.blackExact[addr]; ok {
+		return true
+	}
+	for _, p := range s.blackNet {
+		if p.Contains(addr) {
+			return true
+		}
+	}
+	return false
+}
+
+// IPList 是不可变的 IP 名单快照。
+//
+// 全局名单对所有站点生效；站点名单只在该站点命中。
+// 优先级：站点名单 > 全局名单（白名单始终优先于黑名单）。
+type IPList struct {
+	global ipSet
+	sites  map[string]*ipSet
+}
+
 // BuildIPList 从数据库记录构建快照，自动过滤已过期的黑名单。
 func BuildIPList(rows []model.IPRule, nowMS int64) *IPList {
 	l := &IPList{
-		whiteExact: map[netip.Addr]struct{}{},
-		blackExact: map[netip.Addr]struct{}{},
+		global: *newIPSet(),
+		sites:  map[string]*ipSet{},
 	}
 	for _, r := range rows {
 		if r.ExpiresAt > 0 && r.ExpiresAt < nowMS && r.Kind == "black" {
 			continue
 		}
 		isWhite := r.Kind == "white"
+		target := &l.global
+		// scope=site 但没填站点属于脏数据，按全局处理会误伤，直接忽略这条更安全
+		if r.Scope == "site" {
+			if r.Site == "" {
+				continue
+			}
+			set, ok := l.sites[r.Site]
+			if !ok {
+				set = newIPSet()
+				l.sites[r.Site] = set
+			}
+			target = set
+		}
 		if p, err := netip.ParsePrefix(r.IP); err == nil {
 			if isWhite {
-				l.whiteNet = append(l.whiteNet, p)
+				target.whiteNet = append(target.whiteNet, p)
 			} else {
-				l.blackNet = append(l.blackNet, p)
+				target.blackNet = append(target.blackNet, p)
 			}
 			continue
 		}
@@ -43,45 +110,32 @@ func BuildIPList(rows []model.IPRule, nowMS int64) *IPList {
 		if err != nil {
 			continue
 		}
-		if isWhite {
-			l.whiteExact[addr] = struct{}{}
-		} else {
-			l.blackExact[addr] = struct{}{}
-		}
+		target.add(addr, isWhite)
 	}
 	return l
 }
 
 // IsWhitelisted 白名单优先，白名单内的 IP 不做任何检测。
-func (l *IPList) IsWhitelisted(addr netip.Addr) bool {
+// site 为当前请求命中的站点名；站点名单只对该站点生效。
+func (l *IPList) IsWhitelisted(addr netip.Addr, site string) bool {
 	if l == nil {
 		return false
 	}
-	if _, ok := l.whiteExact[addr]; ok {
+	if s := l.sites[site]; s != nil && s.white(addr) {
 		return true
 	}
-	for _, p := range l.whiteNet {
-		if p.Contains(addr) {
-			return true
-		}
-	}
-	return false
+	return l.global.white(addr)
 }
 
 // IsBlacklisted 判断是否黑名单。
-func (l *IPList) IsBlacklisted(addr netip.Addr) bool {
+func (l *IPList) IsBlacklisted(addr netip.Addr, site string) bool {
 	if l == nil {
 		return false
 	}
-	if _, ok := l.blackExact[addr]; ok {
+	if s := l.sites[site]; s != nil && s.black(addr) {
 		return true
 	}
-	for _, p := range l.blackNet {
-		if p.Contains(addr) {
-			return true
-		}
-	}
-	return false
+	return l.global.black(addr)
 }
 
 // Count 返回名单规模，供面板展示。
@@ -89,7 +143,15 @@ func (l *IPList) Count() (white, black int) {
 	if l == nil {
 		return 0, 0
 	}
-	return len(l.whiteExact) + len(l.whiteNet), len(l.blackExact) + len(l.blackNet)
+	sets := []*ipSet{&l.global}
+	for _, s := range l.sites {
+		sets = append(sets, s)
+	}
+	for _, s := range sets {
+		white += len(s.whiteExact) + len(s.whiteNet)
+		black += len(s.blackExact) + len(s.blackNet)
+	}
+	return white, black
 }
 
 // Holder 用 atomic.Pointer 承载名单快照。
@@ -104,9 +166,20 @@ func (h *Holder) Store(l *IPList) { h.p.Store(l) }
 func (h *Holder) Load() *IPList { return h.p.Load() }
 
 // BanList 内存封禁表，与数据库最终一致（重启后由 LoadFromDB 恢复）。
+//
+// key 由「作用域站点 + IP」拼成：全局封禁用裸 IP，站点封禁用 site+"\x00"+IP。
+// 站点名为空串即全局；站点名不含 \x00，拼接无歧义。
 type BanList struct {
 	mu    chan struct{} // 用容量 1 的 channel 当锁，避免惰性初始化问题
 	items atomic.Pointer[map[string]int64]
+}
+
+// banKey 生成封禁表键。site 为空表示全局封禁。
+func banKey(site, ip string) string {
+	if site == "" {
+		return ip
+	}
+	return site + "\x00" + ip
 }
 
 // NewBanList 创建封禁表。
@@ -121,10 +194,16 @@ func NewBanList() *BanList {
 func (b *BanList) lock()   { <-b.mu }
 func (b *BanList) unlock() { b.mu <- struct{}{} }
 
-// Banned 判断是否在封禁中。
-func (b *BanList) Banned(ip string, nowMS int64) bool {
+// Banned 判断是否在封禁中：全局封禁或该站点封禁任一命中即视为封禁。
+func (b *BanList) Banned(ip, site string, nowMS int64) bool {
 	m := *b.items.Load()
-	until, ok := m[ip]
+	if until, ok := m[banKey("", ip)]; ok && (until == 0 || until > nowMS) {
+		return true
+	}
+	if site == "" {
+		return false
+	}
+	until, ok := m[banKey(site, ip)]
 	if !ok {
 		return false
 	}
@@ -134,8 +213,8 @@ func (b *BanList) Banned(ip string, nowMS int64) bool {
 	return true
 }
 
-// Ban 写入封禁，until 为毫秒时间戳（0 表示永久）。
-func (b *BanList) Ban(ip string, until int64) {
+// Ban 写入封禁，until 为毫秒时间戳（0 表示永久）。site 为空表示全局封禁。
+func (b *BanList) Ban(ip, site string, until int64) {
 	b.lock()
 	defer b.unlock()
 	old := *b.items.Load()
@@ -143,21 +222,22 @@ func (b *BanList) Ban(ip string, until int64) {
 	for k, v := range old {
 		next[k] = v
 	}
-	next[ip] = until
+	next[banKey(site, ip)] = until
 	b.items.Store(&next)
 }
 
-// Unban 解除封禁。
-func (b *BanList) Unban(ip string) bool {
+// Unban 解除指定作用域的封禁。
+func (b *BanList) Unban(ip, site string) bool {
+	key := banKey(site, ip)
 	b.lock()
 	defer b.unlock()
 	old := *b.items.Load()
-	if _, ok := old[ip]; !ok {
+	if _, ok := old[key]; !ok {
 		return false
 	}
 	next := make(map[string]int64, len(old))
 	for k, v := range old {
-		if k == ip {
+		if k == key {
 			continue
 		}
 		next[k] = v
@@ -186,14 +266,22 @@ func (b *BanList) LoadFromDB(rows []model.Ban, nowMS int64) {
 		if r.ExpiresAt > 0 && r.ExpiresAt < nowMS {
 			continue
 		}
-		next[r.IP] = r.ExpiresAt
+		next[banKey(banSite(r), r.IP)] = r.ExpiresAt
 	}
 	b.lock()
 	b.items.Store(&next)
 	b.unlock()
 }
 
-// Snapshot 返回当前封禁副本。
+// banSite 取记录实际生效的站点：只有 scope=site 才带站点，脏数据按全局处理。
+func banSite(r model.Ban) string {
+	if r.Scope == "site" {
+		return r.Site
+	}
+	return ""
+}
+
+// Snapshot 返回当前封禁副本。key 为内部键：全局是裸 IP，站点封禁为 site+"\x00"+IP。
 func (b *BanList) Snapshot() map[string]int64 {
 	m := *b.items.Load()
 	out := make(map[string]int64, len(m))
@@ -203,8 +291,19 @@ func (b *BanList) Snapshot() map[string]int64 {
 	return out
 }
 
-// Size 返回封禁数量。
-func (b *BanList) Size() int { return len(*b.items.Load()) }
+// Size 返回被封禁的 IP 数量（同一 IP 的全局与站点封禁只算一个）。
+func (b *BanList) Size() int {
+	m := *b.items.Load()
+	seen := make(map[string]struct{}, len(m))
+	for k := range m {
+		ip := k
+		if i := strings.IndexByte(k, 0); i >= 0 {
+			ip = k[i+1:]
+		}
+		seen[ip] = struct{}{}
+	}
+	return len(seen)
+}
 
 // Cleanup 清理过期条目，返回清理数量。
 func (b *BanList) Cleanup(nowMS int64) int {
