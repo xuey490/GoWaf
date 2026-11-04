@@ -49,7 +49,9 @@ func (s *Server) NotifyTest(c *gin.Context) {
 	if err != nil {
 		lg.Status, lg.Error = "fail", err.Error()
 		_ = s.Store.Gorm().Create(&lg).Error
-		response.Internal(c, "发送失败: "+err.Error())
+		// 用 400 而不是 500：SMTP 认证/连接失败是配置问题，不是服务端故障。
+		// 前端拦截器只对 5xx 做自动重试，用 500 会导致重复投递。
+		response.BadRequest(c, "发送失败: "+err.Error())
 		return
 	}
 	_ = s.Store.Gorm().Create(&lg).Error

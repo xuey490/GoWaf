@@ -1,11 +1,13 @@
 package notify
 
 import (
+	"bytes"
 	"crypto/tls"
 	"errors"
 	"fmt"
 	"html"
 	"mime"
+	"mime/quotedprintable"
 	"net"
 	"net/smtp"
 	"strconv"
@@ -88,25 +90,67 @@ func SendMail(cfg Config, subject, htmlBody string) error {
 		return fmt.Errorf("开始投递失败: %w", err)
 	}
 
-	var b strings.Builder
-	fmt.Fprintf(&b, "From: %s\r\n", from)
-	fmt.Fprintf(&b, "To: %s\r\n", strings.Join(cfg.To, ", "))
-	// 中文主题必须走 RFC 2047 编码，否则很多邮箱会显示成乱码
-	fmt.Fprintf(&b, "Subject: %s\r\n", mime.QEncoding.Encode("UTF-8", subject))
-	b.WriteString("MIME-Version: 1.0\r\n")
-	b.WriteString("Content-Type: text/html; charset=UTF-8\r\n")
-	b.WriteString("Content-Transfer-Encoding: 8bit\r\n")
-	fmt.Fprintf(&b, "Date: %s\r\n", time.Now().Format(time.RFC1123Z))
-	b.WriteString("\r\n")
-	b.WriteString(htmlBody)
-
-	if _, err := w.Write([]byte(b.String())); err != nil {
+	msg, err := buildMessage(cfg, from, subject, htmlBody)
+	if err != nil {
+		return err
+	}
+	if _, err := w.Write(msg); err != nil {
 		return fmt.Errorf("写入邮件内容失败: %w", err)
 	}
 	if err := w.Close(); err != nil {
 		return fmt.Errorf("结束投递失败: %w", err)
 	}
 	return c.Quit()
+}
+
+// buildMessage 组装完整 MIME 报文（头部 + quoted-printable 正文）。
+//
+// 正文必须走 quoted-printable：HTML 压缩后常常是超长单行，用 8bit 直发会撞上
+// RFC 5321 的 998 octet 行上限（QQ 邮箱直接回 500 Line too long），
+// QP 编码器会自动按 76 字符软换行，顺带解决非 ASCII 正文的 8bit 兼容性。
+func buildMessage(cfg Config, from, subject, htmlBody string) ([]byte, error) {
+	var b bytes.Buffer
+	fmt.Fprintf(&b, "From: %s\r\n", from)
+	fmt.Fprintf(&b, "To: %s\r\n", foldAddressList(cfg.To))
+	// 中文主题必须走 RFC 2047 编码，否则很多邮箱会显示成乱码
+	fmt.Fprintf(&b, "Subject: %s\r\n", mime.QEncoding.Encode("UTF-8", subject))
+	b.WriteString("MIME-Version: 1.0\r\n")
+	b.WriteString("Content-Type: text/html; charset=UTF-8\r\n")
+	b.WriteString("Content-Transfer-Encoding: quoted-printable\r\n")
+	fmt.Fprintf(&b, "Date: %s\r\n", time.Now().Format(time.RFC1123Z))
+	b.WriteString("\r\n")
+
+	qp := quotedprintable.NewWriter(&b)
+	if _, err := qp.Write([]byte(htmlBody)); err != nil {
+		return nil, fmt.Errorf("编码邮件内容失败: %w", err)
+	}
+	if err := qp.Close(); err != nil {
+		return nil, fmt.Errorf("编码邮件内容失败: %w", err)
+	}
+	return b.Bytes(), nil
+}
+
+// foldAddressList 把收件人列表折行，避免收件人很多时头部过宽。
+// 折行点只在逗号之后（RFC 5322 允许在逗号处折行），单行控制在 72 字符内。
+func foldAddressList(addrs []string) string {
+	var sb strings.Builder
+	col := 0
+	for i, a := range addrs {
+		if i > 0 {
+			// 预留 ", " 两个字符，放不下就先折行
+			if col+2+len(a) > 72 {
+				sb.WriteString(",\r\n ")
+				col = 1 + len(a)
+				sb.WriteString(a)
+				continue
+			}
+			sb.WriteString(", ")
+			col += 2
+		}
+		sb.WriteString(a)
+		col += len(a)
+	}
+	return sb.String()
 }
 
 // RenderDigest 生成摘要邮件。多个封禁事件合成一封，按 IP 去重后列出。
