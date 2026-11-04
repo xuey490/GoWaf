@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# GoWAF 一键部署 / 运维脚本（Ubuntu/Debian + 宝塔/1Panel/原生 Apache 或 Nginx）
+# GoWAF 一键部署 / 运维脚本（Ubuntu/Debian + 宝塔/1Panel/小皮/原生 Apache 或 Nginx）
 #
 # 核心事实：GoWAF 是「反向代理型」WAF，它必须站在 Web 服务器前面。
 # 所以部署动作只有一件事——把 80/443 交给 gowaf，让后端引擎退到 127.0.0.1:8080。
@@ -50,6 +50,17 @@ BT_CERT_DIR="${BT_PANEL}/vhost/cert"
 BT_VHOST_DIR="${BT_PANEL}/vhost/apache"
 BT_NGINX_VHOST_DIR="${BT_PANEL}/vhost/nginx"
 BT_APACHE="/www/server/apache"
+
+# 小皮 Linux 官方布局（xp.cn 安装包解压到 /usr/local/phpstudy）：
+#   soft/nginx/<ver>/conf/nginx.conf
+#   soft/apache/<ver>/conf/httpd.conf
+#   vhost/{nginx,apache}/*.conf
+#   vhost/cert/<域名>/{fullchain,privkey}.pem
+# /www/server/panel 无 BT-Panel 主程序时视为宝塔同构兜底（部分魔改版）。
+XP_HOME="/usr/local/phpstudy"
+XP_SOFT="${XP_HOME}/soft"
+XP_VHOST="${XP_HOME}/vhost"
+XP_CERT_DIR="${XP_VHOST}/cert"
 
 # 1Panel 的 OpenResty 在 Docker 容器里，配置挂在宿主目录
 OP1_HOME="/opt/1panel/apps/openresty/openresty"
@@ -291,17 +302,62 @@ ${who}
 # ---------------------------------------------------------------- 面板探测
 # PANEL 只决定「配置在哪、证书在哪、怎么重载」，ENGINE 决定「改什么语法」。
 
+# 小皮 / 宝塔 版本目录 glob：取字典序最新的一个现存文件。无匹配返回 1。
+xp_latest_file() {
+  local pattern=$1 f latest=""
+  local -a files=()
+  shopt -s nullglob
+  # shellcheck disable=SC2206
+  files=($pattern)
+  shopt -u nullglob
+  (( ${#files[@]} > 0 )) || return 1
+  for f in "${files[@]}"; do
+    [[ -e $f ]] || continue
+    if [[ -z $latest || $f > $latest ]]; then
+      latest=$f
+    fi
+  done
+  [[ -n $latest ]] || return 1
+  printf '%s\n' "$latest"
+}
+
+panel_nginx_conf() {
+  local f
+  f=$(xp_latest_file "${XP_SOFT}/nginx/*/conf/nginx.conf" || true)
+  if [[ -n $f ]]; then printf '%s\n' "$f"; return 0; fi
+  if [[ -f /www/server/nginx/conf/nginx.conf ]]; then
+    printf '%s\n' /www/server/nginx/conf/nginx.conf
+    return 0
+  fi
+  return 1
+}
+
+panel_apache_conf() {
+  local f
+  f=$(xp_latest_file "${XP_SOFT}/apache/*/conf/httpd.conf" || true)
+  if [[ -n $f ]]; then printf '%s\n' "$f"; return 0; fi
+  if [[ -f "${BT_APACHE}/conf/httpd.conf" ]]; then
+    printf '%s\n' "${BT_APACHE}/conf/httpd.conf"
+    return 0
+  fi
+  return 1
+}
+
 detect_panel() {
   PANEL=system
   # 注意判定顺序：1Panel 会在 /www/server/panel 造一个兼容目录（只有 vhost/pyenv，
   # 没有 BT-Panel 主程序），所以「目录存在」不足以判定宝塔，必须看面板主程序。
+  # 小皮 Linux 官方在 /usr/local/phpstudy，不能只靠 /www/server/panel 判定。
   if [[ -f "${BT_PANEL}/BT-Panel" || -d "${BT_PANEL}/class" ]]; then
     PANEL=bt
     info "面板：宝塔（${BT_PANEL}）"
   elif [[ -d /opt/1panel ]]; then
     PANEL=1panel
     info "面板：1Panel（/opt/1panel）"
-  elif [[ -d /www/server/panel || -d /www/phpstudy_pro ]]; then
+  elif [[ -d ${XP_SOFT} || -x ${XP_HOME}/system/phpstudyctl || -d /www/phpstudy_pro ]]; then
+    PANEL=phpstudy
+    info "面板：小皮 Linux（${XP_HOME}）"
+  elif [[ -d /www/server/panel ]]; then
     PANEL=phpstudy
     info "面板：小皮 Linux（站点配置与宝塔同构）"
   else
@@ -346,10 +402,17 @@ detect_engine() {
     ENGINE=apache
     info "引擎：Apache（正在监听 80/443）"
   else
-    # 没人在跑：按配置文件存在性判断
+    # 没人在跑：按配置文件存在性判断。
+    # 宝塔/小皮机器上经常残留 apt 的 /etc/nginx、/etc/apache2，不能把系统包装当面板引擎。
     local has_apache has_nginx
-    has_apache=0; [[ -f "${BT_APACHE}/conf/httpd.conf" || -f /etc/apache2/apache2.conf ]] && has_apache=1
-    has_nginx=0;  nginx_conf_exists && has_nginx=1
+    has_apache=0; has_nginx=0
+    if [[ $PANEL == bt || $PANEL == phpstudy ]]; then
+      panel_apache_conf >/dev/null && has_apache=1
+      nginx_conf_exists && has_nginx=1
+    else
+      [[ -f "${BT_APACHE}/conf/httpd.conf" || -f /etc/apache2/apache2.conf ]] && has_apache=1
+      nginx_conf_exists && has_nginx=1
+    fi
     if (( has_apache == 1 && has_nginx == 0 )); then
       ENGINE=apache
       info "引擎：Apache（按配置文件判断，服务未运行）"
@@ -367,6 +430,16 @@ detect_engine() {
 }
 
 nginx_conf_exists() {
+  if [[ $PANEL == bt || $PANEL == phpstudy ]]; then
+    panel_nginx_conf >/dev/null && return 0
+    if [[ -d $BT_NGINX_VHOST_DIR && -n "$(ls "${BT_NGINX_VHOST_DIR}" 2>/dev/null)" ]]; then
+      return 0
+    fi
+    if [[ -d ${XP_VHOST}/nginx && -n "$(ls "${XP_VHOST}/nginx" 2>/dev/null)" ]]; then
+      return 0
+    fi
+    return 1
+  fi
   # 1Panel（OpenResty 宿主配置）/ 系统 nginx / 宝塔 nginx
   if [[ -f $OP1_CONF || -f /etc/nginx/nginx.conf || -f /www/server/nginx/conf/nginx.conf ]]; then
     return 0
@@ -382,29 +455,66 @@ nginx_conf_exists() {
 # ---------------------------------------------------------------- Apache 环境探测
 
 detect_env_apache() {
-  if [[ -f "${BT_APACHE}/conf/httpd.conf" ]]; then
-    APACHE_CONF="${BT_APACHE}/conf/httpd.conf"
-    VHOST_DIR="${BT_VHOST_DIR}"
-    CERT_DIR="${BT_CERT_DIR}"
-    info "站点目录：${VHOST_DIR}"
-  elif [[ -f /etc/apache2/apache2.conf ]]; then
-    APACHE_CONF="/etc/apache2/apache2.conf"
-    VHOST_DIR="/etc/apache2/sites-enabled"
-    CERT_DIR="${CERT_DIR:-/etc/gowaf/certs}"
+  APACHE_CONF=""
+  VHOST_DIR=""
+
+  if [[ $PANEL == phpstudy ]]; then
+    local xp
+    xp=$(xp_latest_file "${XP_SOFT}/apache/*/conf/httpd.conf" || true)
+    if [[ -n $xp ]]; then
+      APACHE_CONF="$xp"
+      if [[ -d ${XP_VHOST}/apache ]]; then
+        VHOST_DIR="${XP_VHOST}/apache"
+      elif [[ -d "$(dirname "$xp")/vhosts" ]]; then
+        VHOST_DIR="$(dirname "$xp")/vhosts"
+      else
+        VHOST_DIR="${BT_VHOST_DIR}"
+      fi
+    fi
   fi
 
+  if [[ -z $APACHE_CONF && -f "${BT_APACHE}/conf/httpd.conf" ]]; then
+    APACHE_CONF="${BT_APACHE}/conf/httpd.conf"
+    VHOST_DIR="${BT_VHOST_DIR}"
+  elif [[ -z $APACHE_CONF && -f /etc/apache2/apache2.conf ]]; then
+    APACHE_CONF="/etc/apache2/apache2.conf"
+    VHOST_DIR="/etc/apache2/sites-enabled"
+  fi
+  [[ -n $APACHE_CONF && -n $VHOST_DIR ]] || die "没找到 Apache 主配置或站点目录"
+  [[ -d $VHOST_DIR ]] || die "Apache 站点目录不存在：${VHOST_DIR}"
+
+  case $PANEL in
+    phpstudy)
+      if [[ -d $XP_CERT_DIR ]]; then CERT_DIR="$XP_CERT_DIR"; else CERT_DIR="${BT_CERT_DIR}"; fi
+      ;;
+    bt) CERT_DIR="${BT_CERT_DIR}" ;;
+    *)  CERT_DIR="${CERT_DIR:-/etc/gowaf/certs}" ;;
+  esac
+  info "Apache 主配置：${APACHE_CONF}"
+  info "站点目录：${VHOST_DIR}"
+
   WEB_SVC=""
-  for s in httpd apache2; do
-    if systemctl list-unit-files "${s}.service" >/dev/null 2>&1; then
-      APACHE_SVC="$s"; break
-    fi
-  done
-  [[ -n $APACHE_SVC ]] || die "找不到 httpd/apache2 的 systemd 服务"
+  if [[ -x /etc/init.d/httpd ]]; then
+    APACHE_SVC=httpd
+  elif [[ -x /etc/init.d/apache2 ]]; then
+    APACHE_SVC=apache2
+  else
+    for s in httpd apache2; do
+      if systemctl list-unit-files "${s}.service" >/dev/null 2>&1; then
+        APACHE_SVC="$s"; break
+      fi
+    done
+  fi
+  [[ -n $APACHE_SVC ]] || die "找不到 httpd/apache2 的 systemd / init.d 服务"
   WEB_SVC="$APACHE_SVC"
   info "Apache 服务名：${APACHE_SVC}"
 
-  # 宝塔的 apachectl 不在 PATH 里，必须显式找
+  # 小皮/宝塔的 apachectl 不在 PATH 里，必须显式找
+  local xp_ctl="" cand
+  xp_ctl=$(xp_latest_file "${XP_SOFT}/apache/*/bin/apachectl" || true)
+  APACHE_CTL=""
   for cand in \
+    "$xp_ctl" \
     "${BT_APACHE}/bin/apachectl" \
     "$(command -v apachectl 2>/dev/null || true)" \
     "$(command -v apache2ctl 2>/dev/null || true)" \
@@ -419,12 +529,28 @@ detect_env_apache() {
 # ---------------------------------------------------------------- Nginx 环境探测
 
 detect_env_nginx() {
-  # 主配置。宝塔/小皮必须优先认 /www/server/nginx：Ubuntu 上经常残留
+  # 主配置。宝塔/小皮必须优先认面板路径：Ubuntu 上经常残留
   # /etc/nginx/nginx.conf（apt 装过），若先命中系统路径会改错文件、漏改 vhost。
-  if [[ $PANEL == bt || $PANEL == phpstudy ]] && [[ -f /www/server/nginx/conf/nginx.conf ]]; then
+  # 小皮官方在 /usr/local/phpstudy/soft/nginx/<ver>，宝塔同构兜底 /www/server/nginx。
+  NGINX_CONF=""
+  if [[ $PANEL == phpstudy ]]; then
+    local xp
+    xp=$(xp_latest_file "${XP_SOFT}/nginx/*/conf/nginx.conf" || true)
+    if [[ -n $xp ]]; then
+      NGINX_CONF="$xp"
+      if [[ -d ${XP_VHOST}/nginx ]]; then
+        VHOST_DIR="${XP_VHOST}/nginx"
+      elif [[ -d "$(dirname "$xp")/vhosts" ]]; then
+        VHOST_DIR="$(dirname "$xp")/vhosts"
+      else
+        VHOST_DIR="${BT_NGINX_VHOST_DIR}"
+      fi
+    fi
+  fi
+  if [[ -z $NGINX_CONF && ( $PANEL == bt || $PANEL == phpstudy ) && -f /www/server/nginx/conf/nginx.conf ]]; then
     NGINX_CONF="/www/server/nginx/conf/nginx.conf"
     VHOST_DIR="${BT_NGINX_VHOST_DIR}"
-  elif [[ -f $OP1_CONF ]]; then
+  elif [[ -z $NGINX_CONF && -f $OP1_CONF ]]; then
     NGINX_CONF="$OP1_CONF"
     # 1Panel 版本不同，站点 conf.d 挂载位置不同：新版 /opt/1panel/www/conf.d，旧版 app 目录下的 conf.d。
     # 取「真的有站点配置」的那个，两个都没有时默认新路径。
@@ -435,10 +561,10 @@ detect_env_nginx() {
     else
       VHOST_DIR="${OP1_WWW}/conf.d"
     fi
-  elif [[ -f /www/server/nginx/conf/nginx.conf ]]; then
+  elif [[ -z $NGINX_CONF && -f /www/server/nginx/conf/nginx.conf ]]; then
     NGINX_CONF="/www/server/nginx/conf/nginx.conf"
     VHOST_DIR="${BT_NGINX_VHOST_DIR}"
-  elif [[ -f /etc/nginx/nginx.conf ]]; then
+  elif [[ -z $NGINX_CONF && -f /etc/nginx/nginx.conf ]]; then
     NGINX_CONF="/etc/nginx/nginx.conf"
     if [[ -d /etc/nginx/sites-enabled && -n "$(ls /etc/nginx/sites-enabled/*.conf 2>/dev/null || ls /etc/nginx/sites-enabled/ 2>/dev/null)" ]]; then
       VHOST_DIR="/etc/nginx/sites-enabled"
@@ -456,7 +582,9 @@ detect_env_nginx() {
     NGINX_BIN=""   # 容器内执行，见 nginx_run()
     NGINX_REALIP_CONF="${OP1_HOME}/conf/conf.d/gowaf-realip.conf"
   else
-    for cand in /www/server/nginx/sbin/nginx "$(command -v nginx 2>/dev/null || true)" /usr/sbin/nginx /usr/local/openresty/nginx/sbin/nginx; do
+    local xp_bin="" cand
+    xp_bin=$(xp_latest_file "${XP_SOFT}/nginx/*/sbin/nginx" || true)
+    for cand in "$xp_bin" /www/server/nginx/sbin/nginx "$(command -v nginx 2>/dev/null || true)" /usr/sbin/nginx /usr/local/openresty/nginx/sbin/nginx; do
       if [[ -n $cand && -x $cand ]]; then NGINX_BIN="$cand"; break; fi
     done
     [[ -n $NGINX_BIN ]] || die "找不到 nginx 可执行文件"
@@ -488,7 +616,10 @@ detect_env_nginx() {
 
   # 证书目录
   case $PANEL in
-    bt|phpstudy) CERT_DIR="${BT_CERT_DIR}" ;;
+    phpstudy)
+      if [[ -d $XP_CERT_DIR ]]; then CERT_DIR="$XP_CERT_DIR"; else CERT_DIR="${BT_CERT_DIR}"; fi
+      ;;
+    bt)          CERT_DIR="${BT_CERT_DIR}" ;;
     1panel)      CERT_DIR="${OP1_WWW}/ssl" ;;
     *)           CERT_DIR="${CERT_DIR:-/etc/gowaf/certs}" ;;
   esac
@@ -710,16 +841,22 @@ wait_port_free() {
 dump_listen_evidence() {
   local p=$1 el=""
   if [[ $ENGINE == apache ]]; then
-    el="${BT_APACHE}/logs/error_log"
+    if [[ -n ${APACHE_CONF:-} ]]; then
+      el="$(dirname "$(dirname "$APACHE_CONF")")/logs/error_log"
+    else
+      el="${BT_APACHE}/logs/error_log"
+    fi
     printf '\n--- 端口 %s 的占用者 ---\n' "$p" >&2
     port_holder "$p" >&2 || true
     printf '\n--- Apache 进程 ---\n' >&2
-    ps -eo pid,ppid,args 2>/dev/null | grep -E '[h]ttpd' | head -8 >&2 || true
+    ps -eo pid,ppid,args 2>/dev/null | grep -E '[h]ttpd|[a]pache2' | head -8 >&2 || true
   else
     if [[ $PANEL == 1panel ]]; then
       el="${OP1_HOME}/logs/error.log"
-    elif [[ $NGINX_CONF == /www/server/nginx/* ]]; then
+    elif [[ ${NGINX_CONF:-} == /www/server/nginx/* ]]; then
       el="/www/server/nginx/logs/error.log"
+    elif [[ ${NGINX_CONF:-} == /usr/local/phpstudy/* ]]; then
+      el="$(dirname "$(dirname "$NGINX_CONF")")/logs/error.log"
     else
       el="/var/log/nginx/error.log"
     fi
@@ -765,8 +902,9 @@ inject_httpd_block() {
       ok "启用 mod_remoteip（真实 IP 透传）"
     fi
   elif ! grep -qE '^[[:space:]]*LoadModule[[:space:]]+remoteip_module' "$APACHE_CONF"; then
-    local so
-    for so in "${BT_APACHE}/modules/mod_remoteip.so" /usr/lib/apache2/modules/mod_remoteip.so; do
+    local prefix so
+    prefix="$(dirname "$(dirname "$APACHE_CONF")")"
+    for so in "${prefix}/modules/mod_remoteip.so" "${BT_APACHE}/modules/mod_remoteip.so" /usr/lib/apache2/modules/mod_remoteip.so; do
       if [[ -f $so ]]; then
         printf '\nLoadModule remoteip_module %s\n' "$so" >> "$APACHE_CONF"
         ok "启用 mod_remoteip（真实 IP 透传）"
@@ -860,9 +998,11 @@ abort_install() {
 
 # 主配置 + 零散 Listen + 全部 vhost 的指纹，用来判断这次是不是真的改动了 Apache
 apache_fingerprint() {
+  local extra_dir
+  extra_dir="$(dirname "$APACHE_CONF")/extra"
   {
     cat "$APACHE_CONF" 2>/dev/null || true
-    cat "${BT_APACHE}"/conf/extra/*.conf 2>/dev/null || true
+    cat "${extra_dir}"/*.conf 2>/dev/null || true
     cat "$VHOST_DIR"/*.conf 2>/dev/null || true
   } | md5sum | awk '{print $1}'
 }
@@ -952,7 +1092,8 @@ apache_stop_and_verify() {
 }
 
 apache_start_and_verify() {
-  local el="${BT_APACHE}/logs/error_log"
+  local el
+  el="$(dirname "$(dirname "$APACHE_CONF")")/logs/error_log"
   apache_ctl start || true
   if ! wait_port_listening "$UPSTREAM_PORT" 20; then
     warn "systemctl start 之后没看到 ${UPSTREAM_PORT}，改用 apachectl -k restart 再试"

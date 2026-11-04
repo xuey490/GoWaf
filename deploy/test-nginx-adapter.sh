@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 #
-# 宝塔 Nginx 适配器单测：不启服务、不需要 root。
-# 覆盖实测会踩到的坑：server/{ 分行、http/{ 分行、$server_port !~ 443 无锚点。
+# 面板适配器单测：不启服务、不需要 root。
+# 覆盖实测会踩到的坑：宝塔 Nginx server/{ 分行、http/{ 分行、$server_port !~ 443 无锚点；
+# 小皮 Linux 路径 glob；Apache VirtualHost 改写与强制 HTTPS。
 #
 set -Eeuo pipefail
 
@@ -133,5 +134,50 @@ NGINX_CONF="${WORKDIR}/nginx-same.conf"
 nginx_inject_realip
 grep -q 'set_real_ip_from 127.0.0.1;' "$NGINX_CONF" || fail "同行 http { 没有注入 realip"
 pass "同行 http { 注入 realip"
+
+# ---------- 8. 小皮 Linux 版本目录 glob 取最新 ----------
+mkdir -p "${WORKDIR}/soft/nginx/nginx-1.15/conf" "${WORKDIR}/soft/nginx/nginx-1.18/conf"
+touch "${WORKDIR}/soft/nginx/nginx-1.15/conf/nginx.conf" "${WORKDIR}/soft/nginx/nginx-1.18/conf/nginx.conf"
+got=$(xp_latest_file "${WORKDIR}/soft/nginx/*/conf/nginx.conf")
+[[ $got == *nginx-1.18* ]] || fail "xp_latest_file 没有取到较新版本：$got"
+if xp_latest_file "${WORKDIR}/soft/missing/*/conf/nginx.conf" >/dev/null 2>&1; then
+  fail "不存在的 glob 应该返回失败"
+fi
+pass "小皮 Linux 版本目录 glob 取最新"
+
+# ---------- 9. Apache VirtualHost *:80 + 强制 HTTPS ----------
+PANEL=phpstudy
+ENGINE=apache
+VHOST_DIR="$WORKDIR"
+cat > "${WORKDIR}/demo.apache.conf" <<'EOF'
+<VirtualHost *:80>
+    ServerName demo.local
+    DocumentRoot /www/wwwroot/demo.local
+    #HTTP_TO_HTTPS_START
+    RewriteEngine On
+    RewriteCond %{SERVER_PORT} !^443$
+    RewriteRule ^(.*)$ https://%{SERVER_NAME}$1 [L,R=301]
+    #HTTP_TO_HTTPS_END
+</VirtualHost>
+<VirtualHost *:443>
+    ServerName demo.local
+    SSLEngine on
+</VirtualHost>
+EOF
+retarget_vhosts
+grep -q '<VirtualHost 127.0.0.1:8080>' "${WORKDIR}/demo.apache.conf" \
+  || fail "Apache *:80 没有改写到 127.0.0.1:8080"
+grep -qE '^[[:space:]]*<VirtualHost[[:space:]]+\*:80>' "${WORKDIR}/demo.apache.conf" \
+  && fail "Apache *:80 还在"
+grep -qF 'RewriteCond %{HTTP:X-Forwarded-Proto} !^https$' "${WORKDIR}/demo.apache.conf" \
+  || fail "Apache 强制 HTTPS 没有补 X-Forwarded-Proto"
+grep -qF '<VirtualHost *:443>' "${WORKDIR}/demo.apache.conf" \
+  || fail "未接管前 *:443 段不该动"
+# 幂等
+cp "${WORKDIR}/demo.apache.conf" "${WORKDIR}/demo.apache.conf.bak"
+retarget_vhosts
+cmp -s "${WORKDIR}/demo.apache.conf" "${WORKDIR}/demo.apache.conf.bak" \
+  || fail "Apache retarget 第二次不是幂等"
+pass "Apache VirtualHost *:80 改写 + 强制 HTTPS 幂等"
 
 printf '\n全部适配器单测通过\n'

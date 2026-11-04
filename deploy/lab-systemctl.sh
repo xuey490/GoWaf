@@ -18,8 +18,21 @@ is_running() {
   u=$(unit_base "$1")
   case $u in
     nginx)
-      pidfile=/www/server/nginx/logs/nginx.pid
-      [[ -f $pidfile ]] && kill -0 "$(cat "$pidfile")" 2>/dev/null ;;
+      for pidfile in /www/server/nginx/logs/nginx.pid \
+                     /usr/local/phpstudy/soft/nginx/*/logs/nginx.pid; do
+        [[ -f $pidfile ]] || continue
+        kill -0 "$(cat "$pidfile")" 2>/dev/null && return 0
+      done
+      return 1 ;;
+    httpd|apache2)
+      for pidfile in /www/server/apache/logs/httpd.pid \
+                     /usr/local/phpstudy/soft/apache/*/logs/httpd.pid \
+                     /run/apache2/apache2.pid \
+                     /var/run/apache2/apache2.pid; do
+        [[ -f $pidfile ]] || continue
+        kill -0 "$(cat "$pidfile")" 2>/dev/null && return 0
+      done
+      return 1 ;;
     gowaf)
       pidfile=/run/gowaf.pid
       [[ -f $pidfile ]] && kill -0 "$(cat "$pidfile")" 2>/dev/null ;;
@@ -36,6 +49,13 @@ start_unit() {
   case $u in
     nginx)
       /etc/init.d/nginx start
+      ;;
+    httpd|apache2)
+      if [[ -x /etc/init.d/httpd ]]; then
+        /etc/init.d/httpd start
+      elif [[ -x /etc/init.d/apache2 ]]; then
+        /etc/init.d/apache2 start
+      fi
       ;;
     gowaf)
       local bin=/www/server/gowaf/bin/gowaf
@@ -63,6 +83,15 @@ stop_unit() {
   u=$(unit_base "$1")
   case $u in
     nginx) /etc/init.d/nginx stop || true ;;
+    httpd|apache2)
+      if [[ -x /etc/init.d/httpd ]]; then
+        /etc/init.d/httpd stop || true
+      elif [[ -x /etc/init.d/apache2 ]]; then
+        /etc/init.d/apache2 stop || true
+      fi
+      pkill -x apache2 2>/dev/null || true
+      pkill -x httpd 2>/dev/null || true
+      ;;
     gowaf)
       pidfile=/run/gowaf.pid
       if [[ -f $pidfile ]] && kill -0 "$(cat "$pidfile")" 2>/dev/null; then
@@ -133,12 +162,12 @@ case $ACTION in
   list-unit-files)
     # 空参数：给一个最小列表；带参数：该 unit 存在即打印
     if [[ ${#UNITS[@]} -eq 0 ]]; then
-      printf 'nginx.service\nenabled\ngowaf.service\nenabled\n'
+      printf 'nginx.service\nenabled\nhttpd.service\nenabled\napache2.service\nenabled\ngowaf.service\nenabled\n'
       exit 0
     fi
     for u in "${UNITS[@]}"; do
       case $(unit_base "$u") in
-        nginx|gowaf|gowaf-resync) printf '%s\tenabled\n' "$u" ;;
+        nginx|httpd|apache2|gowaf|gowaf-resync) printf '%s\tenabled\n' "$u" ;;
         *) exit 1 ;;
       esac
     done
@@ -189,6 +218,11 @@ case $ACTION in
     for u in "${UNITS[@]}"; do
       case $(unit_base "$u") in
         nginx) /etc/init.d/nginx reload || true ;;
+        httpd|apache2)
+          if [[ -x /etc/init.d/httpd ]]; then /etc/init.d/httpd reload || true
+          elif [[ -x /etc/init.d/apache2 ]]; then /etc/init.d/apache2 reload || true
+          fi
+          ;;
         gowaf) stop_unit gowaf; start_unit gowaf ;;
       esac
     done

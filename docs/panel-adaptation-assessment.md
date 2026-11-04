@@ -106,9 +106,10 @@ install.sh（编排层，保持现有 install/rollback/uninstall/resync/doctor �
 2. **健康检查/重载**：`docker exec <openresty> nginx -t && nginx -s reload`，服务名从 compose 容器名取
 
 ### 4.5 小皮面板 Linux（phpStudy Linux）
-- 站点配置路径与宝塔同构：Nginx 在 `/www/server/panel/vhost/nginx/<域名>.conf`、Apache 在 `/www/server/panel/vhost/apache/<域名>.conf`——**宝塔适配器改改路径常量即复用**，证书目录沿用面板布局
-- 面板「保存/重定向」操作会按模板重新生成整个 vhost 文件（官方行为，与宝塔同款覆盖风险），resync 兜底
-- 探测函数识别到小皮布局时走宝塔适配器 + 路径覆盖，列为 P2 收尾
+- **官方布局**（xp.cn 安装包）：`/usr/local/phpstudy/soft/nginx/<ver>/conf/nginx.conf`、`soft/apache/<ver>/conf/httpd.conf`，站点 `vhost/{nginx,apache}/*.conf`，证书 `vhost/cert/<域名>/{fullchain,privkey}.pem`。`detect_panel` 认 `/usr/local/phpstudy/soft` 或 `system/phpstudyctl`。
+- **宝塔同构兜底**：无 BT-Panel 主程序的 `/www/server/panel`（部分魔改版）仍走 `/www/server/panel/vhost/{nginx,apache}`。
+- 语法复用宝塔 Apache/Nginx 适配器（listen / VirtualHost 改写、realip、强制 HTTPS 死循环修复）；面板「保存/重定向」会整文件覆盖，resync 兜底。
+- 面板机器上残留的 apt `/etc/nginx`、`/etc/apache2` **不算**引擎，避免误报双引擎。
 
 ### 4.6 双引擎并存（加分项，数据面已支持）
 WAF 路由表本来就是 per-site upstream。机器上同时有 Apache(8080) 和 Nginx(8081) 退守时，控制台把各站点上游指到对应端口即可——**这是比 cPanel 级方案更灵活的形态，且数据面零开发**。

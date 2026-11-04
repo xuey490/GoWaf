@@ -500,18 +500,22 @@ curl -s -o /dev/null -w "%{http_code}\n" -H "Host: demo.local" http://127.0.0.1:
 
 ```bash
 make test          # go test ./...
-make test-adapter  # 宝塔 Nginx 适配器单测（listen 改写 / 强制 HTTPS / realip）
+make test-adapter  # 宝塔/小皮适配器单测（listen 改写 / 强制 HTTPS / realip / Apache vhost）
 make vet           # go vet ./...
 make fmt           # gofmt
 ```
 
-本机没有完整宝塔面板时，可用实验室脚本按宝塔 Nginx 的目录与配置模板搭一套可被 `install.sh` 识别的环境：
+本机没有完整面板时，可用实验室脚本按对应目录与配置模板搭一套可被 `install.sh` 识别的环境：
 
 ```bash
-sudo bash deploy/lab-bt-nginx.sh   # /www/server/{panel,nginx} + 演示站点 demo.local / shop.local
+sudo bash deploy/lab-bt-nginx.sh          # 宝塔 Nginx：/www/server/{panel,nginx}
+sudo bash deploy/lab-phpstudy.sh apache  # 小皮 Linux Apache：/usr/local/phpstudy/soft/apache/<ver>
+sudo bash deploy/lab-phpstudy.sh nginx   # 小皮 Linux Nginx：/usr/local/phpstudy/soft/nginx/<ver>
 sudo bash deploy/install.sh doctor
 sudo bash deploy/install.sh install --force --binary bin/gowaf-linux-amd64
 ```
+
+小皮 Linux 官方安装包（xp.cn）解压到 `/usr/local/phpstudy`，站点在 `vhost/{nginx,apache}`，证书在 `vhost/cert/<域名>`。部分魔改版仍走宝塔同构路径 `/www/server/panel/vhost/{nginx,apache}`，脚本两种都认。探测时忽略机器上残留的 apt `/etc/nginx`、`/etc/apache2`，避免宝塔/小皮被误判成双引擎。
 
 ### 断点调试（Delve）
 
