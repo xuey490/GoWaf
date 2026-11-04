@@ -25,10 +25,12 @@ function Reset-DetectState {
     $script:ConfFile = ''
     $script:CertDir = ''
     $script:SearchRoots = @()
-    $Engine = ''
-    $Panel = ''
     $HttpOnly = $false
     Set-Variable -Name Engine -Value '' -Scope Script -ErrorAction SilentlyContinue
+    Set-Variable -Name Panel -Value '' -Scope Script -ErrorAction SilentlyContinue
+    Set-Variable -Name SearchRoot -Value @() -Scope Script -ErrorAction SilentlyContinue
+    Set-Variable -Name CustomVhostDir -Value '' -Scope Script -ErrorAction SilentlyContinue
+    Set-Variable -Name CustomConfFile -Value '' -Scope Script -ErrorAction SilentlyContinue
 }
 
 function New-LabRoot($name) {
@@ -344,6 +346,59 @@ try {
 } catch {
     if ("$($_.Exception.Message)" -match '-Engine') { Pass '双引擎拒绝自动猜测，要求 -Engine' }
     else { Fail "双引擎报错不符合预期：$($_.Exception.Message)" }
+}
+
+Write-Host "`n== 8. 非默认路径：子目录里的小皮 / 宝塔 =="
+$nestedPhp = New-LabRoot 'nested-php'
+Copy-Item (Join-Path $phpApacheRoot 'phpstudy_pro') (Join-Path $nestedPhp 'apps/phpstudy_pro') -Recurse
+if (Invoke-Detect $nestedPhp 'phpstudy' 'apache') {
+    Pass "子目录 apps/phpstudy_pro 仍能探测到小皮 Apache"
+}
+$nestedBt = New-LabRoot 'nested-bt'
+Copy-Item (Join-Path $btNginxRoot 'BtSoft') (Join-Path $nestedBt 'www/BtSoft') -Recurse
+if (Invoke-Detect $nestedBt 'bt' 'nginx') {
+    Pass "子目录 www/BtSoft 仍能探测到宝塔 Nginx"
+}
+
+Write-Host "`n== 9. 更深的自定义路径必须 -VhostDir =="
+$deep = New-LabRoot 'deep-nginx'
+$deepConfDir = Join-Path $deep 'company/prod/stack/nginx/conf'
+Write-Utf8 (Join-Path $deepConfDir 'nginx.conf') @'
+worker_processes 1;
+events { worker_connections 1024; }
+http {
+    include mime.types;
+    include conf.d/*.conf;
+}
+'@
+Write-Utf8 (Join-Path $deepConfDir 'conf.d/shop.conf') @'
+server {
+    listen 80;
+    server_name shop.local;
+}
+'@
+Reset-DetectState
+$env:GOWAF_SEARCH_ROOTS = $deep
+$script:SearchRoots = @($deep)
+try {
+    Detect-Engine
+    Fail '三层以上自定义 nginx 不应被自动猜到'
+} catch {
+    if ("$($_.Exception.Message)" -match '没探测到|VhostDir|SearchRoot') { Pass '过深路径自动探测失败（符合预期）' }
+    else { Fail "过深路径报错不符合预期：$($_.Exception.Message)" }
+}
+Reset-DetectState
+Set-Variable -Name Engine -Value 'nginx' -Scope Script
+Set-Variable -Name CustomVhostDir -Value (Join-Path $deepConfDir 'conf.d') -Scope Script
+Set-Variable -Name CustomConfFile -Value (Join-Path $deepConfDir 'nginx.conf') -Scope Script
+$env:GOWAF_SEARCH_ROOTS = $deep
+Detect-Engine
+if ($script:Engine -eq 'nginx' -and $script:VhostDir -eq (Join-Path $deepConfDir 'conf.d')) {
+    Pass "-VhostDir 接管完全自定义 nginx"
+    Patch-NginxVhosts
+    Assert-File (Join-Path $deepConfDir 'conf.d/shop.conf') 'listen 127\.0\.0\.1:8080;' '自定义路径 listen 80 已改写'
+} else {
+    Fail "指定 -VhostDir 后引擎是 $($script:EngineLabel) 目录 $($script:VhostDir)"
 }
 
 Write-Host ""

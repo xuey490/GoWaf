@@ -5,6 +5,8 @@
 #   .\install.ps1 install                # 备份 → 引擎让出 80/443 → gowaf svc → 防火墙
 #   .\install.ps1 install -Engine nginx  # 同机多引擎时显式指定（iis|apache|nginx）
 #   .\install.ps1 install -Panel bt      # 同机多面板时显式指定（phpstudy|bt|system）
+#   .\install.ps1 install -SearchRoot D:\apps   # 非默认盘符/子目录：把安装父目录加进搜索
+#   .\install.ps1 install -Engine nginx -VhostDir D:\stack\nginx\conf\vhost  # 完全自定义路径
 #   .\install.ps1 install -HttpOnly      # 只接管 80，443 不动
 #   .\install.ps1 rollback               # 从备份还原引擎配置，流量回到引擎直连
 #   .\install.ps1 uninstall              # rollback + 删服务 + 删数据目录
@@ -27,6 +29,17 @@ param(
 
     [ValidateSet('', 'phpstudy', 'bt', 'system')]
     [string]$Panel = '',
+
+    # 非默认安装路径：把「phpstudy_pro / BtSoft / Apache24 / nginx 所在的父目录」加进来（可多次）
+    [string[]]$SearchRoot = @(),
+
+    # 完全自定义：直接指定站点配置目录（必须同时给 -Engine）。命令行仍用 -VhostDir
+    [Alias('VhostDir')]
+    [string]$CustomVhostDir = '',
+
+    # 可选，配合 -VhostDir：httpd.conf / nginx.conf（改 Listen、include）
+    [Alias('ConfFile')]
+    [string]$CustomConfFile = '',
 
     [switch]$HttpOnly,
     [switch]$Force,
@@ -104,12 +117,50 @@ function Join-Under {
     return $p
 }
 
-function Init-SearchRoots {
-    if ($env:GOWAF_SEARCH_ROOTS) {
-        $script:SearchRoots = @($env:GOWAF_SEARCH_ROOTS -split ';' | Where-Object { $_ -and (Test-Path $_) })
-        return
+function Add-SearchRoot([string]$p) {
+    if (-not $p) { return }
+    try { $p = [System.IO.Path]::GetFullPath($p) } catch { return }
+    if (-not (Test-Path $p)) { return }
+    foreach ($e in $script:SearchRoots) {
+        if ([string]::Equals($e, $p, [StringComparison]::OrdinalIgnoreCase)) { return }
     }
-    $script:SearchRoots = @('C:\', 'D:\', 'E:\') | Where-Object { Test-Path $_ }
+    $script:SearchRoots += $p
+}
+
+function Init-SearchRoots {
+    $script:SearchRoots = @()
+    foreach ($p in @($SearchRoot)) { Add-SearchRoot $p }
+    if ($env:GOWAF_SEARCH_ROOTS) {
+        foreach ($p in ($env:GOWAF_SEARCH_ROOTS -split ';' | ForEach-Object { $_.Trim() })) {
+            Add-SearchRoot $p
+        }
+    }
+    # 用户没指定时扫所有盘符 + Program Files，避免只认 C/D/E
+    if ($script:SearchRoots.Count -eq 0) {
+        try {
+            Get-PSDrive -PSProvider FileSystem -ErrorAction SilentlyContinue | ForEach-Object {
+                if ($_.Root -match '^[A-Za-z]:\\$') { Add-SearchRoot $_.Root }
+            }
+        } catch { }
+        if ($script:SearchRoots.Count -eq 0) {
+            @('C:\', 'D:\', 'E:\', 'F:\', 'G:\') | ForEach-Object { Add-SearchRoot $_ }
+        }
+        foreach ($pf in @($env:ProgramFiles, ${env:ProgramFiles(x86)}, $env:ProgramW6432)) {
+            Add-SearchRoot $pf
+        }
+    }
+}
+
+function Get-ChildDirs($root) {
+    if (-not $root -or -not (Test-Path $root)) { return @() }
+    return @(Get-ChildItem $root -Directory -ErrorAction SilentlyContinue)
+}
+
+function Infer-PanelKind([string]$path) {
+    $n = ($path -replace '\\', '/')
+    if ($n -match '/phpstudy_pro(/|$)') { return 'phpstudy' }
+    if ($n -match '/BtSoft(/|$)' -or $n -match '/btsoft(/|$)') { return 'bt' }
+    return 'system'
 }
 
 function Test-HasConfFiles($dir) {
@@ -136,11 +187,20 @@ function New-Candidate {
     }
 }
 
+function Get-PhpstudyHomeDirs {
+    $homes = @()
+    foreach ($root in $script:SearchRoots) {
+        $homes += @(Get-ChildItem $root -Directory -Filter 'phpstudy_pro' -ErrorAction SilentlyContinue)
+        foreach ($child in (Get-ChildDirs $root)) {
+            $homes += @(Get-ChildItem $child.FullName -Directory -Filter 'phpstudy_pro' -ErrorAction SilentlyContinue)
+        }
+    }
+    return @($homes | Where-Object { $_ } | Sort-Object FullName -Unique)
+}
+
 function Get-PhpstudyCandidates {
     $found = @()
-    foreach ($root in $script:SearchRoots) {
-        $pros = @(Get-ChildItem $root -Directory -Filter 'phpstudy_pro' -ErrorAction SilentlyContinue)
-        foreach ($pro in $pros) {
+    foreach ($pro in (Get-PhpstudyHomeDirs)) {
             $ext = Join-Path $pro.FullName 'Extensions'
             if (-not (Test-Path $ext)) { continue }
             foreach ($d in (Get-ChildItem $ext -Directory -ErrorAction SilentlyContinue)) {
@@ -163,17 +223,28 @@ function Get-PhpstudyCandidates {
                 if (Test-Path $ssl) { $cert = $ssl }
                 $found += ,(New-Candidate 'phpstudy' $engineName "小皮 $($d.Name)" $vh $conf $cert)
             }
-        }
     }
     return $found
 }
 
-function Get-BtSoftCandidates {
-    $found = @()
+function Get-BtSoftHomeDirs {
+    $homes = @()
     foreach ($root in $script:SearchRoots) {
         foreach ($name in @('BtSoft', 'btsoft')) {
-            $bt = Join-Path $root $name
-            if (-not (Test-Path $bt)) { continue }
+            $p = Join-Path $root $name
+            if (Test-Path $p) { $homes += $p }
+            foreach ($child in (Get-ChildDirs $root)) {
+                $n = Join-Path $child.FullName $name
+                if (Test-Path $n) { $homes += $n }
+            }
+        }
+    }
+    return @($homes | Sort-Object -Unique)
+}
+
+function Get-BtSoftCandidates {
+    $found = @()
+    foreach ($bt in (Get-BtSoftHomeDirs)) {
             $nginxVh = Join-Under $bt 'nginx' 'conf' 'vhost'
             $nginxConf = Join-Under $bt 'nginx' 'conf' 'nginx.conf'
             $apacheVh = Join-Under $bt 'apache' 'conf' 'vhost'
@@ -191,7 +262,6 @@ function Get-BtSoftCandidates {
                 $dir = if (Test-HasConfFiles $apacheVh) { $apacheVh } else { Split-Path $apacheConf }
                 $found += ,(New-Candidate 'bt' 'apache' "宝塔 Apache（$bt）" $dir $apacheConf $cert)
             }
-        }
     }
     return $found
 }
@@ -206,6 +276,8 @@ function Get-NativeApacheRoots {
         $xampp = Join-Under $root 'xampp' 'apache'
         if (Test-Path (Join-Under $xampp 'conf' 'httpd.conf')) { $roots += $xampp }
         Get-ChildItem $root -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+            $x2 = Join-Under $_.FullName 'xampp' 'apache'
+            if (Test-Path (Join-Under $x2 'conf' 'httpd.conf')) { $roots += $x2 }
             foreach ($name in @('Apache24', 'Apache2.4')) {
                 $p = Join-Path $_.FullName $name
                 if (Test-Path (Join-Under $p 'conf' 'httpd.conf')) { $roots += $p }
@@ -226,12 +298,17 @@ function Get-NativeApacheRoots {
 function Get-NativeNginxRoots {
     $roots = @()
     foreach ($root in $script:SearchRoots) {
+        $candidates = @()
         foreach ($name in @('nginx')) {
-            $p = Join-Path $root $name
-            if (Test-Path (Join-Under $p 'conf' 'nginx.conf')) { $roots += $p }
+            $candidates += (Join-Path $root $name)
         }
-        Get-ChildItem $root -Directory -Filter 'nginx-*' -ErrorAction SilentlyContinue | ForEach-Object {
-            if (Test-Path (Join-Under $_.FullName 'conf' 'nginx.conf')) { $roots += $_.FullName }
+        $candidates += @(Get-ChildItem $root -Directory -Filter 'nginx-*' -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName })
+        foreach ($child in (Get-ChildDirs $root)) {
+            $candidates += (Join-Path $child.FullName 'nginx')
+            $candidates += @(Get-ChildItem $child.FullName -Directory -Filter 'nginx-*' -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName })
+        }
+        foreach ($p in $candidates) {
+            if ($p -and (Test-Path (Join-Under $p 'conf' 'nginx.conf'))) { $roots += $p }
         }
     }
     return @($roots | Where-Object { $_ -and -not (Test-IsPanelTree $_) } | Select-Object -Unique)
@@ -277,13 +354,130 @@ function Get-Listen80Engine {
     return ''
 }
 
+function Find-NearbyConf([string]$start, [string]$engineName) {
+    $dir = $start
+    for ($i = 0; $i -lt 6 -and $dir; $i++) {
+        if ($engineName -eq 'apache') {
+            $httpd = Join-Under $dir 'conf' 'httpd.conf'
+            if (Test-Path $httpd) { return $httpd }
+            $httpd = Join-Path $dir 'httpd.conf'
+            if (Test-Path $httpd) { return $httpd }
+        } else {
+            $ngx = Join-Under $dir 'conf' 'nginx.conf'
+            if (Test-Path $ngx) { return $ngx }
+            $ngx = Join-Path $dir 'nginx.conf'
+            if (Test-Path $ngx) { return $ngx }
+        }
+        $parent = Split-Path $dir -Parent
+        if (-not $parent -or $parent -eq $dir) { break }
+        $dir = $parent
+    }
+    return $null
+}
+
+function Get-CandidateFromInstallDir([string]$dir, [string]$hintEngine) {
+    if (-not $dir -or -not (Test-Path $dir)) { return $null }
+    $engineName = $hintEngine
+    $panelKind = Infer-PanelKind $dir
+    $vhost = $null
+    $conf = $null
+    $walk = $dir
+    for ($i = 0; $i -lt 6 -and $walk; $i++) {
+        foreach ($rel in @(
+            (@('conf', 'vhosts') -join [IO.Path]::DirectorySeparatorChar),
+            (@('conf', 'vhost') -join [IO.Path]::DirectorySeparatorChar),
+            (@('conf', 'extra') -join [IO.Path]::DirectorySeparatorChar),
+            (@('conf', 'conf.d') -join [IO.Path]::DirectorySeparatorChar),
+            (@('conf', 'sites-enabled') -join [IO.Path]::DirectorySeparatorChar)
+        )) {
+            $p = Join-Path $walk $rel
+            if (Test-HasConfFiles $p) {
+                $vhost = $p
+                if (-not $engineName) {
+                    if ($rel -match 'extra') { $engineName = 'apache' }
+                    elseif ($rel -match 'vhosts' -and (Split-Path $walk -Leaf) -like 'Apache*') { $engineName = 'apache' }
+                    elseif ($rel -match 'vhosts' -and (Split-Path $walk -Leaf) -like 'Nginx*') { $engineName = 'nginx' }
+                    elseif ($rel -match 'vhost' -and $walk -match 'apache') { $engineName = 'apache' }
+                    elseif ($rel -match 'vhost' -and $walk -match 'nginx') { $engineName = 'nginx' }
+                    elseif ($rel -match 'conf.d|sites-enabled') { $engineName = 'nginx' }
+                }
+                break
+            }
+        }
+        if ($vhost) { break }
+        $parent = Split-Path $walk -Parent
+        if (-not $parent -or $parent -eq $walk) { break }
+        $walk = $parent
+    }
+    if (-not $engineName) {
+        if (Find-NearbyConf $dir 'apache') { $engineName = 'apache' }
+        elseif (Find-NearbyConf $dir 'nginx') { $engineName = 'nginx' }
+    }
+    if (-not $engineName) { return $null }
+    $conf = Find-NearbyConf $(if ($vhost) { $vhost } else { $dir }) $engineName
+    if (-not $vhost) {
+        if ($conf) { $vhost = Split-Path $conf }
+        else { return $null }
+    }
+    $label = switch ($panelKind) {
+        'phpstudy' { "小皮 $engineName（自定义路径）" }
+        'bt'       { "宝塔 $engineName（自定义路径）" }
+        default    { "原生 $engineName（$dir）" }
+    }
+    return New-Candidate $panelKind $engineName $label $vhost $conf $null
+}
+
+function Get-ExePathFromCommandLine([string]$cmd) {
+    if (-not $cmd) { return $null }
+    if ($cmd -match '^"([^"]+\.exe)"') { return $Matches[1] }
+    if ($cmd -match '^(\S+\.exe)') { return $Matches[1] }
+    return $null
+}
+
+function Get-RunningEngineCandidates {
+    if ($script:TestMode) { return @() }
+    $found = @()
+    $exes = @()
+    foreach ($name in @('nginx', 'httpd', 'apache')) {
+        try {
+            Get-Process -Name $name -ErrorAction SilentlyContinue | ForEach-Object {
+                if ($_.Path) { $exes += $_.Path }
+            }
+        } catch { }
+    }
+    try {
+        Get-CimInstance Win32_Service -ErrorAction SilentlyContinue | Where-Object {
+            $_.PathName -match 'httpd\.exe|nginx\.exe|apache\.exe'
+        } | ForEach-Object {
+            $p = Get-ExePathFromCommandLine $_.PathName
+            if ($p) { $exes += $p }
+        }
+    } catch { }
+    foreach ($exe in ($exes | Select-Object -Unique)) {
+        $hint = if ($exe -match 'nginx') { 'nginx' } else { 'apache' }
+        $c = Get-CandidateFromInstallDir (Split-Path $exe) $hint
+        if ($c) { $found += ,$c }
+    }
+    return $found
+}
+
 function Get-EngineCandidates {
     Init-SearchRoots
     $all = @()
     $all += Get-PhpstudyCandidates
     $all += Get-BtSoftCandidates
     $all += Get-NativeCandidates
-    return $all
+    $all += Get-RunningEngineCandidates
+    $uniq = @()
+    $seen = @{}
+    foreach ($c in $all) {
+        if (-not $c) { continue }
+        $key = "{0}|{1}|{2}" -f $c.Panel, $c.Engine, $c.VhostDir
+        if ($seen.ContainsKey($key)) { continue }
+        $seen[$key] = $true
+        $uniq += ,$c
+    }
+    return $uniq
 }
 
 function Apply-Candidate($c) {
@@ -298,6 +492,23 @@ function Apply-Candidate($c) {
 function Detect-Engine {
     Write-Step '探测引擎'
     Init-SearchRoots
+
+    if ($CustomVhostDir) {
+        if ($Engine -eq 'iis') { Die "-VhostDir 不能和 -Engine iis 一起用" }
+        if ($Engine -ne 'apache' -and $Engine -ne 'nginx') {
+            Die "指定了 -VhostDir 时必须同时给 -Engine apache 或 -Engine nginx"
+        }
+        if (-not (Test-Path $CustomVhostDir)) { Die "-VhostDir 不存在：$CustomVhostDir" }
+        $conf = $CustomConfFile
+        if ($conf -and -not (Test-Path $conf)) { Die "-ConfFile 不存在：$conf" }
+        if (-not $conf) { $conf = Find-NearbyConf $CustomVhostDir $Engine }
+        $panelKind = if ($Panel) { $Panel } else { Infer-PanelKind $CustomVhostDir }
+        $label = "自定义 $Engine（$CustomVhostDir）"
+        Apply-Candidate (New-Candidate $panelKind $Engine $label $CustomVhostDir $conf $null)
+        Write-Ok "引擎：$script:EngineLabel"
+        if ($script:ConfFile) { Write-Ok "主配置：$script:ConfFile" }
+        return
+    }
 
     if ($Engine -eq 'iis') {
         if (-not (Test-IisPresent)) { Die "指定了 iis，但机器上没有 IIS（W3SVC 或 appcmd 缺失）" }
@@ -334,11 +545,15 @@ function Detect-Engine {
             return
         }
         Die @"
-没探测到可接管的站点。本脚本认：
-    小皮   <盘>:\phpstudy_pro\Extensions\Apache*|Nginx*\conf\vhosts
-    宝塔   <盘>:\BtSoft\nginx\conf\vhost  与  <盘>:\BtSoft\apache\conf\vhost
-    原生   <盘>:\Apache24\conf  与  <盘>:\nginx\conf
+没探测到可接管的站点。默认会扫所有盘符下的：
+    小皮   phpstudy_pro\Extensions\Apache*|Nginx*\conf\vhosts（含下一级子目录）
+    宝塔   BtSoft\{nginx,apache}\conf\vhost
+    原生   Apache24\conf  与  nginx\conf
     IIS    W3SVC + appcmd
+    运行中的 httpd.exe / nginx.exe（沿可执行文件往上找 conf）
+非默认路径请加：
+    -SearchRoot D:\apps
+    -Engine nginx -VhostDir D:\stack\nginx\conf\vhost [-ConfFile D:\stack\nginx\conf\nginx.conf]
 "@
     }
 

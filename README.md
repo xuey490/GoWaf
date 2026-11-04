@@ -115,8 +115,12 @@ bash install.sh doctor                        # 只读体检：面板/引擎/站
 .\install.ps1 install                    # 备份 → 引擎让出 80/443 → gowaf svc 开机自启 → 防火墙
 .\install.ps1 install -Engine nginx      # 同机双引擎时显式指定（iis|apache|nginx）
 .\install.ps1 install -Panel bt          # 同机多面板时显式指定（phpstudy|bt|system）
+.\install.ps1 install -SearchRoot D:\apps
+.\install.ps1 install -Engine nginx -VhostDir D:\stack\nginx\conf\vhost
 .\install.ps1 rollback
 ```
+
+默认会扫**所有盘符**根目录以及下一级子目录里的 `phpstudy_pro` / `BtSoft` / `Apache24` / `nginx`，并沿正在运行的 `httpd.exe` / `nginx.exe` 往上找配置。装在更深层自定义目录（例如 `D:\company\prod\stack\nginx`）时，自动探测会失败，这时用 `-SearchRoot` 指向父目录，或直接 `-Engine` + `-VhostDir`（可选 `-ConfFile`）。
 
 Windows 服务模式用 `gowaf svc install|start|stop|uninstall` 实现（单二进制，无 NSSM 依赖）。
 
@@ -425,7 +429,7 @@ CF 节点 IP 计算——**一封一大片**。
 
 **小皮 / 宝塔 / 原生 Windows / IIS**
 
-- 命令相同：`.\install.ps1 doctor` → `.\install.ps1 install`；同机双引擎加 `-Engine`，多面板加 `-Panel`
+- 命令相同：`.\install.ps1 doctor` → `.\install.ps1 install`；同机双引擎加 `-Engine`，多面板加 `-Panel`，非默认安装路径加 `-SearchRoot` 或 `-VhostDir`
 - 主目录 `C:\ProgramData\gowaf`（data / logs / configs）
 - 防火墙走 `netsh advfirewall`
 - 小皮：`phpstudy_pro\Extensions\{Apache,Nginx}*\conf\vhosts`
@@ -537,6 +541,8 @@ gowaf 服务与文件仍保留，只是停用。
 | `install.ps1 install` | 一键部署 |
 | `install.ps1 install -Engine iis` | 显式指定 IIS（或 `apache` / `nginx`） |
 | `install.ps1 install -Panel bt` | 同机多面板时指定宝塔（或 `phpstudy` / `system`） |
+| `install.ps1 install -SearchRoot D:\apps` | 安装目录不在盘符根下时，把父目录加进搜索 |
+| `install.ps1 install -Engine nginx -VhostDir D:\stack\nginx\conf` | 完全自定义路径，不依赖目录名 |
 | `install.ps1 install -HttpOnly` | 只接管 80 |
 | `install.ps1 doctor / status` | 只读体检 / 服务与端口 |
 | `install.ps1 start / stop` | 服务控制 |
