@@ -31,7 +31,6 @@ GoWAF 不是 Web 服务器的模块，而是站在它们**前面**的一层反�
 
 - [工作原理](#工作原理)
 - [支持的面板与引擎](#支持的面板与引擎)
-- [尚未适配、建议后续加](#尚未适配建议后续加)
 - [功能一览](#功能一览)
 - [界面预览](#界面预览)
 - [技术栈](#技术栈)
@@ -45,6 +44,8 @@ GoWAF 不是 Web 服务器的模块，而是站在它们**前面**的一层反�
 - [项目结构](#项目结构)
 - [关键技术细节](#关键技术细节)
 - [系统亮点](#系统亮点)
+- [已知降级](#已知降级)
+- [尚未适配、建议后续加](#尚未适配建议后续加)
 
 ---
 
@@ -128,36 +129,6 @@ Windows 与 Linux 一样按「面板 × 引擎」探测，**不是只有 IIS**�
 默认会扫**所有盘符**根目录以及下一级子目录里的 `phpstudy_pro` / `BtSoft` / `Apache24` / `nginx`，并沿正在运行的 `httpd.exe` / `nginx.exe` 往上找配置。装在更深层自定义目录（例如 `D:\company\prod\stack\nginx`）时，自动探测会失败，这时用 `-SearchRoot` 指向父目录，或直接 `-Engine` + `-VhostDir`（可选 `-ConfFile`）。
 
 Windows 服务模式用 `gowaf svc install|start|stop|uninstall` 实现（单二进制，无 NSSM 依赖）。
-
-### 已知降级
-
-- **IIS 真实 IP**：IIS 无 `mod_remoteip` 等价物，后端应用看到的客户端 IP 是 `127.0.0.1`。WAF 在边缘看到真实 IP，限流/封禁不受影响。
-- **QUIC / HTTP3**：WAF 不接 UDP 443；doctor 会提示，不做自动改写。
-- **IPv6**：暂不接管 IPv6 listen（会注释以免与 WAF 抢端口），IPv6 流量仍直连源站。
-- **Windows 无 resync 定时器**：Linux 宝塔/小皮「保存站点」会把端口写回 80，`gowaf-resync.timer` 每 60 秒纠正；Windows 版目前只能再跑一次 `install.ps1 install` 或手工改回。
-
----
-
-## 尚未适配、建议后续加
-
-数据面本身仍引擎无关，缺的是**部署脚本里的路径探测 + 改写 + 重载**。按国内常见程度排序：
-
-| 优先级 | 环境 | 为什么还没接 | 工作量大致形态 |
-|---|---|---|---|
-| **高** | **LNMP 一键包**（licess `/usr/local/nginx`） | 国内无面板 VPS 很常见；现在只认 Debian `/etc/nginx` 和宝塔 `/www/server/nginx`，这套路径探测不到 | 复用 Nginx 适配器，加一组路径 |
-| **高** | **原生 OpenResty**（`/usr/local/openresty`，非 1Panel 容器） | 1Panel 已接的是 Docker；裸装 OpenResty 不会被当成引擎 | 近似原生 Nginx，路径和 `nginx -s reload` 不同 |
-| **高** | **宝塔 OpenLiteSpeed / OLS** | 宝塔可把网站引擎切到 OLS；配置是 `httpd_config.conf`，不是 Apache/Nginx | 新适配器 |
-| **中** | **Windows 端口漂移自愈** | 宝塔/小皮 Windows 保存站点同样会覆盖 vhost，现在没有 Linux 那套 60 秒 resync | `install.ps1` 加计划任务 |
-| **中** | **Tengine** | Nginx 分支，二进制名和默认前缀不同 | 基本可复用 Nginx 适配器 |
-| **中** | **独立 Docker Nginx**（非 1Panel） | 只适配了 1Panel 的 OpenResty 网站引擎；自己 `docker run nginx` 不会改端口映射 | 接近 1Panel bridge 路线 |
-| **低** | **Caddy** | `Caddyfile` 语法完全不同 | 新适配器 |
-| **低** | **cPanel / Plesk / DirectAdmin / CyberPanel** | 海外面板，国内占比低 | 适配器接口已留 |
-| **低** | **WDCP / AMH / 彩虹等小众国内面板** | 路径各异、用户少 | 需求出现再接 |
-| **不做** | macOS、K8s Ingress、商业 LiteSpeed | 超出当前「单机反向代理接管 80/443」形态 | — |
-
-已经能当「原生 Apache」扫到、但不是一等公民的：**XAMPP / WAMP**（Windows）。aaPanel 国际版目录与宝塔 Linux 同构，现有 `PANEL=bt` 探测大概率能用，但没有单独实验室。
-
-更细的适配评估见 [docs/panel-adaptation-assessment.md](docs/panel-adaptation-assessment.md)。
 
 ---
 
@@ -773,6 +744,38 @@ gowaf/
    强制 HTTPS 死循环修复……每一处防御都对应一次真实线上问题。
 7. **可观测**：攻击事件入库（类别/评分/命中规则/来源 IP/URL）、仪表盘可视化、
    logrotate 日志轮转、doctor 一键体检输出完整证据链。
+
+---
+
+## 已知降级
+
+- **IIS 真实 IP**：IIS 无 `mod_remoteip` 等价物，后端应用看到的客户端 IP 是 `127.0.0.1`。WAF 在边缘看到真实 IP，限流/封禁不受影响。
+- **QUIC / HTTP3**：WAF 不接 UDP 443；doctor 会提示，不做自动改写。
+- **IPv6**：暂不接管 IPv6 listen（会注释以免与 WAF 抢端口），IPv6 流量仍直连源站。
+- **Windows 无 resync 定时器**：Linux 宝塔/小皮「保存站点」会把端口写回 80，`gowaf-resync.timer` 每 60 秒纠正；Windows 版目前只能再跑一次 `install.ps1 install` 或手工改回。
+
+---
+
+## 尚未适配、建议后续加
+
+数据面本身仍引擎无关，缺的是**部署脚本里的路径探测 + 改写 + 重载**。按国内常见程度排序：
+
+| 优先级 | 环境 | 为什么还没接 | 工作量大致形态 |
+|---|---|---|---|
+| **高** | **LNMP 一键包**（licess `/usr/local/nginx`） | 国内无面板 VPS 很常见；现在只认 Debian `/etc/nginx` 和宝塔 `/www/server/nginx`，这套路径探测不到 | 复用 Nginx 适配器，加一组路径 |
+| **高** | **原生 OpenResty**（`/usr/local/openresty`，非 1Panel 容器） | 1Panel 已接的是 Docker；裸装 OpenResty 不会被当成引擎 | 近似原生 Nginx，路径和 `nginx -s reload` 不同 |
+| **高** | **宝塔 OpenLiteSpeed / OLS** | 宝塔可把网站引擎切到 OLS；配置是 `httpd_config.conf`，不是 Apache/Nginx | 新适配器 |
+| **中** | **Windows 端口漂移自愈** | 宝塔/小皮 Windows 保存站点同样会覆盖 vhost，现在没有 Linux 那套 60 秒 resync | `install.ps1` 加计划任务 |
+| **中** | **Tengine** | Nginx 分支，二进制名和默认前缀不同 | 基本可复用 Nginx 适配器 |
+| **中** | **独立 Docker Nginx**（非 1Panel） | 只适配了 1Panel 的 OpenResty 网站引擎；自己 `docker run nginx` 不会改端口映射 | 接近 1Panel bridge 路线 |
+| **低** | **Caddy** | `Caddyfile` 语法完全不同 | 新适配器 |
+| **低** | **cPanel / Plesk / DirectAdmin / CyberPanel** | 海外面板，国内占比低 | 适配器接口已留 |
+| **低** | **WDCP / AMH / 彩虹等小众国内面板** | 路径各异、用户少 | 需求出现再接 |
+| **不做** | macOS、K8s Ingress、商业 LiteSpeed | 超出当前「单机反向代理接管 80/443」形态 | — |
+
+已经能当「原生 Apache」扫到、但不是一等公民的：**XAMPP / WAMP**（Windows）。aaPanel 国际版目录与宝塔 Linux 同构，现有 `PANEL=bt` 探测大概率能用，但没有单独实验室。
+
+更细的适配评估见 [docs/panel-adaptation-assessment.md](docs/panel-adaptation-assessment.md)。
 
 ---
 
