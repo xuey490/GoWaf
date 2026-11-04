@@ -6,9 +6,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/corazawaf/coraza-coreruleset"
+	corazaconf "github.com/corazawaf/coraza-coreruleset/coraza/v3"
+	crsv4 "github.com/corazawaf/coraza-coreruleset/crs/v4"
 	"github.com/corazawaf/coraza/v3"
 	"github.com/corazawaf/coraza/v3/types"
+	"github.com/jcchavezs/mergefs"
+
+	"gowaf/internal/detect/crspatch"
 )
 
 // CRSEngine 是 OWASP CRS 的第二检测引擎（基于 Coraza）。
@@ -53,10 +57,11 @@ const (
 	// 因此协议类命中只作证据：单条 15 分，总和封顶 29，永不单独越过默认校验
 	// 阈值 30。要拦截必须配合真正的内容类规则（SQLi/XSS/RCE 等）。
 	//
-	// 覆盖 920xxx（协议强制）与 921xxx（请求走私）：后者同样依赖 Content-Length /
-	// Transfer-Encoding 的写法，正常 API 客户端也会被误判，一并降权。
+	// 覆盖 920xxx（协议强制）、921xxx（请求走私）与 922xxx（multipart 合规，
+	// v4.30 新增：检查 part 的 charset / content-type 写法）：三者同样依赖
+	// 报文写法，正常 API 客户端也会被误判，一并降权。
 	crsProtocolMin    = 920000
-	crsProtocolMax    = 922000
+	crsProtocolMax    = 923000
 	crsProtocolWeight = 15
 	crsProtocolCap    = 29
 )
@@ -91,13 +96,16 @@ Include @crs-setup.conf.example
 Include @owasp_crs/*.conf
 `, engineMode, pl, pl)
 
+	// crs/v4 提供 @owasp_crs/ 与 @crs-setup.conf.example（内嵌 CRS v4.30.0），
+	// coraza/v3 提供 @coraza.conf-recommended，两者用 mergefs 合并成根 FS；
+	// crspatch 补 v4.30.0 打包遗漏的 web-shells-php.data（排第一，优先级最高）。
 	waf, err := coraza.NewWAF(coraza.NewWAFConfig().
-		WithRootFS(coreruleset.FS).
+		WithRootFS(mergefs.Merge(crspatch.FS, crsv4.FS, corazaconf.FS)).
 		WithDirectives(directives))
 	if err != nil {
 		return nil, fmt.Errorf("加载 CRS 失败: %w", err)
 	}
-	return &CRSEngine{waf: waf, mode: mode, paranoia: pl, version: "crs-embedded"}, nil
+	return &CRSEngine{waf: waf, mode: mode, paranoia: pl, version: "crs-" + crsv4.Version}, nil
 }
 
 // Mode 返回生效模式。

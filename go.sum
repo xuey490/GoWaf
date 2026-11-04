@@ -12,6 +12,10 @@ github.com/cloudwego/base64x v0.1.6 h1:t11wG9AECkCDk5fMSoxmufanudBtJ+/HemLstXDLI
 github.com/cloudwego/base64x v0.1.6/go.mod h1:OFcloc187FXDaYHvrNIjxSe8ncn0OOM8gEHfghB2IPU=
 github.com/corazawaf/coraza-coreruleset v0.0.0-20240226094324-415b1017abdc h1:OlJhrgI3I+FLUCTI3JJW8MoqyM78WbqJjecqMnqG+wc=
 github.com/corazawaf/coraza-coreruleset v0.0.0-20240226094324-415b1017abdc/go.mod h1:7rsocqNDkTCira5T0M7buoKR2ehh7YZiPkzxRuAgvVU=
+github.com/corazawaf/coraza-coreruleset/coraza/v3 v3.0.0-20261009175007-c8edd5c66d6a h1:oZfUBDi0SsMksm/Kn69JvJvBrpmdDk9N0MPXHMkOxuM=
+github.com/corazawaf/coraza-coreruleset/coraza/v3 v3.0.0-20261009175007-c8edd5c66d6a/go.mod h1:NJ9zTdyOf9Cfmlerw1IGz4fiigwrrxuHMepWruwUKd0=
+github.com/corazawaf/coraza-coreruleset/crs/v4 v4.30.0 h1:XMYT7VOFM2VrpIKMUn4vFWyoFNYg1ZaYiexs76AmxzQ=
+github.com/corazawaf/coraza-coreruleset/crs/v4 v4.30.0/go.mod h1:1yaQUjecpEJ/cWXhJaFto+vRuezJCCfVxGQlaQxAGt0=
 github.com/corazawaf/coraza/v3 v3.8.1 h1:dMV55FbMR2vOks/acrT43RShR+VkzU6jwp+XPdxay8o=
 github.com/corazawaf/coraza/v3 v3.8.1/go.mod h1:nPVk2JqADYBcKLYvo9cRsr+z4JhanU0WniGhZZBZD6c=
 github.com/corazawaf/libinjection-go v0.3.3 h1:NhbXKRfRpqKzBMzv8zpCcnjyEw7BCVhBOv9IPuBl7Fc=
@@ -83,8 +87,8 @@ github.com/kylelemons/godebug v1.1.0 h1:RPNrshWIDI6G2gRW9EHilWtl7Z6Sb1BR0xunSBf0
 github.com/kylelemons/godebug v1.1.0/go.mod h1:9/0rRGxNHcop5bhtWyNeEfOS8JIWk580+fNqagV/RAw=
 github.com/leodido/go-urn v1.4.0 h1:WT9HwE9SGECu3lg4d/dIA+jxlljEa1/ffXKmRjqdmIQ=
 github.com/leodido/go-urn v1.4.0/go.mod h1:bvxc+MVxLKB4z00jd1z+Dvzr47oO32F/QSNjSBOlFxI=
-github.com/magefile/mage v1.17.0 h1:dS4tkq997Ism03akafC8509iqDjeE7TNTexI25Y7sXM=
-github.com/magefile/mage v1.17.0/go.mod h1:Yj51kqllmsgFpvvSzgrZPK9WtluG3kUhFaBUVLo4feA=
+github.com/magefile/mage v1.17.2 h1:fyXVu1eadI8Ap1HCCNgEhJ5McIWiYhLR8uol64ZZc40=
+github.com/magefile/mage v1.17.2/go.mod h1:Yj51kqllmsgFpvvSzgrZPK9WtluG3kUhFaBUVLo4feA=
 github.com/mattn/go-isatty v0.0.20 h1:xfD0iDuEKnDkl03q4limB+vH+GxLEtL/jb4xVJSWWEY=
 github.com/mattn/go-isatty v0.0.20/go.mod h1:W+V8PltTTMOvKvAeJH7IuucS94S2C6jfK/D7dTCTo3Y=
 github.com/mattn/go-sqlite3 v1.14.22 h1:2gZY6PC6kBnID23Tichd1K+Z0oS6nE/XwU+Vz/5o4kU=

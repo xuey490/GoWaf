@@ -85,3 +85,14 @@ func TestCRSPanicSafe(t *testing.T) {
 		t.Fatalf("nil 引擎应返回空结果")
 	}
 }
+
+// TestCRSVersionV430 锁定内嵌 CRS 版本为 v4.30.0（升级打包子模块时同步更新）。
+func TestCRSVersionV430(t *testing.T) {
+	eng, err := NewCRSEngine(CRSOptions{Mode: "block", Paranoia: 1})
+	if err != nil {
+		t.Fatalf("加载 CRS 失败: %v", err)
+	}
+	if got := eng.Version(); got != "crs-v4.30.0" {
+		t.Fatalf("CRS 版本不符: got %q, want crs-v4.30.0", got)
+	}
+}

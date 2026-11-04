@@ -3,11 +3,13 @@ module gowaf
 go 1.27.3
 
 require (
-	github.com/corazawaf/coraza-coreruleset v0.0.0-20240226094324-415b1017abdc
+	github.com/corazawaf/coraza-coreruleset/coraza/v3 v3.0.0-20261009175007-c8edd5c66d6a
+	github.com/corazawaf/coraza-coreruleset/crs/v4 v4.30.0
 	github.com/corazawaf/coraza/v3 v3.8.1
 	github.com/gin-gonic/gin v1.12.0
 	github.com/glebarez/sqlite v1.11.0
 	github.com/golang-jwt/jwt/v5 v5.3.1
+	github.com/jcchavezs/mergefs v0.1.1
 	github.com/prometheus/client_golang v1.25.0
 	golang.org/x/crypto v0.57.0
 	golang.org/x/sys v0.48.0
@@ -42,7 +44,7 @@ require (
 	github.com/kaptinlin/jsonschema v0.4.6 // indirect
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
 	github.com/leodido/go-urn v1.4.0 // indirect
-	github.com/magefile/mage v1.17.0 // indirect
+	github.com/magefile/mage v1.17.2 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
