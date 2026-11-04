@@ -90,7 +90,7 @@ flowchart LR
 | **宝塔 + Nginx** | `listen` 改写 + `realip` | 自动处理 `default_server` 冲突、强制 HTTPS 301 死循环 |
 | **1Panel + OpenResty** | 按容器网络模式分流 | **bridge**：compose 端口重映射 `80:80 → 8080:80`，容器内配置零侵入；**host**：改写宿主挂载的 listen（含默认站点） |
 | **小皮 Linux + Apache / Nginx** | 官方路径 + 宝塔同构兜底 | 官方 xp.cn：`/usr/local/phpstudy/soft/{nginx,apache}/<ver>` 与 `vhost/`；魔改版仍走 `/www/server/panel/vhost/{apache,nginx}`。残留 apt nginx/apache2 不算引擎 |
-| **原生 systemd Apache / Nginx** | 常规接管 | Debian `sites-enabled` / `conf.d`；无面板环境 |
+| **原生 systemd Apache / Nginx** | 常规接管 | Debian `sites-enabled`（含无后缀 `default` 与符号链接）/ `ports.conf` / `conf.d`；证书目录 `/etc/gowaf/certs` |
 
 ```bash
 bash install.sh install                       # 自动探测面板与引擎
@@ -593,6 +593,8 @@ make fmt           # gofmt
 sudo bash deploy/lab-bt-nginx.sh          # 宝塔 Nginx：/www/server/{panel,nginx}
 sudo bash deploy/lab-phpstudy.sh apache  # 小皮 Linux Apache：/usr/local/phpstudy/soft/apache/<ver>
 sudo bash deploy/lab-phpstudy.sh nginx   # 小皮 Linux Nginx：/usr/local/phpstudy/soft/nginx/<ver>
+sudo bash deploy/lab-system.sh apache    # 原生 Debian Apache：/etc/apache2/sites-enabled
+sudo bash deploy/lab-system.sh nginx     # 原生 Debian Nginx：/etc/nginx/sites-enabled（含无后缀 default）
 sudo bash deploy/install.sh doctor
 sudo bash deploy/install.sh install --force --binary bin/gowaf-linux-amd64
 ```

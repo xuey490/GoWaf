@@ -137,16 +137,82 @@ confirm() {
 
 # ---------------------------------------------------------------- 证书工具
 
+# Debian/Ubuntu 原生站点：sites-enabled 里既有 *.conf，也有无后缀的 default；
+# 且多为指向 sites-available 的符号链接。只 glob *.conf 会漏掉 default，
+# cp -a 目录会只拷到链接本身，备份等于没备份。
+iter_vhost_files() {
+  local dir=${1:-$VHOST_DIR} f base real
+  local -A seen=()
+  [[ -d $dir ]] || return 0
+  shopt -s nullglob
+  for f in "$dir"/*; do
+    # -f 对指向普通文件的符号链接为真
+    [[ -f $f ]] || continue
+    base=$(basename "$f")
+    case $base in
+      README*|*.bak|*.dpkg-*|*.ucf-*|*~|*.gowaf.tmp|*.disabled) continue ;;
+    esac
+    # Debian sites-enabled 是链接：跟到 sites-available 再改，避免 sed -i 把链接打成普通文件
+    real=$(readlink -f "$f")
+    [[ -f $real ]] || continue
+    [[ -n ${seen[$real]+x} ]] && continue
+    seen[$real]=1
+    printf '%s\n' "$real"
+  done
+}
+
+backup_vhost_files() {
+  local f base dest
+  [[ -d $VHOST_DIR ]] || return 0
+  mkdir -p "${BK_DIR}/vhost"
+  while IFS= read -r f; do
+    base=$(basename "$f")
+    dest="${BK_DIR}/vhost/${base}"
+    # 跟符号链接拷内容，否则 rollback 还原的还是指向已改文件的链接
+    if [[ -L $f ]]; then
+      cp -aL "$f" "$dest"
+    else
+      cp -a "$f" "$dest"
+    fi
+  done < <(iter_vhost_files)
+}
+
+restore_vhost_files() {
+  local bd=$1 f dest
+  [[ -d "${bd}/vhost" ]] || return 0
+  shopt -s nullglob
+  for f in "${bd}/vhost/"*; do
+    [[ -e $f ]] || continue
+    dest="${VHOST_DIR}/$(basename "$f")"
+    if [[ -L $dest ]]; then
+      cat "$f" > "$dest"
+    else
+      cp -a "$f" "$dest"
+    fi
+  done
+}
+
+# Debian sites-enabled 是符号链接：mv 会把链接换成普通文件，必须写穿到 sites-available。
+commit_inplace() {
+  local dest=$1 tmp=$2
+  if [[ -L $dest ]]; then
+    cat "$tmp" > "$dest"
+    rm -f "$tmp"
+  else
+    mv "$tmp" "$dest"
+  fi
+}
+
 # 汇总所有 vhost 的 ServerName / ServerAlias（小写、去端口、去重、去掉 _ 与 * 占位）
 collect_vhost_names() {
   local f
-  for f in "$VHOST_DIR"/*.conf; do
+  while IFS= read -r f; do
     [[ -f $f ]] || continue
     # 注意正则：Nginx 是 server_name/server_alias（带下划线），Apache 是 ServerName/ServerAlias
     # （无下划线）。写成 ^server(name|alias)$ 会漏掉全部 nginx 站点——server 后面是 _name。
     awk 'tolower($1) ~ /^server(_name|_alias|name|alias)$/ { for (i = 2; i <= NF; i++) print tolower($i) }' \
       "$f" 2>/dev/null || true
-  done | sed -E 's/:[0-9]+$//' | tr -d ';' | grep -vE '^(_|\*|)$' | LC_ALL=C sort -u | tr '\n' ' ' || true
+  done < <(iter_vhost_files) | sed -E 's/:[0-9]+$//' | tr -d ';' | grep -vE '^(_|\*|)$' | LC_ALL=C sort -u | tr '\n' ' ' || true
 }
 
 # 读一张证书实际覆盖的域名。宝塔的目录名是「站点名」不是域名，
@@ -494,7 +560,10 @@ detect_env_apache() {
   info "站点目录：${VHOST_DIR}"
 
   WEB_SVC=""
-  if [[ -x /etc/init.d/httpd ]]; then
+  # Debian 原生 apache2 不要被实验室残留的 /etc/init.d/httpd（宝塔/小皮）抢走。
+  if [[ $APACHE_CONF == /etc/apache2/* ]]; then
+    APACHE_SVC=apache2
+  elif [[ -x /etc/init.d/httpd ]]; then
     APACHE_SVC=httpd
   elif [[ -x /etc/init.d/apache2 ]]; then
     APACHE_SVC=apache2
@@ -509,19 +578,30 @@ detect_env_apache() {
   WEB_SVC="$APACHE_SVC"
   info "Apache 服务名：${APACHE_SVC}"
 
-  # 小皮/宝塔的 apachectl 不在 PATH 里，必须显式找
+  # 小皮/宝塔的 apachectl 不在 PATH 里，必须显式找。
+  # 原生 Debian 必须用系统 apache2ctl，否则会命中残留的面板包装器。
   local xp_ctl="" cand
   xp_ctl=$(xp_latest_file "${XP_SOFT}/apache/*/bin/apachectl" || true)
   APACHE_CTL=""
-  for cand in \
-    "$xp_ctl" \
-    "${BT_APACHE}/bin/apachectl" \
-    "$(command -v apachectl 2>/dev/null || true)" \
-    "$(command -v apache2ctl 2>/dev/null || true)" \
-    /usr/sbin/apache2ctl
-  do
-    if [[ -n $cand && -x $cand ]]; then APACHE_CTL="$cand"; break; fi
-  done
+  if [[ $PANEL == system || $APACHE_CONF == /etc/apache2/* ]]; then
+    for cand in \
+      "$(command -v apache2ctl 2>/dev/null || true)" \
+      /usr/sbin/apache2ctl \
+      "$(command -v apachectl 2>/dev/null || true)"
+    do
+      if [[ -n $cand && -x $cand ]]; then APACHE_CTL="$cand"; break; fi
+    done
+  else
+    for cand in \
+      "$xp_ctl" \
+      "${BT_APACHE}/bin/apachectl" \
+      "$(command -v apachectl 2>/dev/null || true)" \
+      "$(command -v apache2ctl 2>/dev/null || true)" \
+      /usr/sbin/apache2ctl
+    do
+      if [[ -n $cand && -x $cand ]]; then APACHE_CTL="$cand"; break; fi
+    done
+  fi
   [[ -n $APACHE_CTL ]] || die "找不到 apachectl / apache2ctl，无法校验配置"
   info "配置校验器：${APACHE_CTL}"
 }
@@ -584,9 +664,15 @@ detect_env_nginx() {
   else
     local xp_bin="" cand
     xp_bin=$(xp_latest_file "${XP_SOFT}/nginx/*/sbin/nginx" || true)
-    for cand in "$xp_bin" /www/server/nginx/sbin/nginx "$(command -v nginx 2>/dev/null || true)" /usr/sbin/nginx /usr/local/openresty/nginx/sbin/nginx; do
-      if [[ -n $cand && -x $cand ]]; then NGINX_BIN="$cand"; break; fi
-    done
+    if [[ $PANEL == system ]]; then
+      for cand in /usr/sbin/nginx "$(command -v nginx 2>/dev/null || true)"; do
+        if [[ -n $cand && -x $cand ]]; then NGINX_BIN="$cand"; break; fi
+      done
+    else
+      for cand in "$xp_bin" /www/server/nginx/sbin/nginx "$(command -v nginx 2>/dev/null || true)" /usr/sbin/nginx /usr/local/openresty/nginx/sbin/nginx; do
+        if [[ -n $cand && -x $cand ]]; then NGINX_BIN="$cand"; break; fi
+      done
+    fi
     [[ -n $NGINX_BIN ]] || die "找不到 nginx 可执行文件"
     NGINX_REALIP_CONF="$(dirname "$NGINX_CONF")/conf.d/gowaf-realip.conf"
     [[ $NGINX_CONF == /www/server/nginx/* ]] && NGINX_REALIP_CONF="/www/server/nginx/conf/conf.d/gowaf-realip.conf"
@@ -706,6 +792,10 @@ backup_apache() {
   # 主配置：Apache 是 httpd.conf，Nginx 是 nginx.conf
   if [[ $ENGINE == apache ]]; then
     cp -a "$APACHE_CONF" "${BK_DIR}/" 2>/dev/null || true
+    # Debian 的 Listen 写在 ports.conf，不备份的话 rollback 站点回不去 80
+    if [[ -f "$(dirname "$APACHE_CONF")/ports.conf" ]]; then
+      cp -a "$(dirname "$APACHE_CONF")/ports.conf" "${BK_DIR}/ports.conf"
+    fi
   else
     cp -a "$NGINX_CONF" "${BK_DIR}/" 2>/dev/null || true
     [[ $PANEL == 1panel && -f "${OP1_HOME}/docker-compose.yml" ]] && cp -a "${OP1_HOME}/docker-compose.yml" "${BK_DIR}/" 2>/dev/null || true
@@ -715,10 +805,7 @@ backup_apache() {
       cp -a "${OP1_DEFAULT_DIR}/." "${BK_DIR}/default/" 2>/dev/null || true
     fi
   fi
-  if [[ -d $VHOST_DIR ]]; then
-    mkdir -p "${BK_DIR}/vhost"
-    cp -a "${VHOST_DIR}/." "${BK_DIR}/vhost/" 2>/dev/null || true
-  fi
+  backup_vhost_files
 
   # 记录还原所需的最小信息，rollback 时不必猜
   cat > "${BK_DIR}/meta.env" <<EOF
@@ -841,7 +928,9 @@ wait_port_free() {
 dump_listen_evidence() {
   local p=$1 el=""
   if [[ $ENGINE == apache ]]; then
-    if [[ -n ${APACHE_CONF:-} ]]; then
+    if [[ ${APACHE_CONF:-} == /etc/apache2/* ]]; then
+      el=/var/log/apache2/error.log
+    elif [[ -n ${APACHE_CONF:-} ]]; then
       el="$(dirname "$(dirname "$APACHE_CONF")")/logs/error_log"
     else
       el="${BT_APACHE}/logs/error_log"
@@ -857,6 +946,8 @@ dump_listen_evidence() {
       el="/www/server/nginx/logs/error.log"
     elif [[ ${NGINX_CONF:-} == /usr/local/phpstudy/* ]]; then
       el="$(dirname "$(dirname "$NGINX_CONF")")/logs/error.log"
+    elif [[ ${NGINX_CONF:-} == /etc/nginx/* ]]; then
+      el=/var/log/nginx/error.log
     else
       el="/var/log/nginx/error.log"
     fi
@@ -934,7 +1025,7 @@ EOF
 # 把 <VirtualHost *:443> 整段注释掉（TLS 已经由 WAF 终止，这段再留着会造成重复 ServerName）
 disable_ssl_vhosts() {
   local f changed
-  for f in "$VHOST_DIR"/*.conf; do
+  while IFS= read -r f; do
     [[ -f $f ]] || continue
     grep -qE '^[[:space:]]*<VirtualHost[^>]*:443>' "$f" || continue
     changed=0
@@ -947,17 +1038,17 @@ disable_ssl_vhosts() {
       END { exit(changed ? 0 : 3) }
     ' "$f" > "${f}.gowaf.tmp" || { rm -f "${f}.gowaf.tmp"; continue; }
     if ! cmp -s "$f" "${f}.gowaf.tmp"; then
-      mv "${f}.gowaf.tmp" "$f"
+      commit_inplace "$f" "${f}.gowaf.tmp"
       ok "已禁用 SSL vhost：$(basename "$f")"
     else
       rm -f "${f}.gowaf.tmp"
     fi
-  done
+  done < <(iter_vhost_files)
 }
 
 retarget_vhosts() {
   local f n=0 before
-  for f in "$VHOST_DIR"/*.conf; do
+  while IFS= read -r f; do
     [[ -f $f ]] || continue
     before=$(md5sum "$f" | awk '{print $1}')
     # 直接 sed 全部替换，已经改过的行不会匹配，天然幂等；
@@ -980,9 +1071,9 @@ retarget_vhosts() {
         print $0
         prev = $0
       }
-    ' "$f" > "${f}.gowaf.tmp" && mv "${f}.gowaf.tmp" "$f"
+    ' "$f" > "${f}.gowaf.tmp" && commit_inplace "$f" "${f}.gowaf.tmp"
     [[ $(md5sum "$f" | awk '{print $1}') != "$before" ]] && n=$((n + 1))
-  done
+  done < <(iter_vhost_files)
   [[ $n -eq 0 ]] && info "所有 vhost 端口已经就位" || ok "改写 ${n} 个 vhost 文件到 127.0.0.1:${UPSTREAM_PORT}（含强制 HTTPS 跳转适配）"
 }
 
@@ -998,12 +1089,13 @@ abort_install() {
 
 # 主配置 + 零散 Listen + 全部 vhost 的指纹，用来判断这次是不是真的改动了 Apache
 apache_fingerprint() {
-  local extra_dir
+  local extra_dir f
   extra_dir="$(dirname "$APACHE_CONF")/extra"
   {
     cat "$APACHE_CONF" 2>/dev/null || true
+    cat "$(dirname "$APACHE_CONF")/ports.conf" 2>/dev/null || true
     cat "${extra_dir}"/*.conf 2>/dev/null || true
-    cat "$VHOST_DIR"/*.conf 2>/dev/null || true
+    while IFS= read -r f; do cat "$f" 2>/dev/null || true; done < <(iter_vhost_files)
   } | md5sum | awk '{print $1}'
 }
 
@@ -1093,7 +1185,11 @@ apache_stop_and_verify() {
 
 apache_start_and_verify() {
   local el
-  el="$(dirname "$(dirname "$APACHE_CONF")")/logs/error_log"
+  if [[ $APACHE_CONF == /etc/apache2/* ]]; then
+    el=/var/log/apache2/error.log
+  else
+    el="$(dirname "$(dirname "$APACHE_CONF")")/logs/error_log"
+  fi
   apache_ctl start || true
   if ! wait_port_listening "$UPSTREAM_PORT" 20; then
     warn "systemctl start 之后没看到 ${UPSTREAM_PORT}，改用 apachectl -k restart 再试"
@@ -1150,12 +1246,15 @@ restore_web_from() {
   # 不再用 || true：还原失败必须让 rollback 整体失败，
   # 否则会出现「看似回滚了，其实端口还卡在 8080」的假成功。
   cp -a "${bd}/$(basename "$mainconf")" "$mainconf" || return 1
+  if [[ $ENGINE == apache && -f "${bd}/ports.conf" && -f "$(dirname "$mainconf")/ports.conf" ]]; then
+    cp -a "${bd}/ports.conf" "$(dirname "$mainconf")/ports.conf" || return 1
+  fi
   if [[ $PANEL == 1panel && -f "${bd}/docker-compose.yml" ]]; then
     cp -a "${bd}/docker-compose.yml" "${OP1_HOME}/docker-compose.yml" || return 1
     (cd "$OP1_HOME" && docker compose up -d >/dev/null 2>&1) || true
   fi
   if [[ -d "${bd}/vhost" ]]; then
-    cp -a "${bd}/vhost/." "$VHOST_DIR/" || return 1
+    restore_vhost_files "$bd" || return 1
   fi
   if [[ -d "${bd}/default" && -d $OP1_DEFAULT_DIR ]]; then
     cp -a "${bd}/default/." "$OP1_DEFAULT_DIR/" || return 1
@@ -1221,9 +1320,10 @@ nginx_reload() {
 }
 
 nginx_fingerprint() {
+  local f
   {
     cat "$NGINX_CONF" 2>/dev/null || true
-    cat "$VHOST_DIR"/*.conf 2>/dev/null || true
+    while IFS= read -r f; do cat "$f" 2>/dev/null || true; done < <(iter_vhost_files)
   } | md5sum | awk '{print $1}'
 }
 
@@ -1320,7 +1420,7 @@ nginx_retarget_file() {
     }
   ' "$f" > "${f}.gowaf.tmp" || { rm -f "${f}.gowaf.tmp"; return 0; }
   if ! cmp -s "$f" "${f}.gowaf.tmp"; then
-    mv "${f}.gowaf.tmp" "$f"
+    commit_inplace "$f" "${f}.gowaf.tmp"
   else
     rm -f "${f}.gowaf.tmp"
   fi
@@ -1333,7 +1433,7 @@ nginx_retarget_file() {
 # 改用 X-Forwarded-Proto 判断：WAF 传来的 https 不跳，真正的 http 仍然 301。幂等。
 nginx_fix_https_loop() {
   local f n=0
-  for f in "$NGINX_CONF" "$VHOST_DIR"/*.conf; do
+  while IFS= read -r f; do
     [[ -f $f ]] || continue
     if grep -q 'x_forwarded_proto' "$f" 2>/dev/null; then continue; fi
     # 宝塔模板常见 `if ($server_port !~ 443)`（没有 ^ $）；也兼容 ^443$ / 带引号。
@@ -1342,7 +1442,7 @@ nginx_fix_https_loop() {
       -e 's/if[[:space:]]*\([[:space:]]*\$scheme[[:space:]]*=[[:space:]]*http[[:space:]]*\)/if ($http_x_forwarded_proto = "http")/g' \
       "$f"
     grep -q 'x_forwarded_proto' "$f" 2>/dev/null && n=$((n + 1))
-  done
+  done < <({ [[ -n ${NGINX_CONF:-} ]] && printf '%s\n' "$NGINX_CONF"; iter_vhost_files; })
   [[ $n -gt 0 ]] && ok "修正 ${n} 个站点的强制 HTTPS 跳转（防 WAF 后台 301 死循环）"
   return 0
 }
@@ -1394,7 +1494,7 @@ nginx_inject_realip() {
     }
     { print }
   ' "$NGINX_CONF" > "${NGINX_CONF}.gowaf.tmp" || { rm -f "${NGINX_CONF}.gowaf.tmp"; return 1; }
-  mv "${NGINX_CONF}.gowaf.tmp" "$NGINX_CONF"
+  commit_inplace "$NGINX_CONF" "${NGINX_CONF}.gowaf.tmp"
   ok "nginx.conf 注入真实 IP 透传（set_real_ip_from: ${trust}）"
 }
 
@@ -1438,7 +1538,12 @@ patch_nginx() {
       # 容器内配置靠宿主挂载，重启容器即生效，升级 OpenResty 不回退。
       local f changed=0
       nginx_retarget_file "$NGINX_CONF" "$TAKE_443" && changed=$((changed + 1))
-      for f in "$VHOST_DIR"/*.conf "$OP1_DEFAULT_DIR"/*.conf; do
+      while IFS= read -r f; do
+        [[ -f $f ]] || continue
+        nginx_retarget_file "$f" "$TAKE_443" && changed=$((changed + 1))
+      done < <(iter_vhost_files)
+      shopt -s nullglob
+      for f in "$OP1_DEFAULT_DIR"/*.conf; do
         [[ -f $f ]] || continue
         nginx_retarget_file "$f" "$TAKE_443" && changed=$((changed + 1))
       done
@@ -1455,10 +1560,10 @@ patch_nginx() {
     # 宝塔 nginx.conf 里常有默认 server { listen 80; }，不改的话引擎会继续占 80，
     # WAF 起不来。1Panel host 模式已经在上面改过主配置，这里同样处理。
     nginx_retarget_file "$NGINX_CONF" "$TAKE_443" && changed=$((changed + 1))
-    for f in "$VHOST_DIR"/*.conf; do
+    while IFS= read -r f; do
       [[ -f $f ]] || continue
       nginx_retarget_file "$f" "$TAKE_443" && changed=$((changed + 1))
-    done
+    done < <(iter_vhost_files)
     [[ $changed -gt 0 ]] && ok "改写 ${changed} 个配置文件的 listen" || info "所有站点 listen 已就位"
     if [[ $TAKE_443 -eq 1 ]]; then
       nginx_fix_https_loop
@@ -1550,16 +1655,20 @@ nginx_drift_detected() {
     return 1
   fi
   # 原生 nginx / 宝塔 / 1Panel host 模式：站点文件 + 主配置（宝塔默认站点常写在 nginx.conf）
+  local files=() f
+  [[ -n ${NGINX_CONF:-} && -f $NGINX_CONF ]] && files+=("$NGINX_CONF")
+  while IFS= read -r f; do files+=("$f"); done < <(iter_vhost_files)
+  (( ${#files[@]} > 0 )) || return 1
   if grep -lE '^[[:space:]]*listen[[:space:]]+((\*|0\.0\.0\.0):)?80([[:space:]][^;]*)?[[:space:]]*;' \
-       "$NGINX_CONF" "$VHOST_DIR"/*.conf 2>/dev/null | grep -q .; then
+       "${files[@]}" 2>/dev/null | grep -q .; then
     return 0
   fi
   if grep -lE '^[[:space:]]*listen[[:space:]]+\[::\]:80[[:space:]]*;' \
-       "$NGINX_CONF" "$VHOST_DIR"/*.conf 2>/dev/null | grep -q .; then
+       "${files[@]}" 2>/dev/null | grep -q .; then
     return 0
   fi
   if [[ $TAKE_443 -eq 1 ]] && grep -lE '^[[:space:]]*listen[[:space:]]+((\*|0\.0\.0\.0|\[::\]):)?443([[:space:]][^;]*)?[[:space:]]*;' \
-       "$NGINX_CONF" "$VHOST_DIR"/*.conf 2>/dev/null | grep -q .; then
+       "${files[@]}" 2>/dev/null | grep -q .; then
     return 0
   fi
   return 1
@@ -1568,15 +1677,18 @@ nginx_drift_detected() {
 # Apache 的漂移检测（原逻辑抽成函数供 resync 调度）。
 # 443 只在本次部署接管 443 时才算漂移——--http-only 部署时引擎持有 443 是合法稳态。
 apache_drift_detected() {
-  if grep -qE '^[[:space:]]*Listen[[:space:]]+(\[::\]:|0\.0\.0\.0:)?80[[:space:]]*$' "$APACHE_CONF" 2>/dev/null; then
+  local f
+  if grep -qE '^[[:space:]]*Listen[[:space:]]+(\[::\]:|0\.0\.0\.0:)?80[[:space:]]*$' \
+       "$APACHE_CONF" "$(dirname "$APACHE_CONF")/ports.conf" 2>/dev/null; then
     return 0
   fi
-  if [[ $TAKE_443 -eq 1 ]] && grep -qE '^[[:space:]]*Listen[[:space:]]+(\[::\]:|0\.0\.0\.0:)?443[[:space:]]*$' "$APACHE_CONF" 2>/dev/null; then
+  if [[ $TAKE_443 -eq 1 ]] && grep -qE '^[[:space:]]*Listen[[:space:]]+(\[::\]:|0\.0\.0\.0:)?443[[:space:]]*$' \
+       "$APACHE_CONF" "$(dirname "$APACHE_CONF")/ports.conf" 2>/dev/null; then
     return 0
   fi
-  if grep -lqE '^[[:space:]]*<VirtualHost[[:space:]]+\*:(80|443)>' "$VHOST_DIR"/*.conf 2>/dev/null; then
-    return 0
-  fi
+  while IFS= read -r f; do
+    grep -qE '^[[:space:]]*<VirtualHost[[:space:]]+\*:(80|443)>' "$f" 2>/dev/null && return 0
+  done < <(iter_vhost_files)
   return 1
 }
 
@@ -1607,7 +1719,7 @@ collect_sites_yaml() {
   local f name alias line hosts=() first=1 seen=" "
 
   printf 'sites:\n'
-  for f in "$VHOST_DIR"/*.conf; do
+  while IFS= read -r f; do
     [[ -f $f ]] || continue
     name=$(site_primary_name "$f")
     [[ -n $name ]] || continue
@@ -1640,7 +1752,7 @@ collect_sites_yaml() {
     done
     printf ']\n'
     printf '    upstream: "http://127.0.0.1:%s"\n' "$UPSTREAM_PORT"
-  done
+  done < <(iter_vhost_files)
 
   # 兜底：未知域名也不至于 404
   [[ $first -eq 0 ]] && printf '\n'
@@ -2682,7 +2794,7 @@ do_doctor() {
     info "证书目录里没有可用证书（需要 fullchain.pem + privkey.pem）：${CERT_DIR}"
   fi
   info "各站点文件的域名声明："
-  for f in "$VHOST_DIR"/*.conf; do
+  while IFS= read -r f; do
     [[ -f $f ]] || continue
     # 注意：grep 无匹配会返回 1，在 set -Eeuo pipefail 下会让整个脚本静默退出
     # （0.site_total_log_format.conf 这类非站点文件就会触发），必须 || true
@@ -2695,7 +2807,7 @@ do_doctor() {
     fi
     [[ -n ${names// /} ]] || continue
     printf '      %-34s %s\n' "$(basename "$f")" "$names"
-  done
+  done < <(iter_vhost_files)
   if [[ -n $MISSING_NAMES ]]; then
     warn "没有任何证书覆盖的域名：${MISSING_NAMES}"
     warn "经 Cloudflare 回源时 SNI 是域名，对不上任何证书 → Full (strict) 会报 526"

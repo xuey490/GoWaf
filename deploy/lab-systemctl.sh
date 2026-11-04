@@ -18,7 +18,9 @@ is_running() {
   u=$(unit_base "$1")
   case $u in
     nginx)
-      for pidfile in /www/server/nginx/logs/nginx.pid \
+      for pidfile in /run/nginx.pid \
+                     /var/run/nginx.pid \
+                     /www/server/nginx/logs/nginx.pid \
                      /usr/local/phpstudy/soft/nginx/*/logs/nginx.pid; do
         [[ -f $pidfile ]] || continue
         kill -0 "$(cat "$pidfile")" 2>/dev/null && return 0

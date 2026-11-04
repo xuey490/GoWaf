@@ -180,4 +180,39 @@ cmp -s "${WORKDIR}/demo.apache.conf" "${WORKDIR}/demo.apache.conf.bak" \
   || fail "Apache retarget 第二次不是幂等"
 pass "Apache VirtualHost *:80 改写 + 强制 HTTPS 幂等"
 
+# ---------- 10. Debian sites-enabled/default 无后缀 + 符号链接备份 ----------
+SITE="${WORKDIR}/sites-enabled"
+AVAIL="${WORKDIR}/sites-available"
+mkdir -p "$SITE" "$AVAIL"
+cat > "${AVAIL}/default" <<'EOF'
+server {
+    listen 80 default_server;
+    server_name _;
+}
+EOF
+ln -s "${AVAIL}/default" "${SITE}/default"
+cat > "${AVAIL}/shop.local.conf" <<'EOF'
+server {
+    listen 80;
+    server_name shop.local;
+}
+EOF
+ln -s "${AVAIL}/shop.local.conf" "${SITE}/shop.local.conf"
+VHOST_DIR="$SITE"
+got=$(iter_vhost_files)
+echo "$got" | grep -Fxq "${AVAIL}/default" || fail "iter_vhost_files 没有跟到 sites-available/default：$got"
+echo "$got" | grep -q 'shop.local.conf' || fail "iter_vhost_files 漏掉 .conf：$got"
+BK_DIR="${WORKDIR}/bk"
+backup_vhost_files
+[[ -L ${BK_DIR}/vhost/default ]] && fail "备份还是符号链接，没有跟内容"
+grep -q 'listen 80 default_server' "${BK_DIR}/vhost/default" \
+  || fail "备份没有 default 原文"
+nginx_retarget_file "${SITE}/default" 0 || true
+grep -q 'listen 127.0.0.1:8080' "${AVAIL}/default" \
+  || fail "改写符号链接没有写到 sites-available"
+restore_vhost_files "$BK_DIR"
+grep -q 'listen 80 default_server' "${AVAIL}/default" \
+  || fail "restore 没有把 default 写回 sites-available"
+pass "Debian sites-enabled/default 无后缀 + 符号链接备份还原"
+
 printf '\n全部适配器单测通过\n'
