@@ -32,6 +32,7 @@ type CRSEngine struct {
 	waf      coraza.WAF
 	mode     string // block / log
 	paranoia int
+	methods  string // 911100 方法白名单
 	version  string
 	packages int // 编译进来的 SecLang 规则包数量
 	pkgIDs   map[int]struct{}
@@ -43,10 +44,18 @@ type CRSOptions struct {
 	Mode string
 	// Paranoia 偏执等级 1-4，越高越严（误报也越多）。
 	Paranoia int
+	// AllowedMethods 911100 方法白名单。CRS 默认只放 GET HEAD POST OPTIONS，
+	// 前后端分离的 REST API（PUT/DELETE/PATCH）全部命中 911100（CRITICAL 60 分）
+	// 直接 403。这里在 901-INITIALIZATION 之前写入 TX 覆盖默认值；空串用默认集。
+	AllowedMethods string
 	// Packages 追加编译进引擎的 SecLang 规则包（按导入顺序 Include）。
 	// 调用方负责先逐包 ValidateSecLang，编译失败的包不要传进来。
 	Packages []CRSPackage
 }
+
+// DefaultCRSMethods 默认方法白名单：REST API 常规方法集。
+// 若站点纯浏览器表单业务，可在设置里收紧为 "GET HEAD POST OPTIONS"。
+const DefaultCRSMethods = "GET HEAD POST OPTIONS PUT DELETE PATCH"
 
 // 只保留请求阶段（911xxx-944xxx）的检测规则，过滤初始化/评分/关联这类噪声规则。
 const (
@@ -95,14 +104,18 @@ func NewCRSEngine(opt CRSOptions) (*CRSEngine, error) {
 
 	// 顺序很重要：偏执等级必须在 901-INITIALIZATION 之前写入 TX，
 	// 否则 CRS 会先按默认 PL1 初始化，后面的设置不生效。
+	// allowed_methods 同理：901-INITIALIZATION 只在未设置时才写默认值
+	// （GET HEAD POST OPTIONS），先写才能覆盖；不然前后端分离的
+	// PUT/DELETE/PATCH 会被 911100 判 CRITICAL 直接拦掉。
+	methods := sanitizeMethods(opt.AllowedMethods)
 	var sb strings.Builder
 	fmt.Fprintf(&sb, `
 SecRuleEngine %s
-SecAction "id:900900,phase:1,pass,nolog,setvar:tx.blocking_paranoia_level=%d,setvar:tx.detection_paranoia_level=%d"
+SecAction "id:900900,phase:1,pass,nolog,setvar:tx.blocking_paranoia_level=%d,setvar:tx.detection_paranoia_level=%d,setvar:'tx.allowed_methods=%s'"
 Include @coraza.conf-recommended
 Include @crs-setup.conf.example
 Include @owasp_crs/*.conf
-`, engineMode, pl, pl)
+`, engineMode, pl, pl, methods)
 	// SecLang 规则包排在 CRS 之后：CRS 的 901/949/959 评分框架先就位，
 	// 包里的排除规则（RemoveById）和自定义检测才能按预期叠加。
 	// 注意：内容直接内联而非 Include——Coraza 对相对路径 Include 读的是
@@ -129,8 +142,35 @@ Include @owasp_crs/*.conf
 	if err != nil {
 		return nil, fmt.Errorf("加载 CRS 失败: %w", err)
 	}
-	return &CRSEngine{waf: waf, mode: mode, paranoia: pl, version: "crs-" + crsv4.Version,
+	return &CRSEngine{waf: waf, mode: mode, paranoia: pl, methods: methods, version: "crs-" + crsv4.Version,
 		packages: len(opt.Packages), pkgIDs: pkgIDs}, nil
+}
+
+// sanitizeMethods 清洗方法白名单：只留大写字母与空格，防止注入破坏指令串。
+func sanitizeMethods(v string) string {
+	v = strings.ToUpper(strings.TrimSpace(v))
+	if v == "" {
+		return DefaultCRSMethods
+	}
+	var b strings.Builder
+	for _, r := range v {
+		if (r >= 'A' && r <= 'Z') || r == ' ' {
+			b.WriteRune(r)
+		}
+	}
+	out := strings.Join(strings.Fields(b.String()), " ")
+	if out == "" {
+		return DefaultCRSMethods
+	}
+	return out
+}
+
+// Methods 返回当前方法白名单（用于 reload 缓存比对）。
+func (c *CRSEngine) Methods() string {
+	if c == nil {
+		return ""
+	}
+	return c.methods
 }
 
 // pkgIDRe 从 SecLang 文本里粗提取 rule id（id:123 / id: 123 / id:'123'）。

@@ -46,6 +46,9 @@ const (
 	KeyCRSEnabled  = "engine.crs.enabled"
 	KeyCRSMode     = "engine.crs.mode"
 	KeyCRSParanoia = "engine.crs.paranoia"
+	// KeyCRSMethods CRS 911100 方法白名单（空格分隔）。默认 REST 常规集，
+	// 纯表单业务可收紧为 "GET HEAD POST OPTIONS"。
+	KeyCRSMethods = "engine.crs.methods"
 
 	// 威胁情报命中后的处置。
 	// ban_on_hit=true 时把命中 IP 写进封禁表（source=intel），
@@ -362,20 +365,23 @@ func (r *Runtime) reloadCRS(sm map[string]string) {
 			pl = n
 		}
 	}
+	methods := r.settingFrom(sm, KeyCRSMethods, detect.DefaultCRSMethods)
 	if !enabled {
 		r.crs.Store(nil)
 		return
 	}
-	if cur := r.crs.Load(); cur != nil && cur.Mode() == mode && cur.Paranoia() == pl {
+	if cur := r.crs.Load(); cur != nil && cur.Mode() == mode && cur.Paranoia() == pl && cur.Methods() == methods {
 		return
 	}
 	pkgs := r.loadSeclangPackages()
-	eng, err := detect.NewCRSEngine(detect.CRSOptions{Mode: mode, Paranoia: pl, Packages: pkgs})
+	opts := detect.CRSOptions{Mode: mode, Paranoia: pl, AllowedMethods: methods, Packages: pkgs}
+	eng, err := detect.NewCRSEngine(opts)
 	if err != nil && len(pkgs) > 0 {
 		// 规则包组合编译失败（如包间 rule id 冲突）：退回纯 CRS，绝不能让
 		// 一个坏包把 CRS 引擎整体打瘫。
 		log.Printf("[runtime] CRS+规则包编译失败，退回纯 CRS: %v", err)
-		eng, err = detect.NewCRSEngine(detect.CRSOptions{Mode: mode, Paranoia: pl})
+		opts.Packages = nil
+		eng, err = detect.NewCRSEngine(opts)
 	}
 	if err != nil {
 		log.Printf("[runtime] CRS 加载失败，本次仍用自研规则: %v", err)
@@ -512,6 +518,7 @@ func DefaultSettings(cfg *config.Config) map[string]string {
 		KeyCRSEnabled:     "true",
 		KeyCRSMode:        "block",
 		KeyCRSParanoia:    "1",
+		KeyCRSMethods:     detect.DefaultCRSMethods,
 
 		KeyIntelBanOnHit: "true",
 		KeyIntelBanTTL:   "3600",

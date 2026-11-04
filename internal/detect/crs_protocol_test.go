@@ -76,3 +76,60 @@ func TestCRSStillBlocksSQLi(t *testing.T) {
 		t.Fatalf("SQLi 应得分 >= 60，实际 %d", res.Score)
 	}
 }
+
+// TestCRSMethodEnforcementREST 回归：线上事故——前后端分离的 REST API 用
+// PUT 更新资源，CRS 默认 tx.allowed_methods 只有 GET HEAD POST OPTIONS，
+// 911100 判 CRITICAL 60 分，叠加 920620（15 分）正好达到拦截阈值 75，
+// 管理后台整屏 API 全 403，随后自动封禁连锁放大。
+func TestCRSMethodEnforcementREST(t *testing.T) {
+	eng, err := NewCRSEngine(CRSOptions{Mode: "block", Paranoia: 2})
+	if err != nil {
+		t.Fatalf("加载 CRS 失败: %v", err)
+	}
+	hdr := "Host: demo.local\nContent-Length: 2\n" +
+		"Content-Type: application/json\n" +
+		"User-Agent: Mozilla/5.0 Chrome/131.0.0.0\n"
+	for _, m := range []string{"PUT", "DELETE", "PATCH"} {
+		res := eng.Inspect(&Input{
+			Method: m, Host: "demo.local", Path: "/prod/api/flow/category/update/2",
+			Body: `{"id":2}`, Headers: hdr,
+		})
+		for _, h := range res.Hits {
+			if h.RuleID == "crs-911100" {
+				t.Errorf("%s 请求命中 911100（方法白名单未覆盖 REST 方法），score=%d", m, res.Score)
+			}
+		}
+		if res.Action == "block" {
+			t.Errorf("%s 正常 REST 更新被拦截: score=%d hits=%v", m, res.Score, res.RuleIDs)
+		}
+	}
+
+	// 收紧白名单后 PUT 应重新命中
+	eng2, err := NewCRSEngine(CRSOptions{Mode: "block", Paranoia: 1, AllowedMethods: "GET HEAD POST OPTIONS"})
+	if err != nil {
+		t.Fatalf("加载 CRS 失败: %v", err)
+	}
+	res := eng2.Inspect(&Input{
+		Method: "PUT", Host: "demo.local", Path: "/x", Headers: hdr,
+	})
+	found := false
+	for _, h := range res.Hits {
+		if h.RuleID == "crs-911100" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("收紧白名单后 PUT 未命中 911100")
+	}
+	if eng2.Methods() != "GET HEAD POST OPTIONS" {
+		t.Errorf("Methods() 不符: %q", eng2.Methods())
+	}
+
+	// sanitizeMethods 防注入
+	if got := sanitizeMethods("GET' HEAD,\\ DELETE\"; SecRuleEngine On"); got != "GET HEAD DELETE SECRULEENGINE ON" {
+		t.Errorf("sanitizeMethods 异常: %q", got)
+	}
+	if sanitizeMethods("") != DefaultCRSMethods || sanitizeMethods("!!!") != DefaultCRSMethods {
+		t.Errorf("空/非法输入应回退默认集")
+	}
+}
