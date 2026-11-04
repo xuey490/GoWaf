@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 #
-# GoWAF 一键部署 / 运维脚本（Ubuntu + 宝塔 Apache）
+# GoWAF 一键部署 / 运维脚本（Ubuntu/Debian + 宝塔/1Panel/原生 Apache 或 Nginx）
 #
 # 核心事实：GoWAF 是「反向代理型」WAF，它必须站在 Web 服务器前面。
-# 所以部署动作只有一件事——把 80/443 交给 gowaf，让 Apache 退到 127.0.0.1:8080。
+# 所以部署动作只有一件事——把 80/443 交给 gowaf，让后端引擎退到 127.0.0.1:8080。
 # 其余都是围绕这件事的安全措施：备份、configtest、失败自动回滚、端口漂移自愈。
 #
 # 用法：
@@ -12,7 +12,7 @@
 #   ./install.sh status               # 状态 + 端口 + 最近日志
 #   ./install.sh observe              # 切观察模式（不拦截）
 #   ./install.sh protect              # 切实时拦截模式
-#   ./install.sh resync               # 修复被宝塔面板改回的 Apache 端口
+#   ./install.sh resync               # 修复被面板改回的引擎端口（Apache/Nginx）
 #   ./install.sh cloudflare on|off|update|status   # Cloudflare 回源 IP 识别
 #   ./install.sh console open [--ip 1.2.3.4|all] [--hours 2]   # 临时对外暴露控制台
 #   ./install.sh console close|status              # 立刻收回 / 查看当前状态
@@ -23,7 +23,7 @@
 # 参数：
 #   --binary PATH   指定 gowaf 二进制（默认找脚本同目录的 gowaf-linux-amd64 / bin/gowaf）
 #   --rules PATH    指定规则文件（不指定则保留服务器上已有的，避免覆盖你的调优）
-#   --upstream-port N   Apache 回退端口，默认 8080
+#   --upstream-port N   后端引擎回退端口，默认 8080
 #   --http-only     只接管 80，443 完全不动（最保守的上线方式）
 #   --cloudflare    站点挂在 Cloudflare 小云朵后面：把 CF 回源网段写入 trusted_proxies，
 #                   使限流/封禁/日志按真实访客 IP 计算（否则会按 CF 节点 IP，一封一大片）
@@ -325,6 +325,20 @@ detect_engine() {
   local holder
   holder=$(ss -lntp 2>/dev/null | awk 'NR > 1 && $4 ~ /:(80|443)$/ && $6 ~ /users:/ { print $6 }' | head -1)
 
+  # gowaf 已接管 80/443 时，端口持有者不再是 nginx/httpd。resync 必须沿用上次部署的引擎，
+  # 否则双引擎机器会走到「无法自动判断」直接退出，站点配置漂移修不了。
+  if [[ $holder == *gowaf* ]]; then
+    local meta="${GW_BACKUP}/latest/meta.env" saved=""
+    if [[ -f $meta ]]; then
+      saved=$(awk -F= '/^ENGINE=/{print $2; exit}' "$meta" | tr -d '[:space:]')
+    fi
+    if [[ $saved == apache || $saved == nginx ]]; then
+      ENGINE=$saved
+      info "引擎：$ENGINE（gowaf 已接管 80/443，沿用上次部署）"
+      return
+    fi
+  fi
+
   if [[ $holder == *nginx* || $holder == *openresty* ]]; then
     ENGINE=nginx
     info "引擎：Nginx（正在监听 80/443）"
@@ -405,8 +419,12 @@ detect_env_apache() {
 # ---------------------------------------------------------------- Nginx 环境探测
 
 detect_env_nginx() {
-  # 主配置
-  if [[ -f $OP1_CONF ]]; then
+  # 主配置。宝塔/小皮必须优先认 /www/server/nginx：Ubuntu 上经常残留
+  # /etc/nginx/nginx.conf（apt 装过），若先命中系统路径会改错文件、漏改 vhost。
+  if [[ $PANEL == bt || $PANEL == phpstudy ]] && [[ -f /www/server/nginx/conf/nginx.conf ]]; then
+    NGINX_CONF="/www/server/nginx/conf/nginx.conf"
+    VHOST_DIR="${BT_NGINX_VHOST_DIR}"
+  elif [[ -f $OP1_CONF ]]; then
     NGINX_CONF="$OP1_CONF"
     # 1Panel 版本不同，站点 conf.d 挂载位置不同：新版 /opt/1panel/www/conf.d，旧版 app 目录下的 conf.d。
     # 取「真的有站点配置」的那个，两个都没有时默认新路径。
@@ -417,6 +435,9 @@ detect_env_nginx() {
     else
       VHOST_DIR="${OP1_WWW}/conf.d"
     fi
+  elif [[ -f /www/server/nginx/conf/nginx.conf ]]; then
+    NGINX_CONF="/www/server/nginx/conf/nginx.conf"
+    VHOST_DIR="${BT_NGINX_VHOST_DIR}"
   elif [[ -f /etc/nginx/nginx.conf ]]; then
     NGINX_CONF="/etc/nginx/nginx.conf"
     if [[ -d /etc/nginx/sites-enabled && -n "$(ls /etc/nginx/sites-enabled/*.conf 2>/dev/null || ls /etc/nginx/sites-enabled/ 2>/dev/null)" ]]; then
@@ -424,9 +445,6 @@ detect_env_nginx() {
     else
       VHOST_DIR="/etc/nginx/conf.d"
     fi
-  elif [[ -f /www/server/nginx/conf/nginx.conf ]]; then
-    NGINX_CONF="/www/server/nginx/conf/nginx.conf"
-    VHOST_DIR="${BT_NGINX_VHOST_DIR}"
   fi
   [[ -n $NGINX_CONF ]] || die "没找到 nginx.conf 主配置"
   [[ -d $VHOST_DIR ]] || die "Nginx 站点目录不存在：${VHOST_DIR}"
@@ -884,6 +902,18 @@ patch_apache() {
     return 0
   fi
 
+  # resync 时 gowaf 已经占着 80/443：只重载 Apache，不要等 80 真空。
+  if port_held_by_gowaf 80; then
+    info "gowaf 已占用 80，只重载 Apache 使其监听 ${UPSTREAM_PORT}"
+    apache_ctl reload || apache_ctl restart || apache_ctl start || true
+    if ! wait_port_listening "$UPSTREAM_PORT" 20; then
+      apache_start_and_verify
+      return
+    fi
+    ok "Apache 已监听 127.0.0.1:${UPSTREAM_PORT}"
+    return 0
+  fi
+
   # Listen 变更必须「先停、确认 80 真空了、再起」。
   # 宝塔的 Apache 由 SysV 脚本托管，systemctl restart 经常变成空操作
   # （stop 没真正停，start 报 already running 却返回成功），
@@ -895,20 +925,28 @@ patch_apache() {
 apache_stop_and_verify() {
   info "停止 Apache（Listen 变动只能靠重启生效，约 2~5 秒内站点短暂不可用）"
   apache_ctl stop || true
-  if ! wait_port_free 80 12; then
-    "$APACHE_CTL" -k stop >/dev/null 2>&1 || true
+  if port_held_by_gowaf 80; then
+    info "80 已由 gowaf 持有（resync 正常态），不要求空闲"
+  else
+    if ! wait_port_free 80 12; then
+      "$APACHE_CTL" -k stop >/dev/null 2>&1 || true
+    fi
+    if ! wait_port_free 80 20; then
+      warn "Apache 已 stop，但 80 仍然被占用"
+      dump_listen_evidence 80
+      restore_apache_from "$BK_DIR"
+      die "80 没有释放，无法交给 WAF。请按上面的占用者信息处理后重试"
+    fi
   fi
-  if ! wait_port_free 80 20; then
-    warn "Apache 已 stop，但 80 仍然被占用"
-    dump_listen_evidence 80
-    restore_apache_from "$BK_DIR"
-    die "80 没有释放，无法交给 WAF。请按上面的占用者信息处理后重试"
-  fi
-  if [[ $TAKE_443 -eq 1 ]] && ! wait_port_free 443 10; then
-    warn "443 仍被占用"
-    dump_listen_evidence 443
-    restore_apache_from "$BK_DIR"
-    die "443 没有释放，无法交给 WAF"
+  if [[ $TAKE_443 -eq 1 ]]; then
+    if port_held_by_gowaf 443; then
+      info "443 已由 gowaf 持有（resync 正常态），不要求空闲"
+    elif ! wait_port_free 443 10; then
+      warn "443 仍被占用"
+      dump_listen_evidence 443
+      restore_apache_from "$BK_DIR"
+      die "443 没有释放，无法交给 WAF"
+    fi
   fi
   ok "Apache 已停止，80${TAKE_443:+/443} 已让出"
 }
@@ -1057,11 +1095,23 @@ nginx_fingerprint() {
 #                              块里只有 443 listen：改为 127.0.0.1:UPSTREAM_PORT 明文
 #                                （不能注释——无 listen 的 server 块默认绑 *:80，会和 WAF 打架）
 #   listen 8080 / unix:      → 原样保留（幂等重入、特殊监听）
+#
+# 宝塔/小皮模板是 `server` 与 `{` 分行写，不能只认同一行的 `server {`。
 nginx_retarget_file() {
   local f=$1 take443=$2 before after
   [[ -f $f ]] || return 0
   before=$(md5sum "$f" | awk '{print $1}')
   awk -v port="$UPSTREAM_PORT" -v take443="$take443" '
+    function brace_delta(s,    t, nopen, nclose) {
+      t = s
+      nopen = gsub(/{/, "{", t)
+      t = s
+      nclose = gsub(/}/, "}", t)
+      return nopen - nclose
+    }
+    function start_block() {
+      inblk = 1; has80 = 0
+    }
     function flush(    i, line, low, is443) {
       for (i = 1; i <= bn; i++) {
         line = buf[i]; low = tolower(line); is443 = 0
@@ -1090,22 +1140,43 @@ nginx_retarget_file() {
       }
       bn = 0
     }
-    BEGIN { bn = 0; inblk = 0; has80 = 0; depth = 0 }
+    BEGIN { bn = 0; inblk = 0; has80 = 0; depth = 0; pending = 0 }
     inblk == 0 {
+      if (pending) {
+        if ($0 ~ /^[[:space:]]*\{/) {
+          start_block()
+          bn = 2; buf[1] = pending_line; buf[2] = $0
+          depth = brace_delta(pending_line " " $0)
+          pending = 0
+        } else {
+          print pending_line
+          pending = 0
+          if ($0 ~ /^[[:space:]]*server[[:space:]]*\{/) {
+            start_block(); bn = 1; buf[1] = $0; depth = brace_delta($0)
+          } else if ($0 ~ /^[[:space:]]*server[[:space:]]*$/) {
+            pending = 1; pending_line = $0
+          } else { print }
+        }
+        next
+      }
       if ($0 ~ /^[[:space:]]*server[[:space:]]*\{/) {
-        inblk = 1; has80 = 0; bn = 1; buf[1] = $0
-        depth = gsub(/{/, "{") - gsub(/}/, "}")
+        start_block(); bn = 1; buf[1] = $0; depth = brace_delta($0)
+      } else if ($0 ~ /^[[:space:]]*server[[:space:]]*$/) {
+        pending = 1; pending_line = $0
       } else { print }
       next
     }
     inblk == 1 {
       bn++; buf[bn] = $0
       if (tolower($0) ~ /^[[:space:]]*listen[[:space:]]+((\*|0\.0\.0\.0):)?80([[:space:]][^;]*)?[[:space:]]*;/) has80 = 1
-      depth += gsub(/{/, "{") - gsub(/}/, "}")
+      depth += brace_delta($0)
       if (depth <= 0) { flush(); inblk = 0 }
       next
     }
-    END { if (inblk) flush() }
+    END {
+      if (pending) print pending_line
+      if (inblk) flush()
+    }
   ' "$f" > "${f}.gowaf.tmp" || { rm -f "${f}.gowaf.tmp"; return 0; }
   if ! cmp -s "$f" "${f}.gowaf.tmp"; then
     mv "${f}.gowaf.tmp" "$f"
@@ -1121,11 +1192,12 @@ nginx_retarget_file() {
 # 改用 X-Forwarded-Proto 判断：WAF 传来的 https 不跳，真正的 http 仍然 301。幂等。
 nginx_fix_https_loop() {
   local f n=0
-  for f in "$VHOST_DIR"/*.conf; do
+  for f in "$NGINX_CONF" "$VHOST_DIR"/*.conf; do
     [[ -f $f ]] || continue
     if grep -q 'x_forwarded_proto' "$f" 2>/dev/null; then continue; fi
+    # 宝塔模板常见 `if ($server_port !~ 443)`（没有 ^ $）；也兼容 ^443$ / 带引号。
     sed -i -E \
-      -e 's/if[[:space:]]*\([[:space:]]*\$server_port[[:space:]]*!~[[:space:]]*\^443\$?[[:space:]]*\)/if ($http_x_forwarded_proto != "https")/g' \
+      -e 's/if[[:space:]]*\([[:space:]]*\$server_port[[:space:]]*!~[[:space:]]*"?\^?443\$?"?[[:space:]]*\)/if ($http_x_forwarded_proto != "https")/g' \
       -e 's/if[[:space:]]*\([[:space:]]*\$scheme[[:space:]]*=[[:space:]]*http[[:space:]]*\)/if ($http_x_forwarded_proto = "http")/g' \
       "$f"
     grep -q 'x_forwarded_proto' "$f" 2>/dev/null && n=$((n + 1))
@@ -1149,8 +1221,7 @@ nginx_inject_realip() {
     trust_lines+="    set_real_ip_from ${c};\n"
   done
   awk -v trust_lines="$trust_lines" '
-    !done && /^[[:space:]]*http[[:space:]]*\{/ {
-      print
+    function inject() {
       print ""
       print "    # ===== GOWAF-MANAGED BEGIN ====="
       print "    # 由 gowaf 部署脚本写入。手工修改会在 gowaf resync 时被覆盖。"
@@ -1160,6 +1231,23 @@ nginx_inject_realip() {
       print "    real_ip_recursive on;"
       print "    # TLS 已在 WAF 终止；站点内 $server_port/$scheme 类判断请看 gowaf 文档"
       print "    # ===== GOWAF-MANAGED END ====="
+    }
+    # 宝塔主配置是 `http` 与 `{` 分行，不能只认同一行的 `http {`。
+    !done && /^[[:space:]]*http[[:space:]]*\{/ {
+      print
+      inject()
+      done = 1
+      next
+    }
+    !done && /^[[:space:]]*http[[:space:]]*$/ {
+      print
+      pending_http = 1
+      next
+    }
+    pending_http && /^[[:space:]]*\{/ {
+      print
+      inject()
+      pending_http = 0
       done = 1
       next
     }
@@ -1223,11 +1311,14 @@ patch_nginx() {
     fi
   else
     local f changed=0
+    # 宝塔 nginx.conf 里常有默认 server { listen 80; }，不改的话引擎会继续占 80，
+    # WAF 起不来。1Panel host 模式已经在上面改过主配置，这里同样处理。
+    nginx_retarget_file "$NGINX_CONF" "$TAKE_443" && changed=$((changed + 1))
     for f in "$VHOST_DIR"/*.conf; do
       [[ -f $f ]] || continue
       nginx_retarget_file "$f" "$TAKE_443" && changed=$((changed + 1))
     done
-    [[ $changed -gt 0 ]] && ok "改写 ${changed} 个站点文件的 listen" || info "所有站点 listen 已就位"
+    [[ $changed -gt 0 ]] && ok "改写 ${changed} 个配置文件的 listen" || info "所有站点 listen 已就位"
     if [[ $TAKE_443 -eq 1 ]]; then
       nginx_fix_https_loop
     fi
@@ -1248,6 +1339,24 @@ patch_nginx() {
     return 0
   fi
 
+  # resync 时 gowaf 已经占着 80/443，绝不能「等 80 真空」——那会把正常的 WAF 监听
+  # 当成 Nginx 没让出端口，然后把刚改好的配置回滚成面板写回的 listen 80。
+  if port_held_by_gowaf 80; then
+    info "gowaf 已占用 80，只重载 Nginx 使其监听 ${UPSTREAM_PORT}"
+    nginx_ctl reload || nginx_ctl restart || nginx_ctl start || true
+    if ! wait_port_listening "$UPSTREAM_PORT" 20; then
+      nginx_ctl start || true
+    fi
+    if ! wait_port_listening "$UPSTREAM_PORT" 20; then
+      warn "Nginx 未能监听 ${UPSTREAM_PORT}"
+      dump_listen_evidence "$UPSTREAM_PORT"
+      restore_web_from "$BK_DIR"
+      die "Nginx 未能切到 ${UPSTREAM_PORT}，已回滚。上面是 error log"
+    fi
+    ok "Nginx 已监听 127.0.0.1:${UPSTREAM_PORT}"
+    return 0
+  fi
+
   nginx_stop_and_verify
   nginx_start_and_verify
 }
@@ -1255,17 +1364,23 @@ patch_nginx() {
 nginx_stop_and_verify() {
   info "停止 Nginx（listen 变动只能靠重启生效，约 1~2 秒内站点短暂不可用）"
   nginx_ctl stop || true
-  if ! wait_port_free 80 15; then
+  if port_held_by_gowaf 80; then
+    info "80 已由 gowaf 持有（resync 正常态），不要求空闲"
+  elif ! wait_port_free 80 15; then
     warn "Nginx 已 stop，但 80 仍然被占用"
     dump_listen_evidence 80
     restore_web_from "$BK_DIR"
     die "80 没有释放，无法交给 WAF。请按上面的占用者信息处理后重试"
   fi
-  if [[ $TAKE_443 -eq 1 ]] && ! wait_port_free 443 10; then
-    warn "443 仍被占用"
-    dump_listen_evidence 443
-    restore_web_from "$BK_DIR"
-    die "443 没有释放，无法交给 WAF"
+  if [[ $TAKE_443 -eq 1 ]]; then
+    if port_held_by_gowaf 443; then
+      info "443 已由 gowaf 持有（resync 正常态），不要求空闲"
+    elif ! wait_port_free 443 10; then
+      warn "443 仍被占用"
+      dump_listen_evidence 443
+      restore_web_from "$BK_DIR"
+      die "443 没有释放，无法交给 WAF"
+    fi
   fi
   ok "Nginx 已停止，80${TAKE_443:+/443} 已让出"
 }
@@ -1293,17 +1408,17 @@ nginx_drift_detected() {
     grep -qE "^[[:space:]]*-?[[:space:]]*\"?80:80\"?" "${OP1_HOME}/docker-compose.yml" 2>/dev/null && return 0
     return 1
   fi
-  # 原生 nginx / 1Panel host 模式：检查 listen 是否被面板改回 80/443
+  # 原生 nginx / 宝塔 / 1Panel host 模式：站点文件 + 主配置（宝塔默认站点常写在 nginx.conf）
   if grep -lE '^[[:space:]]*listen[[:space:]]+((\*|0\.0\.0\.0):)?80([[:space:]][^;]*)?[[:space:]]*;' \
-       "$VHOST_DIR"/*.conf 2>/dev/null | grep -q .; then
+       "$NGINX_CONF" "$VHOST_DIR"/*.conf 2>/dev/null | grep -q .; then
     return 0
   fi
   if grep -lE '^[[:space:]]*listen[[:space:]]+\[::\]:80[[:space:]]*;' \
-       "$VHOST_DIR"/*.conf 2>/dev/null | grep -q .; then
+       "$NGINX_CONF" "$VHOST_DIR"/*.conf 2>/dev/null | grep -q .; then
     return 0
   fi
   if [[ $TAKE_443 -eq 1 ]] && grep -lE '^[[:space:]]*listen[[:space:]]+((\*|0\.0\.0\.0|\[::\]):)?443([[:space:]][^;]*)?[[:space:]]*;' \
-       "$VHOST_DIR"/*.conf 2>/dev/null | grep -q .; then
+       "$NGINX_CONF" "$VHOST_DIR"/*.conf 2>/dev/null | grep -q .; then
     return 0
   fi
   return 1
@@ -2241,15 +2356,19 @@ healthcheck() {
   fi
 
   if [[ $TAKE_443 -eq 1 && -n $host ]]; then
-    # 去掉 -k：要验证的正是「这张证书能不能配上这个域名」
-    tls_host=$host
-    code=$(curl -s -o /dev/null -m 8 -w '%{http_code}' --resolve "${tls_host}:443:127.0.0.1" "https://${tls_host}/" 2>/dev/null) || true
-    code=${code:-000}
-    case $code in
-      000) warn "HTTPS 自检失败（SNI: ${tls_host}）—— 没有证书覆盖这个域名，或 WAF 未在 443 监听" ;;
-      502) warn "HTTPS 自检 502（SNI: ${tls_host}）—— TLS 已通，但后端引擎上游异常" ;;
-      *)   ok "HTTPS 自检 ${code}（SNI: ${tls_host}，证书校验通过）" ;;
-    esac
+    if ! port_held_by_gowaf 443 && [[ ! -f $GW_CONF ]]; then
+      info "HTTPS 自检跳过：WAF 尚未接管 443（install 之后会校验证书与 SNI）"
+    else
+      # 去掉 -k：要验证的正是「这张证书能不能配上这个域名」
+      tls_host=$host
+      code=$(curl -s -o /dev/null -m 8 -w '%{http_code}' --resolve "${tls_host}:443:127.0.0.1" "https://${tls_host}/" 2>/dev/null) || true
+      code=${code:-000}
+      case $code in
+        000) warn "HTTPS 自检失败（SNI: ${tls_host}）—— 没有证书覆盖这个域名，或 WAF 未在 443 监听" ;;
+        502) warn "HTTPS 自检 502（SNI: ${tls_host}）—— TLS 已通，但后端引擎上游异常" ;;
+        *)   ok "HTTPS 自检 ${code}（SNI: ${tls_host}，证书校验通过）" ;;
+      esac
+    fi
   fi
 }
 
@@ -2393,8 +2512,8 @@ do_doctor() {
     for p in 80 443; do
       if port_held_by_gowaf "$p"; then
         holders+="${p}=gowaf "
-      elif port_held_by_apache "$p"; then
-        holders+="${p}=apache "
+      elif port_held_by_web "$p"; then
+        holders+="${p}=${ENGINE} "
       elif port_listening "$p"; then
         holders+="${p}=其他进程 "
       else
@@ -2452,7 +2571,7 @@ do_doctor() {
   # 先滤掉空行再统计：VHOST_NAMES 为空时 printf 会吐一个空行，
   # 不滤掉的话「真实站点数」会算成 1。
   real_total=$(printf '%s\n' $VHOST_NAMES | grep -v '^[[:space:]]*$' \
-    | grep -cEv '^(bt\.default\.com|localhost|.*\.local|ssl\.)' || true)
+    | grep -cEv '^(bt\.default\.com|localhost|ssl\.)' || true)
   step "站点清单（只读）"
   if (( all_total == 0 )); then
     info "没有找到任何 vhost 域名（${VHOST_DIR}）"
@@ -2461,7 +2580,7 @@ do_doctor() {
     printf '      %-34s %-24s %s\n' "域名" "证书目录" "备注"
     for vh in $VHOST_NAMES; do
       case $vh in
-        bt.default.com|localhost|*.local|ssl.*)
+        bt.default.com|localhost|ssl.*)
           printf '      %-34s %-24s %s\n' "$vh" "-" "占位域名，忽略"
           continue ;;
       esac
@@ -2563,4 +2682,7 @@ main() {
   esac
 }
 
-main "$@"
+# 被测试脚本 source 时不跑 main，方便单测 nginx_retarget_file 等函数。
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  main "$@"
+fi

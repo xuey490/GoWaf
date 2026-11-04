@@ -1,6 +1,6 @@
 # GoWAF
 
-**一个面向「宝塔 Apache / 反向代理架构」的单二进制 Go 反向代理 WAF。**
+**一个面向「宝塔 / 1Panel / 原生 Apache 或 Nginx」的单二进制 Go 反向代理 WAF。**
 
 GoWAF 不是 Apache/Nginx 的一个模块，而是站在 Web 服务器**前面**的一层反向代理：
 安装脚本把 80/443 交给 GoWAF，Apache 退到 `127.0.0.1:8080`，所有公网流量先过
@@ -10,8 +10,8 @@ GoWAF 检测，干净的请求原样转发给后端，恶意请求在到达业�
 - **默认观察模式**：首次安装只记录不拦截，观察 3~7 天确认无误杀再切实时拦截
 - **随时全身而退**：`rollback` / `uninstall` 自动还原 Apache 配置并重新接管流量
 
-> 适用环境：Ubuntu/Debian + Apache（宝塔 Apache 与系统 Apache 均支持）。
-> Nginx 环境请勿运行脚本（会探测拒绝，不会改错文件）。
+> 适用环境：Ubuntu/Debian + 宝塔 / 1Panel / 小皮 / 原生 systemd，引擎为 Apache 或 Nginx。
+> 部署脚本自动探测面板与引擎；同机双引擎时加 `--engine nginx` 或 `--engine apache`。
 
 ---
 
@@ -186,7 +186,7 @@ make build
 > 只有要修改控制台界面时才需要前端源码 `Frontend/`（独立维护，不在本仓库内）。
 > 改完执行 `make web` 同步回 `internal/web/dist` 再提交。
 
-服务器上（Ubuntu + 宝塔 Apache）：
+服务器上（Ubuntu + 宝塔 Apache 或 Nginx）：
 
 ```bash
 tar xzf gowaf-deploy-*.tar.gz && cd gowaf-deploy-*
@@ -258,7 +258,14 @@ Windows（管理员 PowerShell）：
 
 Windows 说明：服务模式用 `gowaf svc install|start|stop|uninstall` 实现（单二进制，无 NSSM 依赖）；IIS 走 appcmd 改 `applicationHost.config` 绑定（https 绑定转 http，TLS 由 WAF 终止）；已知降级——IIS 后端应用看到的客户端 IP 是 127.0.0.1（IIS 无 realip 模块），WAF 侧限流/封禁不受影响。
 
-### 方式二：Makefile 手动打包
+### 方式二：Linux 一键打包（Makefile / package.sh）
+
+```bash
+make package                 # linux/amd64 tar.gz + sha256，产出在 dist/
+bash deploy/package.sh arm64 # 交叉编译 arm64
+```
+
+### 方式三：Makefile 手动打包
 
 ```bash
 make build-all
@@ -492,9 +499,18 @@ curl -s -o /dev/null -w "%{http_code}\n" -H "Host: demo.local" http://127.0.0.1:
 ### 测试与代码检查
 
 ```bash
-make test   # go test ./...
-make vet    # go vet ./...
-make fmt    # gofmt
+make test          # go test ./...
+make test-adapter  # 宝塔 Nginx 适配器单测（listen 改写 / 强制 HTTPS / realip）
+make vet           # go vet ./...
+make fmt           # gofmt
+```
+
+本机没有完整宝塔面板时，可用实验室脚本按宝塔 Nginx 的目录与配置模板搭一套可被 `install.sh` 识别的环境：
+
+```bash
+sudo bash deploy/lab-bt-nginx.sh   # /www/server/{panel,nginx} + 演示站点 demo.local / shop.local
+sudo bash deploy/install.sh doctor
+sudo bash deploy/install.sh install --force --binary bin/gowaf-linux-amd64
 ```
 
 ### 断点调试（Delve）

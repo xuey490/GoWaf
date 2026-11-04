@@ -24,9 +24,11 @@ export CGO_ENABLED = 0
 help:
 	@echo "make build      - 构建本机二进制到 bin/$(APP)（直接用已提交的 internal/web/dist）"
 	@echo "make build-all  - 交叉编译 linux/amd64 + linux/arm64 + windows/amd64"
+	@echo "make package    - 交叉编译 linux/amd64 并打成 dist/gowaf-deploy-*.tar.gz"
 	@echo "make web        - （需 Frontend 源码）构建前端并同步到 internal/web/dist"
 	@echo "make sync-web   - （需 Frontend/dist）仅同步已有产物"
 	@echo "make test       - 运行 go test"
+	@echo "make test-adapter - 宝塔 Nginx 适配器单测（不需要 root）"
 	@echo "make vet        - 运行 go vet"
 	@echo "make fmt        - gofmt 全部源码"
 	@echo "make run        - 用 configs/config.yaml 启动"
@@ -80,6 +82,14 @@ build-all: check-web
 .PHONY: test
 test:
 	go test ./...
+
+.PHONY: test-adapter
+test-adapter:
+	bash deploy/test-nginx-adapter.sh
+
+.PHONY: package
+package:
+	bash deploy/package.sh
 
 .PHONY: vet
 vet:
