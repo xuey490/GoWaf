@@ -16,8 +16,10 @@ GoWAF 不是 Web 服务器的模块，而是站在它们**前面**的一层反�
 | **原生**（无面板） | ✓ | ✓ | ✓ | ✓ | — |
 | **IIS** | — | — | — | — | ✓ |
 
-- **单二进制部署**：控制台前端通过 `go:embed` 打进二进制；Linux 一个 `install.sh`，Windows 一个 `install.ps1`
+- **单二进制部署**：控制台前端与 IP 归属地库通过 `go:embed` 打进二进制；Linux 一个 `install.sh`，Windows 一个 `install.ps1`
+- **双引擎检测**：181 条自研规则（快、可解释）+ 内嵌 OWASP CRS v4（广覆盖、随上游更新），分数合并后统一判定
 - **默认观察模式**：首次安装只记录不拦截，观察 3~7 天确认无误杀再切实时拦截
+- **威胁情报 + 邮件告警**：订阅公共情报源，命中即封并自动并入封禁管理；封禁事件按窗口聚合发邮件
 - **随时全身而退**：`rollback` / `uninstall` 自动还原引擎配置并重新接管流量
 
 > 数据面本身引擎无关：对后端是 Apache、Nginx、OpenResty 还是 IIS 完全无感。
@@ -138,14 +140,18 @@ Windows 服务模式用 `gowaf svc install|start|stop|uninstall` 实现（单二
 |---|---|
 | **反向代理** | Host 透传、多站点按域名/SNI 分流、WebSocket 原生升级、流式响应（FlushInterval）、内部反代站点透明兼容 |
 | **TLS 终止** | 443 在 WAF 终止，SNI 多证书 + 通配符匹配，自动读取面板证书目录，`default_cert` 智能兜底；`--http-only` 可只接管 80 |
-| **规则检测** | 49 条内置规则（参考 OWASP CRS 思路）：SQLi / XSS / 路径穿越 / RCE / 扫描器 / 敏感文件 / 文件上传 / 协议异常；评分制（block_score / challenge_score 热更新）；高危规则可设 `ban`（命中即封） |
-| **限流与封禁** | 单 IP RPS / 突发 / 每分钟阈值；**每站点独立限流实例**（互不占用全局指标）；自动封禁带连击机制（反复触发 → 加倍 → 永久封禁）；IP 白名单 |
+| **规则检测（双引擎）** | ① 181 条自研 YAML 规则：SQLi / XSS / 路径穿越 / RCE / 扫描器 / 敏感文件 / 文件上传 / 协议异常，AC 预筛 + RE2 精匹配，评分制，高危规则可设 `ban`（命中即封）；② 内嵌 OWASP CRS v4（Coraza v3），只加载请求阶段规则，偏执等级 1–4，两个引擎分数相加后统一判定 |
+| **误报治理** | 例外规则按「站点 / 规则号 / 分类 / 路径前缀 / 参数名」组合放过（已填的维度必须全部命中），同时作用于自研引擎与 CRS；规则运营支持分组统计、命中样例、批量启停、导入导出 |
+| **威胁情报** | 订阅公共/自建 IP 清单（10 个预设源一键添加），支持自定义 Header/Token 与 JSON 列表（AbuseIPDB、CrowdSec CTI）；命中的 IP 直接拦截并自动写入封禁管理，可在封禁列表统一释放 |
+| **限流与封禁** | 单 IP RPS / 突发 / 每分钟阈值；**每站点独立限流实例**（互不占用全局指标）；自动封禁带连击机制（反复触发 → 加倍 → 永久封禁）；IP 白名单；名单与封禁均支持全局 / 站点作用域 |
+| **告警通知** | 封禁事件按时间窗合并成一封摘要邮件（同 IP 冷却去重），SMTP 支持 ssl / starttls / none；通道预留飞书 / 短信 / 微信，当前版本只实现邮件 |
+| **IP 归属地** | 内置离线库（ip2region 派生，21.6 万 IPv4 区间，1.3MB 嵌入二进制），攻击事件列表、详情与告警邮件直接显示国家/省市，零出网、零限速 |
 | **站点级防护配置** | 全局配置 + 各站点覆盖：站点开启后以站点为准，限流计数按「站点 + IP」隔离 |
 | **Cloudflare 适配** | 回源网段写入 trusted_proxies，按真实访客 IP 限流/封禁/记录（`cloudflare on` 一键开启，支持联网刷新官方网段）；CDN 标记支持全局或按站点 |
 | **计划任务中心** | 定期清理攻击事件（按保留天数）、定期备份规则快照到 `data/backups/`，支持手动触发 |
-| **控制台** | Vue 3 单页管理端：仪表盘 / 攻击事件 / 规则管理 / 站点管理（含防护弹窗、CDN 标记）/ 封禁与 IP 名单 / 计划任务 / 设置；JWT + CSRF + 登录锁定 |
+| **控制台** | Vue 3 单页管理端 12 个模块：仪表盘 / 攻击事件 / 检测规则 / 例外规则 / 威胁情报 / 黑白名单 / 封禁管理 / 防护站点 / 告警通知 / 防护配置 / 计划任务 / 审计日志；JWT + CSRF + 登录锁定 + 按权限位校验写操作 |
 | **自愈与运维** | 端口漂移自愈（面板改回端口每 60 秒自动纠正）、`doctor` 只读体检（部署形态 / 证书对照表 / 站点清单 / 端口占用）、日志 logrotate |
-| **安全防线** | 无限代理自环防护（上游指向自身 80/443/8899 拒绝加载）、控制台默认仅回环、配置校验失败拒绝启动 |
+| **安全防线** | 无限代理自环防护（上游指向自身 80/443/8899 拒绝加载）、控制台默认仅回环、配置校验失败拒绝启动、情报匹配跳过回环/私网网段防自锁 |
 
 ---
 
@@ -155,22 +161,22 @@ Windows 服务模式用 `gowaf svc install|start|stop|uninstall` 实现（单二
 
 ![安全总览](demo/1.png)
 
-**攻击事件** —— 每条请求的风险分、命中规则、攻击类型与响应码，支持导出 CSV：
+**攻击事件** —— 每条请求的风险分、命中规则、攻击类型、来源属地与响应码，支持导出 CSV 与实时订阅：
 
 ![攻击事件](demo/2.png)
 
 <details>
 <summary><strong>更多控制台截图（点击展开）</strong></summary>
 
-**检测规则** —— 49 条内置规则在线启停/调分/编辑，带规则调试器：
+**检测规则** —— 181 条内置规则在线启停/调分/编辑，带规则调试器与命中样例：
 
 ![检测规则](demo/3.png)
 
-**黑白名单** —— IP / CIDR 白名单与黑名单，支持批量导入：
+**黑白名单** —— IP / CIDR 白名单与黑名单，支持批量导入与站点作用域：
 
 ![黑白名单](demo/4.png)
 
-**封禁管理** —— 自动封禁与手动封禁统一管理，一键全量解封：
+**封禁管理** —— 自动封禁、规则直封与情报命中统一管理，一键全量解封：
 
 ![封禁管理](demo/5.png)
 
@@ -178,7 +184,7 @@ Windows 服务模式用 `gowaf svc install|start|stop|uninstall` 实现（单二
 
 ![防护站点](demo/6.png)
 
-**防护配置** —— 全局阈值 / 限流 / 自动封禁参数，改动即生效并留配置版本可回滚：
+**防护配置** —— 全局阈值 / 限流 / 自动封禁 / CRS 引擎参数，改动即生效并留配置版本可回滚：
 
 ![防护配置](demo/7.png)
 
@@ -188,33 +194,43 @@ Windows 服务模式用 `gowaf svc install|start|stop|uninstall` 实现（单二
 
 </details>
 
+> 上图为 v1.0 界面。v1.1 新增的「例外规则」「威胁情报」「告警通知」「审计日志」四个模块见控制台左侧菜单。
+
 ---
 
 ## 技术栈
 
-**后端（Go）**
+**后端（Go 1.27）**
 
 | 组件 | 选型 | 说明 |
 |---|---|---|
-| HTTP 服务 | `net/http` + `httputil.ReverseProxy` | 数据面，Rewrite 保留 RawPath，Host 透传 |
-| 管理面 | Gin + GORM | `/api` 路由、SQLite 存储 |
-| 存储 | SQLite（glebarez 纯 Go 驱动，CGO_ENABLED=0） | 零依赖，静态编译，可交叉编译 |
-| 检测 | AC 自动机（自实现）+ RE2 正则 | 关键词预筛 → 正则精匹配，正则 50ms 超时熔断 |
-| 认证 | golang-jwt v5 + CSRF + IP 白名单 | 控制台安全 |
-| 热更新 | `atomic.Value` / `atomic.Int64` | 阈值、规则、封禁策略改完即生效，不重启 |
-| 迁移 | 顺序 SQL migrations（`internal/store/migrations`） | 升级自动补表/补列 |
-| 嵌入 | `go:embed` | 前端产物打进二进制，交付一个文件 |
+| HTTP 服务 | `net/http` + `httputil.ReverseProxy` | 数据面，Rewrite 保留 RawPath，Host 透传，WebSocket 原生升级 |
+| 管理面 | Gin v1.12 + GORM v1.31 | `/api` 路由、CSRF/权限/审计中间件 |
+| 存储 | SQLite（glebarez 纯 Go 驱动，CGO_ENABLED=0，WAL） | 零依赖，静态编译，可交叉编译 |
+| 自研检测 | AC 自动机（自实现）+ RE2 正则 | 181 条 YAML 规则，关键词预筛 → 正则精匹配，正则 50ms 超时熔断 |
+| CRS 检测 | Coraza v3.8 + coraza-coreruleset（OWASP CRS v4） | 内嵌第二个引擎，`SecRuleEngine On` / `DetectionOnly`，偏执等级 1–4；协议合规类规则（920000–922000）单条降权 15、整段封顶 29，避免正常登录被累计到拦截线 |
+| 威胁情报 | 自研区间集合（uint32 闭区间 + IPv6 前缀，二分查找） | 多源合并去重，单源失败保留上次快照；解析支持纯文本与 JSON 列表 |
+| IP 归属地 | ip2region 派生离线库（`internal/geo`） | 21.6 万 IPv4 区间 / 640 个地区，gzip 后 1.3MB 嵌入二进制 |
+| 告警通知 | `net/smtp` + `mime` | 时间窗聚合、同 IP 冷却、RFC 2047 中文主题、HTML 摘要模板 |
+| 认证授权 | golang-jwt v5 + CSRF + 登录限速 | 写操作按权限位（`ip:ban` / `rule:write` / `site:write` …）校验 |
+| 热更新 | `atomic.Pointer[快照]` / `atomic.Int64` | 规则集、例外集、CRS 引擎、IP 名单、封禁均为不可变快照整体替换，读路径无锁 |
+| 可观测 | Prometheus `client_golang` + SSE | `/metrics` 暴露指标，`/api/stream/events` 实时推送攻击事件 |
+| 迁移 | 顺序 SQL migrations（`internal/store/migrations`，`schema_meta` 记版本） | 升级自动补表/补列，当前 v6 |
+| 嵌入 | `go:embed` | 前端产物 + 归属地库打进二进制，交付一个文件 |
 | Windows 服务 | `golang.org/x/sys/windows/svc` | `gowaf svc` 真 SCM 服务，无第三方守护 |
 
 **前端（控制台）**
 
-Vue 3.5 + TypeScript + Vite + Naive UI + Pinia + Vue Router + vue-i18n（中英双语）+ ECharts
+Vue 3.5 + TypeScript 6 + Vite 8 + Naive UI 2.45 + Pinia 4 + Vue Router 5 + vue-i18n 11（中英双语）+ ECharts 6 + Tailwind CSS 4；
+构建要求 Node ≥ 22.12、pnpm ≥ 8.8（仅改控制台时才需要前端源码）。
 
 ---
 
 ## 快速开始
 
-前提：`go 1.27+` 即可（前端构建产物已直接提交在 `internal/web/dist`，不需要 node/pnpm）。
+前提：`go 1.27.3+` 即可（前端构建产物已直接提交在 `internal/web/dist`，不需要 node/pnpm）。
+依赖只有 Gin、GORM、SQLite 纯 Go 驱动、Coraza + OWASP CRS、JWT、Prometheus 客户端，
+全部静态编译，`CGO_ENABLED=0` 可交叉编译 linux/amd64、linux/arm64、windows/amd64。
 
 ```bash
 # 构建 Linux / Windows 二进制（前端产物 go:embed 进二进制）
@@ -222,6 +238,9 @@ make build-all        # 产出 bin/gowaf-linux-amd64 / arm64 / windows-amd64.exe
 
 # 也可以只构建本机平台
 make build
+
+# 交叉编译打包成可直接上传的 tar.gz（Linux 侧，含 install.sh + builtin.yaml）
+bash deploy/package.sh amd64
 ```
 
 > 只有要修改控制台界面时才需要前端源码 `Frontend/`（独立维护，不在本仓库内）。
@@ -596,6 +615,12 @@ curl -s -o /dev/null -w "%{http_code}\n" -H "Host: demo.local" http://127.0.0.1:
 返回码含义：`200` 放行、`403` 拦截、`429` 限流。控制台「攻击事件」页可看
 每条命中的规则、评分与来源；日志在 `logs/waf.log`。
 
+> **用 curl 测试请带上浏览器 UA**：curl 默认 UA（`curl/8.x`）会命中内置的
+> `scanner-ua` 规则，而这条规则是 `action: ban`（命中即封），本机测试很容易把
+> `127.0.0.1` 封掉，之后所有请求都返回 `403 X-Waf-Reason: ip_banned`，看起来像
+> 「配置没生效」。加 `-A "Mozilla/5.0 ..."` 即可；真被封了就在控制台「封禁管理」
+> 释放，或 `sqlite3 data/waf.db "delete from bans where ip='127.0.0.1';"` 后重启。
+
 > 注意两点：① 检测模式以**数据库/控制台**设置为准（配置文件里的 `engine.mode`
 > 只在首次建库时生效），如果 payload 返回 200，先到控制台确认当前是不是
 > observe 观察模式；② 启动报「端口被占用」说明 8089/8899 已被别的进程监听，
@@ -650,28 +675,35 @@ cd Frontend && pnpm dev     # Vite dev server，默认 http://127.0.0.1:3006
 
 ```
 gowaf/
-├── cmd/gowaf/              # 入口：参数解析、配置加载、启动；Windows 另有 svc 子命令
+├── cmd/
+│   ├── gowaf/              # 入口：参数解析、配置加载、启动；Windows 另有 svc 子命令
+│   └── geo-gen/            # 归属地库生成工具：ip2region 源数据 → internal/geo/data/geo.bin.gz
 ├── internal/
 │   ├── app/                # 应用装配（各模块依赖注入、生命周期）
 │   ├── config/             # 配置解析与校验
-│   ├── edge/               # 请求处理流水线：封禁判定、限流决策、请求体读取（三态）、响应
-│   ├── detect/             # 检测引擎：AC 自动机、归一化、规则评分（阈值原子热更新）
+│   ├── edge/               # 请求处理流水线：黑名单 → 封禁 → 白名单 → 情报 → 静态跳过 → 限流 → 读体 → 检测 → 转发
+│   ├── detect/             # 检测：AC 自动机 + 归一化 + 自研规则评分（rules.go）、OWASP CRS 引擎（crs.go）、例外（exceptions.go）
+│   ├── intel/              # 威胁情报：多源同步、区间集合二分查找、Header/JSON 清单解析
 │   ├── guard/              # 限流器（每站点独立）、IP 名单、自动封禁策略、CF 真实 IP
+│   ├── notify/             # 告警通知：聚合队列、SMTP 发送、邮件模板
+│   ├── geo/                # 离线 IP 归属地（嵌入 geo.bin.gz，21.6 万区间）
 │   ├── proxy/              # 反向代理、多站点路由、TLS/SNI 多证书
-│   ├── runtime/            # 运行时状态：站点+限流器热加载、CDN 标记、自环防护
+│   ├── runtime/            # 运行时状态：站点+限流器热加载、CDN 标记、自环防护、快照热更新
 │   ├── admin/              # 管理面：auth / handler / middleware / response
 │   ├── store/              # GORM + SQLite、migrations、事件与站点模型、种子数据
 │   ├── tasks/              # 计划任务中心（清理事件、备份规则）
 │   ├── metrics/            # 指标统计
 │   └── web/                # go:embed 前端构建产物（仓库直接自带，clone 后即可编译）
-├── rules/builtin.yaml      # 49 条内置检测规则（YAML，可在线增删改）
+├── rules/builtin.yaml      # 181 条内置检测规则（YAML，可在线增删改）
 ├── deploy/
 │   ├── install.sh          # Linux 一键部署：宝塔 / 1Panel / 小皮 / 原生 Apache·Nginx
 │   ├── install.ps1         # Windows 一键部署：小皮 / 宝塔 / 原生 Apache·Nginx / IIS
-│   └── package.ps1         # 交叉编译打包（linux tar.gz / windows zip）
-├── configs/config.yaml     # 配置样例
-├── docs/                   # 适配评估等补充文档
-└── Makefile                # build / build-all / test / vet / fmt（web 目标需 Frontend 源码）
+│   ├── package.sh          # Linux 侧交叉编译打包（tar.gz）
+│   ├── package.ps1         # Windows 侧交叉编译打包
+│   └── lab-*.sh            # 无面板环境用的实验室脚本（宝塔 / 小皮 / 原生目录模拟）
+├── configs/config.yaml     # 本地开发配置样例
+├── docs/                   # 适配评估、开发方案等补充文档
+└── Makefile                # build / build-all / test / vet / fmt / web / sync-web
 ```
 
 > 控制台前端源码（Vue 3 + Naive UI）独立维护，不在本仓库内；
@@ -700,6 +732,33 @@ gowaf/
   高危规则可设 `action: ban`，命中一次立即封禁来源 IP，不走评分累计。
 - **性能闸门**：归一化文本先进 AC 自动机做关键词预筛，关键词不出现则正则根本不跑；
   正则匹配整体 50ms 超时熔断（RE2 + deadline），防止恶意 payload 打爆 CPU。
+- **双引擎协同**：自研规则负责「快、准、可解释」的业务规则，CRS 负责广覆盖的通用特征、
+  随上游更新，两者并行跑、分数相加后由同一个 `decide()` 判动作。没有把 SecRule 翻译成
+  YAML —— CRS 依赖变换链（`t:urlDecodeUni`）、`ARGS_NAMES`、`chain` 与 `TX` 变量，
+  翻译只能覆盖三成规则，丢了变换链等于筛子，所以直接嵌 Coraza 引擎。
+- **CRS 误报控制**：`920000–922000` 这段协议合规类规则（`920620` 等）在完全正常的
+  登录 POST 上也能累计到大几十分，足以顶到 `block_score`（默认 60）触发自动封禁。
+  已对其单列降权：单条权重封顶 15、整段总分封顶 29（永远够不到 `challenge_score` 30）。
+  遇到「正常请求被拦」，先看事件里的 `ruleIds` 是否 920/921 开头。
+- **威胁情报**：清单在内存里压成「排序的 uint32 闭区间 + IPv6 前缀表」，命中走二分查找，
+  几万条区间也不影响转发延迟；每源一个快照，单源拉取失败保留上次数据，不会因为网络抖动
+  把防护清零。匹配前先跳过回环/私网/CGNAT 等特殊用途地址——公共清单常混入
+  `127.0.0.0/8` 这类 bogon，反代场景下上游漏传 `X-Forwarded-For` 会让 clientIP 退化成
+  `127.0.0.1`，不挡住就是整站 403。
+- **归属地零依赖**：`geo.bin.gz` 在构建期由 `cmd/geo-gen` 从 ip2region 源数据生成
+  （只保留国家/省/市，丢掉 ISP 与经纬度，压到 1.3MB），运行时一次二分查找；
+  回环 → `本机`，私网 → `内网`，IPv6 → `IPv6`。
+- **告警聚合**：封禁事件先进内存队列，按 `notify.window`（默认 60 秒）合并成一封摘要邮件，
+  同一 IP 在 `notify.cooldown`（默认 3600 秒）内只报一次，避免被扫描器刷成邮件轰炸。
+  评分阈值只过滤「有评分」的事件，情报封禁这类 score=0 的不会被吞掉。
+- **配置优先级（容易踩）**：`config.yaml` 里的 `engine.*`、`guard.*`、`storage.*` 只是
+  **初始值**——某个键在 `settings` 表里还不存在时才从配置文件灌进去，之后一律以表为准
+  （控制台改的也是表）。所以改 `config.yaml` 的 `engine.mode` 对已部署实例不生效，
+  切模式请用 `gowaf observe|protect` 或控制台，两边会同步写文件与表。
+
+- **观察模式语义**：`observe` 不只是「不新封」，而是让黑名单 → 封禁 → 情报整条拦截链路
+  退化为只看不拦，已存在的封禁也不再拦人；限流不受 observe 约束（限流是真 429），
+  所以安装脚本在 observe 下会把限流阈值放到极宽。
 - **请求体检测三态**：`Content-Length` 超过 `max_body_inspect`（默认 256KB）→ 不读直接透传；
   chunked → 透传；**谎报长度**（实际超限）→ 413。大文件上传（视频/附件）不受影响。
 - **每站点限流隔离**：运行时为每个站点构建独立 `Limiter`，计数按「站点 + IP」隔离；
@@ -742,8 +801,11 @@ gowaf/
 6. **生产事故驱动打磨**：端口漂移自愈、SysV/systemd 双控、重装零中断、
    谎报 Content-Length 识别、备份轮换防挤占、Nginx default_server 去重、
    强制 HTTPS 死循环修复……每一处防御都对应一次真实线上问题。
-7. **可观测**：攻击事件入库（类别/评分/命中规则/来源 IP/URL）、仪表盘可视化、
-   logrotate 日志轮转、doctor 一键体检输出完整证据链。
+7. **可观测**：攻击事件入库（类别/评分/命中规则/来源 IP/来源属地/URL）、仪表盘可视化、
+   `/metrics` 暴露 Prometheus 指标、SSE 实时推送、logrotate 日志轮转、doctor 一键体检输出完整证据链。
+8. **能运营，不只是能拦**：误报有例外规则精确放过（站点 / 规则号 / 分类 / 路径前缀 / 参数名 组合）、
+   规则有分组统计与命中样例可回看、情报有一键预设与命中即封、封禁有统一出口、
+   告警有邮件兜底、写操作有审计留痕 —— 上线之后能持续调，而不是装完就不敢动。
 
 ---
 
@@ -752,6 +814,9 @@ gowaf/
 - **IIS 真实 IP**：IIS 无 `mod_remoteip` 等价物，后端应用看到的客户端 IP 是 `127.0.0.1`。WAF 在边缘看到真实 IP，限流/封禁不受影响。
 - **QUIC / HTTP3**：WAF 不接 UDP 443；doctor 会提示，不做自动改写。
 - **IPv6**：暂不接管 IPv6 listen（会注释以免与 WAF 抢端口），IPv6 流量仍直连源站。
+- **威胁情报依赖出网与 DNS**：同步时要能访问清单 URL；DNS 或出网故障时同步失败，会保留上一次快照（不会把防护清零），失败原因写在情报源列表的「上次错误」里。
+- **CRS 有额外 CPU 开销**：内嵌 CRS 默认开启（`engine.crs.enabled=true`，block/PL1），比纯自研规则多一轮全量匹配；低配机器可切 `engine.crs.mode=log` 只记录，或直接关掉。
+- **告警通道只有邮件**：飞书 / 短信 / 微信只在通道列表里占位，尚未实现。
 - **Windows 无 resync 定时器**：Linux 宝塔/小皮「保存站点」会把端口写回 80，`gowaf-resync.timer` 每 60 秒纠正；Windows 版目前只能再跑一次 `install.ps1 install` 或手工改回。
 
 ---
