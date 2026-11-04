@@ -8,10 +8,10 @@
 
 | 面板 / 环境 | Apache | Nginx / OpenResty | IIS |
 |---|:---:|:---:|:---:|
-| **宝塔** | ✓ | ✓ | — |
+| **宝塔** Linux / Windows | ✓ | ✓ | — |
 | **1Panel** | — | ✓（OpenResty 容器） | — |
 | **小皮** Linux / Windows | ✓ | ✓ | — |
-| **原生** systemd / 无面板 | ✓ | ✓ | — |
+| **原生** Linux systemd / Windows | ✓ | ✓ | — |
 | **Windows IIS** | — | — | ✓ |
 
 - **单二进制部署**：控制台前端通过 `go:embed` 打进二进制；Linux 一个 `install.sh`，Windows 一个 `install.ps1`
@@ -102,15 +102,20 @@ bash install.sh doctor                        # 只读体检：面板/引擎/站
 
 | 环境 | 接管方式 | 说明 |
 |---|---|---|
-| **小皮 Windows + Apache** | vhost 改写 | 探测 `phpstudy_pro\Extensions\Apache*\conf\vhosts` |
-| **小皮 Windows + Nginx** | `listen` 改写 | 探测 `phpstudy_pro\Extensions\Nginx*\conf\vhosts` |
-| **IIS** | `appcmd` 改 `applicationHost.config` 绑定 | https 绑定转 http，TLS 由 WAF 终止 |
+| **小皮 Windows + Apache** | vhost + `Listen` 改写 | `phpstudy_pro\Extensions\Apache*\conf\vhosts` |
+| **小皮 Windows + Nginx** | `listen` 改写 | `phpstudy_pro\Extensions\Nginx*\conf\vhosts` |
+| **宝塔 Windows + Apache** | vhost + `Listen` 改写 | `C:\BtSoft\apache\conf\vhost` 与 `httpd.conf` |
+| **宝塔 Windows + Nginx** | `listen` 改写 | `C:\BtSoft\nginx\conf\vhost` |
+| **原生 Apache** | vhost + `Listen` 改写 | `Apache24\conf\extra\httpd-vhosts.conf`（兼认 xampp / wamp） |
+| **原生 Nginx** | `listen` 改写 | `C:\nginx\conf` 与 `conf.d`（兼认 `nginx-*` 解压目录） |
+| **IIS** | `appcmd` 改绑定 | https 绑定转 http，TLS 由 WAF 终止 |
 
 ```powershell
-.\install.ps1 doctor       # 探测 IIS / 小皮 Apache / 小皮 Nginx、站点清单、端口
-.\install.ps1 install      # 备份 → 引擎让出 80/443 → gowaf svc 开机自启 → 防火墙
-.\install.ps1 install -Engine iis
-.\install.ps1 rollback     # 一键还原，流量回到引擎直连
+.\install.ps1 doctor                     # 探测面板/引擎/站点/端口
+.\install.ps1 install                    # 备份 → 引擎让出 80/443 → gowaf svc 开机自启 → 防火墙
+.\install.ps1 install -Engine nginx      # 同机双引擎时显式指定（iis|apache|nginx）
+.\install.ps1 install -Panel bt          # 同机多面板时显式指定（phpstudy|bt|system）
+.\install.ps1 rollback
 ```
 
 Windows 服务模式用 `gowaf svc install|start|stop|uninstall` 实现（单二进制，无 NSSM 依赖）。
@@ -247,6 +252,8 @@ ssh -L 8899:127.0.0.1:8899 root@<服务器IP>   # 隧道访问控制台
 
 ### Windows 服务器
 
+小皮、宝塔 Windows、原生 Apache / Nginx、IIS **命令相同**：解包后 `doctor` → `install`。同机双引擎加 `-Engine`，多面板加 `-Panel`。
+
 ```powershell
 Expand-Archive gowaf-deploy-*-windows-amd64.zip
 cd gowaf-deploy-*
@@ -265,7 +272,7 @@ cd gowaf-deploy-*
 ```powershell
 .\deploy\package.ps1                          # linux/amd64 tar.gz（用仓库自带前端产物）
 .\deploy\package.ps1 -Arch arm64              # 交叉编译 arm64
-.\deploy\package.ps1 -Platform windows        # windows/amd64 zip（服务模式 + IIS/小皮适配）
+.\deploy\package.ps1 -Platform windows        # windows/amd64 zip（小皮/宝塔/原生 Apache·Nginx / IIS）
 .\deploy\package.ps1 -WithWebBuild            # 本机有 Frontend 源码时：先 pnpm build 再打包
 ```
 
@@ -416,12 +423,17 @@ CF 节点 IP 计算——**一封一大片**。
 - 多个 `default_server` 改到 8080 后会冲突，脚本改写时去掉该标记（未知 Host 由 WAF 兜底站点接管）
 - Apache：系统 `apache2` / `httpd`；Debian 全局 `Listen 80/443` 在 `ports.conf`（不只 `apache2.conf`），脚本会一并注释并纳入 backup / rollback
 
-**小皮 Windows / IIS**
+**小皮 / 宝塔 / 原生 Windows / IIS**
 
+- 命令相同：`.\install.ps1 doctor` → `.\install.ps1 install`；同机双引擎加 `-Engine`，多面板加 `-Panel`
 - 主目录 `C:\ProgramData\gowaf`（data / logs / configs）
 - 防火墙走 `netsh advfirewall`
+- 小皮：`phpstudy_pro\Extensions\{Apache,Nginx}*\conf\vhosts`
+- 宝塔 Windows：`C:\BtSoft\{nginx,apache}\conf\vhost`，证书优先 `C:\BtSoft\panel\vhost\ssl`
+- 原生 Apache：`Listen 80/443` 写在 `httpd.conf`，站点多在 `conf\extra\httpd-vhosts.conf`，脚本两处都改
+- 原生 Nginx：主配置 + `conf.d`；`default_server` 改到 8080 后会摘掉以免冲突
 - IIS：改绑定前备份 `applicationHost.config`；https 绑定转 http（TLS 已在 WAF 终止）
-- 小皮证书无统一目录时，可把证书放到 `C:\ProgramData\gowaf\data\certs` 或在控制台上传
+- 小皮/原生证书无统一目录时，可把证书放到 `C:\ProgramData\gowaf\data\certs` 或在控制台上传
 
 ---
 
@@ -524,6 +536,7 @@ gowaf 服务与文件仍保留，只是停用。
 |---|---|
 | `install.ps1 install` | 一键部署 |
 | `install.ps1 install -Engine iis` | 显式指定 IIS（或 `apache` / `nginx`） |
+| `install.ps1 install -Panel bt` | 同机多面板时指定宝塔（或 `phpstudy` / `system`） |
 | `install.ps1 install -HttpOnly` | 只接管 80 |
 | `install.ps1 doctor / status` | 只读体检 / 服务与端口 |
 | `install.ps1 start / stop` | 服务控制 |
@@ -588,7 +601,7 @@ curl -s -o /dev/null -w "%{http_code}\n" -H "Host: demo.local" http://127.0.0.1:
 
 ```bash
 make test          # go test ./...
-make test-adapter  # 宝塔/小皮适配器单测（listen 改写 / 强制 HTTPS / realip / Apache vhost）
+make test-adapter  # Linux 适配器单测 + Windows 六种环境适配器单测（有 pwsh 时）
 make vet           # go vet ./...
 make fmt           # gofmt
 ```
@@ -603,6 +616,7 @@ sudo bash deploy/lab-system.sh apache    # 原生 Debian Apache：/etc/apache2/s
 sudo bash deploy/lab-system.sh nginx     # 原生 Debian Nginx：/etc/nginx/sites-enabled（含无后缀 default）
 sudo bash deploy/install.sh doctor
 sudo bash deploy/install.sh install --force --binary bin/gowaf-linux-amd64
+pwsh -File deploy/test-windows-adapter.ps1   # 小皮/宝塔/原生 Apache·Nginx 六种 Windows 布局（不需要 Windows 主机）
 ```
 
 小皮 Linux 官方安装包（xp.cn）解压到 `/usr/local/phpstudy`，站点在 `vhost/{nginx,apache}`，证书在 `vhost/cert/<域名>`。部分魔改版仍走宝塔同构路径 `/www/server/panel/vhost/{nginx,apache}`，脚本两种都认。探测时忽略机器上残留的 apt `/etc/nginx`、`/etc/apache2`，避免宝塔/小皮被误判成双引擎。
@@ -649,7 +663,7 @@ gowaf/
 ├── rules/builtin.yaml      # 49 条内置检测规则（YAML，可在线增删改）
 ├── deploy/
 │   ├── install.sh          # Linux 一键部署：宝塔 / 1Panel / 小皮 / 原生 Apache·Nginx
-│   ├── install.ps1         # Windows 一键部署：IIS / 小皮 Apache·Nginx
+│   ├── install.ps1         # Windows 一键部署：小皮 / 宝塔 / 原生 Apache·Nginx / IIS
 │   └── package.ps1         # 交叉编译打包（linux tar.gz / windows zip）
 ├── configs/config.yaml     # 配置样例
 ├── docs/                   # 适配评估等补充文档
@@ -703,7 +717,7 @@ gowaf/
 - **default_cert 智能选择**：面板证书目录名经常是「站点名」不是域名（甚至可能是 IP），
   脚本读每张证书的真实 SAN，选「覆盖 vhost 域名最多」的一张做 SNI 兜底，
   并给出「无证书覆盖域名」清单（CF 回源会 526 的隐患）。
-- **Windows**：`gowaf svc` 走真 SCM；IIS 用 appcmd 改绑定（https→http），后端真实 IP 降级为 127.0.0.1。
+- **Windows**：`gowaf svc` 走真 SCM；自动探测小皮 / 宝塔 `C:\BtSoft` / 原生 Apache24·nginx / IIS。IIS 用 appcmd 改绑定（https→http），后端真实 IP 降级为 127.0.0.1。
 - **部署安全网**：`ExecStartPre` 配置校验失败宁可不启动；指纹比对决定是否真的重启
   引擎；`set -Eeuo pipefail` + 禁止空变量 cp + 精确端口匹配（`:80` 不误伤 `:8080`）。
 
@@ -713,7 +727,7 @@ gowaf/
 
 1. **单文件交付**：控制台前端 `go:embed` 进二进制，SQLite 零外部依赖，
    纯静态编译（CGO_ENABLED=0）可交叉编译 linux/amd64、linux/arm64、windows/amd64。
-2. **全平台、全环境兼容**：宝塔 / 1Panel / 小皮 / 原生 systemd / IIS，Apache · Nginx · OpenResty 全覆盖；
+2. **全平台、全环境兼容**：宝塔 / 1Panel / 小皮 / 原生 Linux 与 Windows / IIS，Apache · Nginx · OpenResty 全覆盖；
    数据面引擎无关，差异全部收敛在部署脚本的适配器里。
 3. **零信任切换**：observe → protect 一条命令；任何时刻 `rollback` 秒回部署前状态，
    `uninstall` 自动还原流量再清理，全程不留后患。

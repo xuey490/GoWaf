@@ -28,7 +28,7 @@ help:
 	@echo "make web        - （需 Frontend 源码）构建前端并同步到 internal/web/dist"
 	@echo "make sync-web   - （需 Frontend/dist）仅同步已有产物"
 	@echo "make test       - 运行 go test"
-	@echo "make test-adapter - 宝塔/小皮适配器单测（不需要 root）"
+	@echo "make test-adapter - Linux + Windows 适配器单测（Windows 项需要 pwsh）"
 	@echo "make vet        - 运行 go vet"
 	@echo "make fmt        - gofmt 全部源码"
 	@echo "make run        - 用 configs/config.yaml 启动"
@@ -86,6 +86,8 @@ test:
 .PHONY: test-adapter
 test-adapter:
 	bash deploy/test-nginx-adapter.sh
+	@if command -v pwsh >/dev/null 2>&1; then pwsh -File deploy/test-windows-adapter.ps1; \
+	else echo "skip Windows adapter tests (pwsh not found)"; fi
 
 .PHONY: package
 package:

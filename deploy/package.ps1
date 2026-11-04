@@ -181,15 +181,15 @@ GoWAF 部署包  $ver  (windows/amd64)
   解压本目录到服务器（如 C:\gowaf-deploy），然后：
 
   cd C:\gowaf-deploy
-  .\install.ps1 doctor        # 只读体检：探测 IIS / 小皮 Apache / Nginx、站点清单、端口
+  .\install.ps1 doctor        # 只读体检：探测小皮/宝塔/原生 Apache·Nginx / IIS
   .\install.ps1 install       # 备份 → 引擎让出 80/443 → gowaf svc 注册开机自启 → 防火墙放行
   .\install.ps1 rollback      # 一键还原引擎配置，流量回到引擎直连
   .\install.ps1 uninstall     # 停服 + 卸载服务 + 还原
 
 说明：
   · Windows 服务模式用 gowaf svc 实现（单二进制，无 NSSM 依赖）
+  · 自动探测：小皮 phpstudy_pro、宝塔 C:\BtSoft、原生 Apache24 / nginx、IIS
   · IIS 走 appcmd 改 applicationHost.config 绑定（https 绑定转 http，TLS 由 WAF 终止）
-  · 小皮 Windows 版自动探测 phpstudy_pro\Extensions\Apache*\conf\vhosts 或 Nginx*\conf\vhosts
   · 已知降级：IIS 后端应用看到的客户端 IP 是 127.0.0.1（IIS 无 realip 模块）；
     WAF 本身的限流/封禁不受影响。控制台 http://127.0.0.1:8899
 "@

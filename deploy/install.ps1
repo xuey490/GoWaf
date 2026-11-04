@@ -1,9 +1,10 @@
-﻿# GoWAF Windows 部署脚本 —— 服务模式 + IIS / 小皮 Apache / 小皮 Nginx 适配
+﻿# GoWAF Windows 部署脚本 —— 服务模式 + 小皮 / 宝塔 / 原生 Apache·Nginx / IIS
 #
 # 用法（管理员 PowerShell）：
 #   .\install.ps1 doctor                 # 只读体检（探测引擎/站点/端口，不动任何东西）
 #   .\install.ps1 install                # 备份 → 引擎让出 80/443 → gowaf svc → 防火墙
-#   .\install.ps1 install -Engine iis    # 同机多引擎时显式指定（iis|apache|nginx）
+#   .\install.ps1 install -Engine nginx  # 同机多引擎时显式指定（iis|apache|nginx）
+#   .\install.ps1 install -Panel bt      # 同机多面板时显式指定（phpstudy|bt|system）
 #   .\install.ps1 install -HttpOnly      # 只接管 80，443 不动
 #   .\install.ps1 rollback               # 从备份还原引擎配置，流量回到引擎直连
 #   .\install.ps1 uninstall              # rollback + 删服务 + 删数据目录
@@ -12,6 +13,8 @@
 # 拓扑：gowaf 占宿主 80/443（TLS 终止）→ 引擎退守 127.0.0.1:8080（明文）
 # 降级说明：IIS 没有 realip 模块，后端应用看到的客户端 IP 是 127.0.0.1；
 #           WAF 在边缘看到的是真实 IP，限流/封禁不受影响。
+#
+# 适配器单测（非 Windows 也可）：$env:GOWAF_ADAPTER_TEST=1 后 dot-source 本文件。
 
 [CmdletBinding()]
 param(
@@ -19,9 +22,11 @@ param(
     [ValidateSet('install', 'rollback', 'uninstall', 'doctor', 'status', 'start', 'stop')]
     [string]$Command = 'install',
 
-    # 同机多引擎时显式指定接管谁
     [ValidateSet('', 'iis', 'apache', 'nginx')]
     [string]$Engine = '',
+
+    [ValidateSet('', 'phpstudy', 'bt', 'system')]
+    [string]$Panel = '',
 
     [switch]$HttpOnly,
     [switch]$Force,
@@ -30,16 +35,24 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+$script:TestMode = ($env:GOWAF_ADAPTER_TEST -eq '1')
 
-$root = Split-Path -Parent $PSScriptRoot
-if (-not (Test-Path (Join-Path $PSScriptRoot 'gowaf-windows-amd64.exe'))) {
+$script:BundleDir = $PSScriptRoot
+$script:WindowsExe = Join-Path $PSScriptRoot 'gowaf-windows-amd64.exe'
+if (-not $script:TestMode -and -not (Test-Path $script:WindowsExe)) {
     Write-Host "找不到 gowaf-windows-amd64.exe（部署包不完整）" -ForegroundColor Red
     exit 1
 }
 
 # ---------------------------------------------------------------- 常量
 
-$GwHome = Join-Path $env:ProgramData 'gowaf'
+if ($env:GOWAF_HOME) {
+    $GwHome = $env:GOWAF_HOME
+} elseif ($env:ProgramData) {
+    $GwHome = Join-Path $env:ProgramData 'gowaf'
+} else {
+    $GwHome = Join-Path ([System.IO.Path]::GetTempPath()) 'gowaf'
+}
 $GwBin = Join-Path $GwHome 'bin\gowaf.exe'
 $GwConf = Join-Path $GwHome 'configs\config.yaml'
 $GwRules = Join-Path $GwHome 'rules\builtin.yaml'
@@ -51,6 +64,7 @@ function Write-Ok($msg)   { Write-Host "    [OK] $msg" -ForegroundColor Green }
 function Write-Warn2($msg) { Write-Host "    [!]  $msg" -ForegroundColor Yellow }
 function Die($msg) {
     Write-Host "`n[X] $msg" -ForegroundColor Red
+    if ($script:TestMode) { throw $msg }
     exit 1
 }
 function Confirm-Yes($msg) {
@@ -60,95 +74,307 @@ function Confirm-Yes($msg) {
 }
 
 function Assert-Admin {
-    $id = [Security.Principal.WindowsIdentity]::GetCurrent()
-    $p = New-Object Security.Principal.WindowsPrincipal($id)
-    if (-not $p.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    if ($script:TestMode) { return }
+    try {
+        $id = [Security.Principal.WindowsIdentity]::GetCurrent()
+        $p = New-Object Security.Principal.WindowsPrincipal($id)
+        if (-not $p.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+            Die "请用管理员身份运行 PowerShell（右键 → 以管理员身份运行）"
+        }
+    } catch {
         Die "请用管理员身份运行 PowerShell（右键 → 以管理员身份运行）"
     }
 }
 
-# ---------------------------------------------------------------- 引擎探测
+# ---------------------------------------------------------------- 路径 / 候选引擎
 
 $script:Engine = ''       # iis / apache / nginx
+$script:PanelKind = ''    # phpstudy / bt / system / iis
 $script:EngineLabel = ''
-$script:VhostDir = ''     # 站点配置目录（phpStudy 的 vhosts；IIS 无需）
-$script:Appcmd = "$env:SystemRoot\System32\inetsrv\appcmd.exe"
+$script:VhostDir = ''     # 站点配置目录
+$script:ConfFile = ''     # 主配置 httpd.conf / nginx.conf（Listen 改写）
+$script:CertDir = ''
+$script:Appcmd = if ($env:SystemRoot) { Join-Path $env:SystemRoot 'System32\inetsrv\appcmd.exe' } else { 'appcmd.exe' }
+$script:SearchRoots = @()
 
-function Test-IisPresent {
-    return ((Get-Service W3SVC -ErrorAction SilentlyContinue) -and (Test-Path $script:Appcmd))
+function Join-Under {
+    param([string]$Root)
+    $p = $Root
+    foreach ($x in $args) { $p = Join-Path $p $x }
+    return $p
 }
 
-function Get-PhpstudyVhostDirs {
-    # phpstudy_pro 安装在任意盘：Extensions\Apache*\conf\vhosts 与 Nginx*\conf\vhosts
+function Init-SearchRoots {
+    if ($env:GOWAF_SEARCH_ROOTS) {
+        $script:SearchRoots = @($env:GOWAF_SEARCH_ROOTS -split ';' | Where-Object { $_ -and (Test-Path $_) })
+        return
+    }
+    $script:SearchRoots = @('C:\', 'D:\', 'E:\') | Where-Object { Test-Path $_ }
+}
+
+function Test-HasConfFiles($dir) {
+    if (-not $dir -or -not (Test-Path $dir)) { return $false }
+    return [bool](Get-ChildItem $dir -File -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -match '\.conf$|^httpd-vhosts' })
+}
+
+function Test-IsPanelTree($path) {
+    if (-not $path) { return $false }
+    $n = $path -replace '\\', '/'
+    return ($n -match '/phpstudy_pro(/|$)' -or $n -match '/BtSoft(/|$)' -or $n -match '/btsoft(/|$)')
+}
+
+function New-Candidate {
+    param($PanelKind, $EngineName, $Label, $VhostDir, $ConfFile, $CertDir)
+    [pscustomobject]@{
+        Panel    = $PanelKind
+        Engine   = $EngineName
+        Label    = $Label
+        VhostDir = $VhostDir
+        ConfFile = $ConfFile
+        CertDir  = $CertDir
+    }
+}
+
+function Get-PhpstudyCandidates {
     $found = @()
-    foreach ($drive in (@('C', 'D', 'E') | Where-Object { Test-Path "$($_):\" })) {
-        $pro = Get-ChildItem "$($drive):\" -Directory -Filter 'phpstudy_pro' -ErrorAction SilentlyContinue | Select-Object -First 1
-        if (-not $pro) { continue }
-        $ext = Join-Path $pro.FullName 'Extensions'
-        if (-not (Test-Path $ext)) { continue }
-        foreach ($d in (Get-ChildItem $ext -Directory -ErrorAction SilentlyContinue)) {
-            $vh = Join-Path $d.FullName 'conf\vhosts'
-            if ((Test-Path $vh) -and (Get-ChildItem $vh -Filter '*.conf' -ErrorAction SilentlyContinue)) {
-                $found += ,@($d.Name, $vh)
+    foreach ($root in $script:SearchRoots) {
+        $pros = @(Get-ChildItem $root -Directory -Filter 'phpstudy_pro' -ErrorAction SilentlyContinue)
+        foreach ($pro in $pros) {
+            $ext = Join-Path $pro.FullName 'Extensions'
+            if (-not (Test-Path $ext)) { continue }
+            foreach ($d in (Get-ChildItem $ext -Directory -ErrorAction SilentlyContinue)) {
+                $vh = Join-Under $d.FullName 'conf' 'vhosts'
+                if (-not (Test-HasConfFiles $vh)) { continue }
+                $engineName = $null
+                if ($d.Name -like 'Apache*') { $engineName = 'apache' }
+                elseif ($d.Name -like 'Nginx*') { $engineName = 'nginx' }
+                else { continue }
+                $conf = $null
+                if ($engineName -eq 'apache') {
+                    $c = Join-Under $d.FullName 'conf' 'httpd.conf'
+                    if (Test-Path $c) { $conf = $c }
+                } else {
+                    $c = Join-Under $d.FullName 'conf' 'nginx.conf'
+                    if (Test-Path $c) { $conf = $c }
+                }
+                $cert = $null
+                $ssl = Join-Under $d.FullName 'conf' 'ssl'
+                if (Test-Path $ssl) { $cert = $ssl }
+                $found += ,(New-Candidate 'phpstudy' $engineName "小皮 $($d.Name)" $vh $conf $cert)
             }
         }
     }
     return $found
 }
 
-function Detect-Engine {
-    Write-Step '探测引擎'
-
-    # 显式指定优先
-    if ($Engine -ne '') {
-        $script:Engine = $Engine
-    }
-    else {
-        # 谁在监听 80？
-        $conn = Get-NetTCPConnection -LocalPort 80 -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
-        if ($conn) {
-            $procName = (Get-Process -Id $conn.OwningProcess -ErrorAction SilentlyContinue).ProcessName
-            switch -Regex ($procName) {
-                '^(System|w3wp|svchost)$' { if (Test-IisPresent) { $script:Engine = 'iis' } }   # http.sys 由 System 持有
-                '^httpd$'                 { $script:Engine = 'apache' }
-                '^nginx$'                 { $script:Engine = 'nginx' }
+function Get-BtSoftCandidates {
+    $found = @()
+    foreach ($root in $script:SearchRoots) {
+        foreach ($name in @('BtSoft', 'btsoft')) {
+            $bt = Join-Path $root $name
+            if (-not (Test-Path $bt)) { continue }
+            $nginxVh = Join-Under $bt 'nginx' 'conf' 'vhost'
+            $nginxConf = Join-Under $bt 'nginx' 'conf' 'nginx.conf'
+            $apacheVh = Join-Under $bt 'apache' 'conf' 'vhost'
+            $apacheConf = Join-Under $bt 'apache' 'conf' 'httpd.conf'
+            $cert = Join-Under $bt 'panel' 'vhost' 'ssl'
+            if (-not (Test-Path $cert)) {
+                $alt = Join-Under $bt 'nginx' 'conf' 'vhost' 'cert'
+                if (Test-Path $alt) { $cert = $alt } else { $cert = $null }
+            }
+            if ((Test-HasConfFiles $nginxVh) -or (Test-Path $nginxConf)) {
+                $dir = if (Test-HasConfFiles $nginxVh) { $nginxVh } else { Split-Path $nginxConf }
+                $found += ,(New-Candidate 'bt' 'nginx' "宝塔 Nginx（$bt）" $dir $nginxConf $cert)
+            }
+            if ((Test-HasConfFiles $apacheVh) -or (Test-Path $apacheConf)) {
+                $dir = if (Test-HasConfFiles $apacheVh) { $apacheVh } else { Split-Path $apacheConf }
+                $found += ,(New-Candidate 'bt' 'apache' "宝塔 Apache（$bt）" $dir $apacheConf $cert)
             }
         }
-        if ($script:Engine -eq '') {
-            # 没在跑：按存在性判断
-            if (Test-IisPresent) { $script:Engine = 'iis' }
-            else {
-                $php = Get-PhpstudyVhostDirs
-                if ($php.Count -gt 0) {
-                    $apacheDir = ($php | Where-Object { $_[0] -like 'Apache*' })
-                    if ($apacheDir) { $script:Engine = 'apache' } else { $script:Engine = 'nginx' }
-                } else {
-                    Die "没探测到 IIS / 小皮 Apache / 小皮 Nginx。没有站点可接管的机器装 WAF 无意义"
+    }
+    return $found
+}
+
+function Get-NativeApacheRoots {
+    $roots = @()
+    foreach ($root in $script:SearchRoots) {
+        foreach ($name in @('Apache24', 'Apache2.4', 'Apache')) {
+            $p = Join-Path $root $name
+            if (Test-Path (Join-Under $p 'conf' 'httpd.conf')) { $roots += $p }
+        }
+        $xampp = Join-Under $root 'xampp' 'apache'
+        if (Test-Path (Join-Under $xampp 'conf' 'httpd.conf')) { $roots += $xampp }
+        Get-ChildItem $root -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+            foreach ($name in @('Apache24', 'Apache2.4')) {
+                $p = Join-Path $_.FullName $name
+                if (Test-Path (Join-Under $p 'conf' 'httpd.conf')) { $roots += $p }
+            }
+            if ($_.Name -like 'wamp*') {
+                $binApache = Join-Under $_.FullName 'bin' 'apache'
+                if (Test-Path $binApache) {
+                    Get-ChildItem $binApache -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+                        if (Test-Path (Join-Under $_.FullName 'conf' 'httpd.conf')) { $roots += $_.FullName }
+                    }
                 }
             }
         }
     }
+    return @($roots | Where-Object { $_ -and -not (Test-IsPanelTree $_) } | Select-Object -Unique)
+}
 
-    switch ($script:Engine) {
-        'iis' {
-            if (-not (Test-IisPresent)) { Die "指定了 iis，但机器上没有 IIS（W3SVC 或 appcmd 缺失）" }
-            $script:EngineLabel = 'IIS'
+function Get-NativeNginxRoots {
+    $roots = @()
+    foreach ($root in $script:SearchRoots) {
+        foreach ($name in @('nginx')) {
+            $p = Join-Path $root $name
+            if (Test-Path (Join-Under $p 'conf' 'nginx.conf')) { $roots += $p }
         }
-        'apache' {
-            $php = Get-PhpstudyVhostDirs | Where-Object { $_[0] -like 'Apache*' }
-            if (-not $php) { Die "指定了 apache，但没找到 phpstudy_pro\Extensions\Apache*\conf\vhosts" }
-            $script:VhostDir = $php[0][1]
-            $script:EngineLabel = "小皮 Apache（$($php[0][0])）"
-        }
-        'nginx' {
-            $php = Get-PhpstudyVhostDirs | Where-Object { $_[0] -like 'Nginx*' }
-            if (-not $php) { Die "指定了 nginx，但没找到 phpstudy_pro\Extensions\Nginx*\conf\vhosts" }
-            $script:VhostDir = $php[0][1]
-            $script:EngineLabel = "小皮 Nginx（$($php[0][0])）"
+        Get-ChildItem $root -Directory -Filter 'nginx-*' -ErrorAction SilentlyContinue | ForEach-Object {
+            if (Test-Path (Join-Under $_.FullName 'conf' 'nginx.conf')) { $roots += $_.FullName }
         }
     }
+    return @($roots | Where-Object { $_ -and -not (Test-IsPanelTree $_) } | Select-Object -Unique)
+}
+
+function Get-NativeCandidates {
+    $found = @()
+    foreach ($p in (Get-NativeApacheRoots)) {
+        $conf = Join-Under $p 'conf' 'httpd.conf'
+        $extra = Join-Under $p 'conf' 'extra'
+        $dir = if (Test-HasConfFiles $extra) { $extra } else { Join-Path $p 'conf' }
+        $found += ,(New-Candidate 'system' 'apache' "原生 Apache（$p）" $dir $conf $null)
+    }
+    foreach ($p in (Get-NativeNginxRoots)) {
+        $conf = Join-Under $p 'conf' 'nginx.conf'
+        $confd = Join-Under $p 'conf' 'conf.d'
+        $sites = Join-Under $p 'conf' 'sites-enabled'
+        $dir = if (Test-HasConfFiles $confd) { $confd } elseif (Test-HasConfFiles $sites) { $sites } else { Join-Path $p 'conf' }
+        $found += ,(New-Candidate 'system' 'nginx' "原生 Nginx（$p）" $dir $conf $null)
+    }
+    return $found
+}
+
+function Test-IisPresent {
+    if ($script:TestMode) { return $false }
+    if (-not $env:SystemRoot) { return $false }
+    return ((Get-Service W3SVC -ErrorAction SilentlyContinue) -and (Test-Path $script:Appcmd))
+}
+
+function Get-Listen80Engine {
+    if ($script:TestMode) { return '' }
+    try {
+        $conn = Get-NetTCPConnection -LocalPort 80 -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
+        if (-not $conn) { return '' }
+        $procName = (Get-Process -Id $conn.OwningProcess -ErrorAction SilentlyContinue).ProcessName
+        switch -Regex ($procName) {
+            '^(System|w3wp|svchost)$' { if (Test-IisPresent) { return 'iis' } }
+            '^(httpd|apache)$'        { return 'apache' }
+            '^nginx$'                 { return 'nginx' }
+            '^gowaf'                  { return 'gowaf' }
+        }
+    } catch { }
+    return ''
+}
+
+function Get-EngineCandidates {
+    Init-SearchRoots
+    $all = @()
+    $all += Get-PhpstudyCandidates
+    $all += Get-BtSoftCandidates
+    $all += Get-NativeCandidates
+    return $all
+}
+
+function Apply-Candidate($c) {
+    $script:Engine = $c.Engine
+    $script:PanelKind = $c.Panel
+    $script:EngineLabel = $c.Label
+    $script:VhostDir = $c.VhostDir
+    $script:ConfFile = $c.ConfFile
+    $script:CertDir = $c.CertDir
+}
+
+function Detect-Engine {
+    Write-Step '探测引擎'
+    Init-SearchRoots
+
+    if ($Engine -eq 'iis') {
+        if (-not (Test-IisPresent)) { Die "指定了 iis，但机器上没有 IIS（W3SVC 或 appcmd 缺失）" }
+        $script:Engine = 'iis'
+        $script:PanelKind = 'iis'
+        $script:EngineLabel = 'IIS'
+        Write-Ok "引擎：$script:EngineLabel"
+        return
+    }
+
+    $cands = @(Get-EngineCandidates)
+    if ($Panel) { $cands = @($cands | Where-Object { $_.Panel -eq $Panel }) }
+    if ($Engine) { $cands = @($cands | Where-Object { $_.Engine -eq $Engine }) }
+
+    $holder = Get-Listen80Engine
+    if ($holder -eq 'iis' -and -not $Engine -and -not $Panel -and (Test-IisPresent)) {
+        $script:Engine = 'iis'
+        $script:PanelKind = 'iis'
+        $script:EngineLabel = 'IIS'
+        Write-Ok "引擎：IIS（正在监听 80）"
+        return
+    }
+    if ($holder -in @('apache', 'nginx') -and -not $Engine) {
+        $byPort = @($cands | Where-Object { $_.Engine -eq $holder })
+        if ($byPort.Count -gt 0) { $cands = $byPort }
+    }
+
+    if ($cands.Count -eq 0) {
+        if (-not $Engine -and -not $Panel -and (Test-IisPresent)) {
+            $script:Engine = 'iis'
+            $script:PanelKind = 'iis'
+            $script:EngineLabel = 'IIS'
+            Write-Ok "引擎：IIS"
+            return
+        }
+        Die @"
+没探测到可接管的站点。本脚本认：
+    小皮   <盘>:\phpstudy_pro\Extensions\Apache*|Nginx*\conf\vhosts
+    宝塔   <盘>:\BtSoft\nginx\conf\vhost  与  <盘>:\BtSoft\apache\conf\vhost
+    原生   <盘>:\Apache24\conf  与  <盘>:\nginx\conf
+    IIS    W3SVC + appcmd
+"@
+    }
+
+    if ($cands.Count -gt 1) {
+        $engines = @($cands.Engine | Select-Object -Unique)
+        $panels = @($cands.Panel | Select-Object -Unique)
+        if ($engines.Count -gt 1) {
+            Die "同时检测到 $($cands.Label -join '、')。请加 -Engine apache 或 -Engine nginx"
+        }
+        if ($panels.Count -gt 1) {
+            Die "同时检测到 $($cands.Label -join '、')。请加 -Panel phpstudy 或 -Panel bt 或 -Panel system"
+        }
+    }
+
+    Apply-Candidate @($cands)[0]
     Write-Ok "引擎：$script:EngineLabel"
     if ($script:VhostDir) { Write-Ok "站点目录：$script:VhostDir" }
+    if ($script:ConfFile) { Write-Ok "主配置：$script:ConfFile" }
+}
+
+function Get-ConfFilesToPatch {
+    $files = @()
+    if ($script:VhostDir -and (Test-Path $script:VhostDir)) {
+        $files += @(Get-ChildItem $script:VhostDir -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -notmatch '\.bak$|\.disabled$|~$|\.dpkg-|\.ucf-' -and $_.Name -notlike 'README*' })
+    }
+    if ($script:ConfFile -and (Test-Path $script:ConfFile)) {
+        $already = $false
+        foreach ($f in $files) {
+            if ($f.FullName -eq $script:ConfFile) { $already = $true; break }
+        }
+        if (-not $already) {
+            $files += ,(Get-Item $script:ConfFile)
+        }
+    }
+    return $files
 }
 
 # ---------------------------------------------------------------- 备份 / 还原
@@ -164,18 +390,29 @@ function Backup-Engine {
     }
     if ($script:VhostDir -and (Test-Path $script:VhostDir)) {
         New-Item -ItemType Directory -Path (Join-Path $bk 'vhosts') -Force | Out-Null
-        Copy-Item "$script:VhostDir\*" (Join-Path $bk 'vhosts') -Force
+        Copy-Item (Join-Path $script:VhostDir '*') (Join-Path $bk 'vhosts') -Force
+    }
+    if ($script:ConfFile -and (Test-Path $script:ConfFile)) {
+        Copy-Item $script:ConfFile (Join-Path $bk 'main.conf') -Force
     }
     @{
         Engine       = $script:Engine
+        Panel        = $script:PanelKind
         VhostDir     = $script:VhostDir
+        ConfFile     = $script:ConfFile
         UpstreamPort = $UpstreamPort
         Take443      = [int](-not $HttpOnly)
         Time         = $ts
     } | ConvertTo-Json | Set-Content (Join-Path $bk 'meta.json') -Encoding utf8
 
-    (New-Item -ItemType SymbolicLink -Path (Join-Path $GwBackup 'latest') -Target $bk -Force) | Out-Null
-    # 只留最近 10 份
+    $latest = Join-Path $GwBackup 'latest'
+    try {
+        New-Item -ItemType SymbolicLink -Path $latest -Target $bk -Force | Out-Null
+    } catch {
+        if (Test-Path $latest) { Remove-Item $latest -Force -ErrorAction SilentlyContinue }
+        New-Item -ItemType Directory -Path $latest -Force | Out-Null
+        Set-Content (Join-Path $latest 'TARGET') $bk
+    }
     Get-ChildItem $GwBackup -Directory | Where-Object { $_.Name -match '^\d{8}-' } |
         Sort-Object Name -Descending | Select-Object -Skip 10 | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
     Write-Ok "引擎配置已备份到 $bk"
@@ -185,7 +422,11 @@ function Backup-Engine {
 function Get-LatestBackup {
     $link = Join-Path $GwBackup 'latest'
     if (-not (Test-Path $link)) { return $null }
-    return (Get-Item $link).Target
+    $item = Get-Item $link
+    if ($item.Target) { return $item.Target }
+    $marker = Join-Path $link 'TARGET'
+    if (Test-Path $marker) { return (Get-Content $marker -Raw).Trim() }
+    return $null
 }
 
 function Restore-Engine($bk) {
@@ -201,50 +442,140 @@ function Restore-Engine($bk) {
     }
     if ($script:VhostDir -and (Test-Path (Join-Path $bk 'vhosts'))) {
         Copy-Item (Join-Path $bk 'vhosts\*') $script:VhostDir -Force
-        Restart-Engine
     }
+    $mainBk = Join-Path $bk 'main.conf'
+    if ($script:ConfFile -and (Test-Path $mainBk)) {
+        Copy-Item $mainBk $script:ConfFile -Force
+    }
+    Restart-Engine
     Write-Ok "引擎配置已还原"
 }
 
-# ---------------------------------------------------------------- Apache / Nginx 改写（小皮 Windows）
+# ---------------------------------------------------------------- Apache / Nginx 改写
+
+function Find-EngineExe {
+    $exeName = if ($script:Engine -eq 'apache') { 'httpd.exe' } else { 'nginx.exe' }
+    $starts = @()
+    if ($script:VhostDir) { $starts += $script:VhostDir }
+    if ($script:ConfFile) { $starts += (Split-Path $script:ConfFile) }
+    foreach ($start in $starts) {
+        $dir = $start
+        for ($i = 0; $i -lt 6 -and $dir; $i++) {
+            $direct = Join-Path $dir $exeName
+            if (Test-Path $direct) { return $direct }
+            $inBin = Join-Under $dir 'bin' $exeName
+            if (Test-Path $inBin) { return $inBin }
+            $dir = Split-Path $dir -Parent
+        }
+    }
+    return $null
+}
 
 function Restart-Engine {
+    if ($script:TestMode) { return }
     switch ($script:Engine) {
         'apache' {
-            $httpd = Get-ChildItem 'C:\','D:\','E:\' -Recurse -Filter 'httpd.exe' -Depth 4 -ErrorAction SilentlyContinue |
-                Where-Object { $_.FullName -like '*phpstudy_pro*' } | Select-Object -First 1
+            $httpd = Find-EngineExe
+            $svcName = $null
+            try {
+                $svcName = (Get-Service -ErrorAction SilentlyContinue |
+                    Where-Object { $_.Name -match 'Apache' -and $_.Status -eq 'Running' } |
+                    Select-Object -First 1).Name
+            } catch { }
+            if ($svcName) { Restart-Service $svcName -Force; return }
             if ($httpd) {
-                $svcName = (Get-Service | Where-Object { $_.Name -match 'Apache' -and $_.Status -eq 'Running' } | Select-Object -First 1).Name
-                if ($svcName) { Restart-Service $svcName -Force }
+                $binDir = Split-Path $httpd
+                & $httpd -k restart 2>$null
+                if ($LASTEXITCODE -ne 0) {
+                    Get-Process httpd -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+                    Start-Sleep 1
+                    Start-Process $httpd -WorkingDirectory $binDir -WindowStyle Hidden
+                }
             }
         }
         'nginx' {
-            $ng = Get-ChildItem 'C:\','D:\','E:\' -Recurse -Filter 'nginx.exe' -Depth 4 -ErrorAction SilentlyContinue |
-                Where-Object { $_.FullName -like '*phpstudy_pro*' } | Select-Object -First 1
+            $ng = Find-EngineExe
             if ($ng) {
-                Get-Process nginx -ErrorAction SilentlyContinue | Stop-Process -Force
+                Get-Process nginx -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
                 Start-Sleep 1
-                Start-Process $ng.FullName -WorkingDirectory $ng.DirectoryName -WindowStyle Hidden
+                Start-Process $ng -WorkingDirectory (Split-Path $ng) -WindowStyle Hidden
             }
         }
     }
 }
 
-# Apache：VirtualHost *:80 → 127.0.0.1:8080；443 处理；强制 HTTPS 修复
+function Disable-SslVhostsInText([string]$c) {
+    $nl = if ($c -match "`r`n") { "`r`n" } else { "`n" }
+    $lines = $c -split '\r?\n'
+    $out = New-Object System.Collections.Generic.List[string]
+    $in443 = $false
+    foreach ($l in $lines) {
+        if (-not $in443 -and $l -match '^\s*<VirtualHost[^>]*:443[^>]*>' -and $l -notmatch '\[GOWAF\]') {
+            $in443 = $true
+        }
+        if ($in443) {
+            if ($l -match '^\s*# \[GOWAF\]') { $out.Add($l) } else { $out.Add("# [GOWAF] $l") }
+            if ($l -match '</VirtualHost>') { $in443 = $false }
+        } else {
+            $out.Add($l)
+        }
+    }
+    return ($out -join $nl)
+}
+
+function Repair-ApacheHttpsLoop([string]$c) {
+    if ($c -match 'X-Forwarded-Proto') { return $c }
+    $nl = if ($c -match "`r`n") { "`r`n" } else { "`n" }
+    $lines = $c -split '\r?\n'
+    $out = New-Object System.Collections.Generic.List[string]
+    foreach ($l in $lines) {
+        if ($l -match 'RewriteCond\s+%\{SERVER_PORT\}\s+!\^443\$') {
+            $indent = ''
+            if ($l -match '^(\s*)') { $indent = $Matches[1] }
+            $out.Add("${indent}RewriteCond %{HTTP:X-Forwarded-Proto} !^https$")
+        }
+        $out.Add($l)
+    }
+    return ($out -join $nl)
+}
+
+function Patch-ApacheListen {
+    if (-not $script:ConfFile -or -not (Test-Path $script:ConfFile)) { return }
+    if ($script:Engine -ne 'apache') { return }
+    $c = Get-Content $script:ConfFile -Raw -Encoding utf8
+    if ($null -eq $c) { $c = '' }
+    $orig = $c
+    $c = [regex]::Replace($c, '(?m)^(\s*)Listen\s+(?:\[::\]:)?(?:0\.0\.0\.0:)?80\s*$', '# [GOWAF] Listen 80')
+    if (-not $HttpOnly) {
+        $c = [regex]::Replace($c, '(?m)^(\s*)Listen\s+(?:\[::\]:)?(?:0\.0\.0\.0:)?443\s*$', '# [GOWAF] Listen 443')
+    }
+    if ($c -notmatch "Listen 127\.0\.0\.1:$UpstreamPort") {
+        if ($c -notmatch 'GOWAF-MANAGED') {
+            $c = $c.TrimEnd() + "`r`n`r`n# ===== GOWAF-MANAGED BEGIN =====`r`nListen 127.0.0.1:$UpstreamPort`r`n# ===== GOWAF-MANAGED END =====`r`n"
+        }
+    }
+    if ($c -ne $orig) {
+        Set-Content $script:ConfFile $c -Encoding utf8 -NoNewline
+        Write-Ok "已改写 Listen $(Split-Path $script:ConfFile -Leaf)"
+    }
+}
+
 function Patch-ApacheVhosts {
     $takeLabel = if (-not $HttpOnly) { '/443' } else { '' }
-    Write-Step "改写小皮 Apache vhost（让出 80$takeLabel，退到 127.0.0.1:$UpstreamPort）"
-    foreach ($f in (Get-ChildItem "$script:VhostDir\*.conf")) {
+    Write-Step "改写 Apache vhost（让出 80$takeLabel，退到 127.0.0.1:$UpstreamPort）"
+    Patch-ApacheListen
+    foreach ($f in (Get-ConfFilesToPatch)) {
+        if ($script:ConfFile -and $f.FullName -eq $script:ConfFile -and (Get-Content $f.FullName -Raw -ErrorAction SilentlyContinue) -notmatch '<VirtualHost') {
+            continue
+        }
         $c = Get-Content $f.FullName -Raw -Encoding utf8
+        if ($null -eq $c) { continue }
         $orig = $c
-        $c = $c -replace '(?m)^(\s*<VirtualHost\s+)\*:80(\s*>)', "`$1 127.0.0.1:$UpstreamPort`$2"
+        $c = [regex]::Replace($c, '(?m)^(\s*)<VirtualHost\s+\*:80\s*>', "`$1<VirtualHost 127.0.0.1:$UpstreamPort>")
+        $c = [regex]::Replace($c, '(?m)^(\s*)<VirtualHost\s+\*:8080\s*>', "`$1<VirtualHost 127.0.0.1:$UpstreamPort>")
+        $c = Repair-ApacheHttpsLoop $c
         if (-not $HttpOnly) {
-            # TLS 已由 WAF 终止，443 vhost 整段注释（避免重复 ServerName）
-            $c = $c -replace '(?ms)^(\s*<VirtualHost\s+\*):443(\s*>.*?)</VirtualHost>', "# [GOWAF] `$1:443`$2</VirtualHost>"
-            # 强制 HTTPS 死循环修复（宝塔模板同款 RewriteCond）
-            if ($c -notmatch 'X-Forwarded-Proto') {
-                $c = $c -replace 'RewriteCond\s+%\{SERVER_PORT\}\s+!\^443\$', "RewriteCond `%{HTTP:X-Forwarded-Proto} !^https`$`n        RewriteCond `%{SERVER_PORT} !^443`$"
-            }
+            $c = Disable-SslVhostsInText $c
         }
         if ($c -ne $orig) {
             Set-Content $f.FullName $c -Encoding utf8 -NoNewline
@@ -253,31 +584,46 @@ function Patch-ApacheVhosts {
     }
 }
 
-# Nginx：listen 80 → 127.0.0.1:8080；IPv6 注释；纯 443 块转明文
+function Test-NginxListen80([string]$line) {
+    return [bool]($line -match '^\s*listen\s+(?:(?:\*|0\.0\.0\.0):)?80(?:\s+[^;]*)?;')
+}
+
 function Patch-NginxVhosts {
     $takeLabel = if (-not $HttpOnly) { '/443' } else { '' }
-    Write-Step "改写小皮 Nginx vhost（让出 80$takeLabel，退到 127.0.0.1:$UpstreamPort）"
-    foreach ($f in (Get-ChildItem "$script:VhostDir\*.conf")) {
-        $lines = Get-Content $f.FullName -Encoding utf8
+    Write-Step "改写 Nginx vhost（让出 80$takeLabel，退到 127.0.0.1:$UpstreamPort）"
+    foreach ($f in (Get-ConfFilesToPatch)) {
+        $lines = @(Get-Content $f.FullName -Encoding utf8)
         $has80 = $false
-        foreach ($l in $lines) { if ($l -match '^\s*listen\s+(\*|0\.0\.0\.0):?80\s*;') { $has80 = $true; break } }
-        $out = @()
+        foreach ($l in $lines) {
+            if (Test-NginxListen80 $l) { $has80 = $true; break }
+        }
+        $out = New-Object System.Collections.Generic.List[string]
         foreach ($l in $lines) {
             $n = $l
-            if ($l -match '^\s*listen\s+\[::\]:80\s*;') {
+            if ($l -match '^\s*#' -and $l -match '\[GOWAF\]') {
+                $out.Add($n)
+                continue
+            }
+            if ($l -match '^\s*listen\s+\[::\]:80\b') {
                 $n = "# [GOWAF] $($l.TrimStart())"
             }
-            elseif ($l -match '^(\s*listen\s+)((\*|0\.0\.0\.0):)?80(\s+[^;]*)?;\s*$') {
-                $n = "$($Matches[1])127.0.0.1:$UpstreamPort;"
+            elseif (Test-NginxListen80 $l) {
+                $indent = ''
+                if ($l -match '^(\s*)') { $indent = $Matches[1] }
+                $n = "${indent}listen 127.0.0.1:$UpstreamPort;"
             }
-            elseif ((-not $HttpOnly) -and $l -match '^\s*listen\s+((\*|0\.0\.0\.0|\[::\]):)?443\s+ssl[^;]*;\s*$') {
+            elseif ((-not $HttpOnly) -and $l -match '^\s*listen\s+(?:(?:\*|0\.0\.0\.0|\[::\]):)?443\b') {
                 if ($has80) { $n = "# [GOWAF] $($l.TrimStart())" }
-                else { $n = $l -replace '^\s*listen\s+.*;\s*$', "    listen 127.0.0.1:$UpstreamPort;" }
+                else {
+                    $indent = ''
+                    if ($l -match '^(\s*)') { $indent = $Matches[1] }
+                    $n = "${indent}listen 127.0.0.1:$UpstreamPort;"
+                }
             }
-            elseif ((-not $HttpOnly) -and $l -match 'if\s*\(\s*\$server_port\s*!~\s*\^443\$?\s*\)') {
-                $n = 'if ($http_x_forwarded_proto != "https"){'
+            elseif ($l -match 'if\s*\(\s*\$server_port\s*!~\s*\^?443\$?\s*\)') {
+                $n = $l -replace 'if\s*\(\s*\$server_port\s*!~\s*\^?443\$?\s*\)', 'if ($http_x_forwarded_proto != "https")'
             }
-            $out += $n
+            $out.Add($n)
         }
         Set-Content $f.FullName $out -Encoding utf8
         Write-Ok "已改写 $($f.Name)"
@@ -287,7 +633,6 @@ function Patch-NginxVhosts {
 # ---------------------------------------------------------------- IIS 适配
 
 function Get-IisSites {
-    # 输出：site 名 | 绑定列表（原始）
     $raw = & $script:Appcmd list sites 2>$null
     $sites = @()
     foreach ($line in $raw) {
@@ -301,7 +646,6 @@ function Get-IisSites {
 function Patch-IisBindings {
     Write-Step "改写 IIS 绑定（让出 80/443，退到 127.0.0.1:$UpstreamPort）"
 
-    # 改 applicationHost.config 前先停 W3SVC（避免运行中写配置被覆盖回去）
     Stop-Service W3SVC -Force -ErrorAction SilentlyContinue
 
     foreach ($site in (Get-IisSites)) {
@@ -315,7 +659,6 @@ function Patch-IisBindings {
                 $changed = $true
             }
             elseif (-not $HttpOnly -and $b -match '^https?/([^:]*):443:(.*)$') {
-                # https 绑定转 http（TLS 由 WAF 终止；IIS 侧不再需要证书）
                 $host_ = $Matches[2]
                 if ($host_ -ne '') { $newB += "http/127.0.0.1:$UpstreamPort`:$host_" }
                 $changed = $true
@@ -336,7 +679,6 @@ function Patch-IisBindings {
 
 # ---------------------------------------------------------------- gowaf 本体安装
 
-# 站点发现：IIS 绑定域名 / phpStudy vhost 域名声明
 function Get-SiteHostnames {
     $names = @()
     if ($script:Engine -eq 'iis') {
@@ -348,15 +690,16 @@ function Get-SiteHostnames {
                 }
             }
         }
+        return $names
     }
-    elseif ($script:VhostDir) {
-        $pat = if ($script:Engine -eq 'apache') { '^\s*Server(Name|Alias)\s+(.+)$' } else { '^\s*server_name\s+(.+);' }
-        foreach ($f in (Get-ChildItem "$script:VhostDir\*.conf" -ErrorAction SilentlyContinue)) {
-            $hits = Select-String -Path $f.FullName -Pattern $pat -ErrorAction SilentlyContinue
-            foreach ($h in $hits) {
-                foreach ($tok in ($h.Matches[0].Groups[2].Value -split '\s+')) {
-                    $tok = $tok.Trim().TrimEnd(';').ToLower()
-                    if ($tok -and $tok -ne '*' -and $tok -ne '_' -and $tok -ne 'localhost' -and $names -notcontains $tok) { $names += $tok }
+    $pat = if ($script:Engine -eq 'apache') { '^\s*Server(Name|Alias)\s+(.+)$' } else { '^\s*server_name\s+(.+);' }
+    foreach ($f in (Get-ConfFilesToPatch)) {
+        $hits = Select-String -Path $f.FullName -Pattern $pat -ErrorAction SilentlyContinue
+        foreach ($h in $hits) {
+            foreach ($tok in ($h.Matches[0].Groups[2].Value -split '\s+')) {
+                $tok = $tok.Trim().TrimEnd(';').ToLower()
+                if ($tok -and $tok -ne '*' -and $tok -ne '_' -and $tok -ne 'localhost' -and $names -notcontains $tok) {
+                    $names += $tok
                 }
             }
         }
@@ -364,12 +707,12 @@ function Get-SiteHostnames {
     return $names
 }
 
-# 与 install.sh render_config 同构的 Windows 配置渲染
 function Render-WindowsConfig($mode) {
     Write-Step "生成配置（engine.mode=$mode）"
 
     $take443 = -not $HttpOnly
     $siteNames = @(Get-SiteHostnames)
+    $certDir = if ($script:CertDir) { $script:CertDir } else { Join-Path $GwData 'certs' }
 
     $sb = New-Object System.Text.StringBuilder
     [void]$sb.AppendLine("# GoWAF 生产配置（由 deploy/install.ps1 生成于 $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')）")
@@ -391,7 +734,7 @@ function Render-WindowsConfig($mode) {
     if ($take443) {
         [void]$sb.AppendLine('tls:')
         [void]$sb.AppendLine('  enabled: true')
-        [void]$sb.AppendLine("  cert_dir: `"$GwData\certs`"")
+        [void]$sb.AppendLine("  cert_dir: `"$certDir`"")
         if ($siteNames.Count -gt 0) { [void]$sb.AppendLine("  default_cert: `"$($siteNames[0])`"") }
         [void]$sb.AppendLine('  min_version: "1.2"')
         [void]$sb.AppendLine('  hsts: false          # 首次上线先别开 HSTS，避免证书问题被浏览器记住')
@@ -465,23 +808,19 @@ function Install-Gowaf {
     New-Item -ItemType Directory -Path (Join-Path $GwHome 'logs') -Force | Out-Null
     New-Item -ItemType Directory -Path (Join-Path $GwData 'certs') -Force | Out-Null
 
-    # 服务在跑时不能覆盖 exe：先改名（老进程继续跑），最后 svc restart 切换
     $svc = Get-Service gowaf -ErrorAction SilentlyContinue
     if ($svc -and $svc.Status -eq 'Running') {
         Move-Item $GwBin "$GwBin.prev" -Force -ErrorAction SilentlyContinue
     }
-    Copy-Item (Join-Path $PSScriptRoot 'gowaf-windows-amd64.exe') $GwBin -Force
+    Copy-Item $script:WindowsExe $GwBin -Force
     Copy-Item (Join-Path $PSScriptRoot 'builtin.yaml') $GwRules -Force
     Write-Ok "二进制与规则就位：$GwHome"
 
-    # 重装/升级不偷偷改模式：已经是 protect 就保持 protect
     $mode = 'observe'
     if (Test-Path $GwConf) {
         $oldMode = (Select-String -Path $GwConf -Pattern '^\s*mode:\s*"?(\w+)"?' | Select-Object -First 1).Matches[0].Groups[1].Value
         if ($oldMode -eq 'protect') { $mode = 'protect' }
-        # 模式记录下来给渲染函数
         $script:KeepMode = $mode
-        # 现有配置不动（保留控制台侧修改）
         Write-Ok "已有配置，保持不变（模式 $mode）"
     }
 }
@@ -513,32 +852,35 @@ function Cmd-Doctor {
     Detect-Engine
     Write-Step '端口占用'
     foreach ($p in @(80, 443, $UpstreamPort, $AdminPort)) {
-        $c = Get-NetTCPConnection -LocalPort $p -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
-        if ($c) {
-            $proc = (Get-Process -Id $c.OwningProcess -ErrorAction SilentlyContinue).ProcessName
-            Write-Host "    $p  监听中（$proc pid=$($c.OwningProcess)）"
-        } else {
-            Write-Host "    $p  空闲"
+        try {
+            $c = Get-NetTCPConnection -LocalPort $p -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($c) {
+                $proc = (Get-Process -Id $c.OwningProcess -ErrorAction SilentlyContinue).ProcessName
+                Write-Host "    $p  监听中（$proc pid=$($c.OwningProcess)）"
+            } else {
+                Write-Host "    $p  空闲"
+            }
+        } catch {
+            Write-Host "    $p  （本机无法探测 TCP 占用）"
         }
     }
     if ($script:Engine -eq 'iis') {
         Write-Step 'IIS 站点清单'
         foreach ($s in (Get-IisSites)) { Write-Host "    $($s[0])  bindings: $($s[2])" }
     }
-    elseif ($script:VhostDir) {
+    elseif ($script:VhostDir -or $script:ConfFile) {
         Write-Step '站点清单（域名声明）'
-        foreach ($f in (Get-ChildItem "$script:VhostDir\*.conf")) {
-            $names = @()
-            if ($script:Engine -eq 'apache') {
-                $names = (Select-String -Path $f.FullName -Pattern '^\s*Server(Name|Alias)\s+(.+)$' | ForEach-Object { $_.Matches[0].Groups[2].Value })
-            } else {
-                $names = (Select-String -Path $f.FullName -Pattern '^\s*server_name\s+(.+);' | ForEach-Object { $_.Matches[0].Groups[1].Value })
-            }
-            if ($names) { Write-Host "    $($f.Name)  $($names -join ' ')" }
+        foreach ($n in (Get-SiteHostnames)) { Write-Host "    $n" }
+        if (-not (Get-SiteHostnames)) {
+            foreach ($f in (Get-ConfFilesToPatch)) { Write-Host "    $($f.FullName)" }
         }
     }
-    $svc = Get-Service gowaf -ErrorAction SilentlyContinue
-    if ($svc) { Write-Ok "gowaf 服务：$($svc.Status)" } else { Write-Ok "gowaf 服务：未安装" }
+    try {
+        $svc = Get-Service gowaf -ErrorAction SilentlyContinue
+        if ($svc) { Write-Ok "gowaf 服务：$($svc.Status)" } else { Write-Ok "gowaf 服务：未安装" }
+    } catch {
+        Write-Ok "gowaf 服务：未安装"
+    }
 }
 
 function Cmd-Install {
@@ -562,15 +904,16 @@ function Cmd-Install {
             'apache' { Patch-ApacheVhosts; Restart-Engine }
             'nginx'  { Patch-NginxVhosts; Restart-Engine }
         }
-        # 确认引擎真的让出了 80
         Start-Sleep 2
-        $c = Get-NetTCPConnection -LocalPort 80 -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
-        if ($c) {
-            $proc = (Get-Process -Id $c.OwningProcess).ProcessName
-            if ($proc -notmatch 'gowaf') {
-                Write-Warn2 "80 仍被 $proc 占用（gowaf 尚未接管）"
+        try {
+            $c = Get-NetTCPConnection -LocalPort 80 -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($c) {
+                $proc = (Get-Process -Id $c.OwningProcess).ProcessName
+                if ($proc -notmatch 'gowaf') {
+                    Write-Warn2 "80 仍被 $proc 占用（gowaf 尚未接管）"
+                }
             }
-        }
+        } catch { }
         Install-Svc
         Set-Firewall
     }
@@ -633,6 +976,8 @@ function Cmd-Status {
         } else { Write-Host "    $p  空闲" }
     }
 }
+
+if ($script:TestMode) { return }
 
 switch ($Command) {
     'install'   { Cmd-Install }
