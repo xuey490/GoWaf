@@ -393,3 +393,25 @@ type NotifyLog struct {
 
 // TableName 显式表名。
 func (NotifyLog) TableName() string { return "notify_logs" }
+
+// SeclangPackage SecLang 规则包：第三方 SecLang/CRS 插件包的元信息。
+//
+// 包内容（.conf 文本）落盘在 data/seclang/<slug>.conf，由 Coraza 与内嵌
+// CRS 一起编译执行；本表只管生命周期（启停/计数/错误）。
+type SeclangPackage struct {
+	ID        uint   `gorm:"primaryKey;autoIncrement" json:"id"`
+	Name      string `gorm:"column:name;size:128;not null" json:"name"`
+	Slug      string `gorm:"column:slug;size:64;not null;uniqueIndex" json:"slug"`
+	Vendor    string `gorm:"column:vendor;size:64;not null;default:''" json:"vendor"`
+	Version   string `gorm:"column:version;size:32;not null;default:'1'" json:"version"`
+	RuleCount int    `gorm:"column:rule_count;not null;default:0" json:"ruleCount"`
+	Enabled   int    `gorm:"column:enabled;not null;default:1" json:"enabled"`
+	LastError string `gorm:"column:last_error;size:255;not null;default:''" json:"lastError"`
+	Note      string `gorm:"column:note;size:255;not null;default:''" json:"note"`
+	CreatedBy string `gorm:"column:created_by;size:64;not null;default:''" json:"createdBy"`
+	CreatedAt int64  `gorm:"column:created_at;not null;default:0" json:"createdAt"`
+	UpdatedAt int64  `gorm:"column:updated_at;not null;default:0" json:"updatedAt"`
+}
+
+// TableName 显式表名。
+func (SeclangPackage) TableName() string { return "seclang_packages" }

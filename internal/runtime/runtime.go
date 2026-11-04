@@ -8,6 +8,8 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -335,6 +337,10 @@ func (r *Runtime) Reload(ctx context.Context) error {
 // CRS 返回当前 CRS 引擎（未启用时为 nil）。
 func (r *Runtime) CRS() *detect.CRSEngine { return r.crs.Load() }
 
+// InvalidateCRS 强制下次 Reload 重建 CRS 引擎（SecLang 规则包增删改时调用，
+// 否则 reloadCRS 会因 mode/paranoia 未变而跳过重建）。
+func (r *Runtime) InvalidateCRS() { r.crs.Store(nil) }
+
 func (r *Runtime) crsLabel() string {
 	c := r.crs.Load()
 	if c == nil {
@@ -343,7 +349,7 @@ func (r *Runtime) crsLabel() string {
 	return fmt.Sprintf("%s/PL%d", c.Mode(), c.Paranoia())
 }
 
-// reloadCRS 按设置重建 CRS 引擎。加载约 70ms，只在设置里真的变了才重建。
+// reloadCRS 按设置重建 CRS 引擎。加载约 70ms，只在设置或规则包变了才重建。
 func (r *Runtime) reloadCRS(sm map[string]string) {
 	enabled := true
 	if v, ok := sm[KeyCRSEnabled]; ok && v != "" {
@@ -363,12 +369,52 @@ func (r *Runtime) reloadCRS(sm map[string]string) {
 	if cur := r.crs.Load(); cur != nil && cur.Mode() == mode && cur.Paranoia() == pl {
 		return
 	}
-	eng, err := detect.NewCRSEngine(detect.CRSOptions{Mode: mode, Paranoia: pl})
+	pkgs := r.loadSeclangPackages()
+	eng, err := detect.NewCRSEngine(detect.CRSOptions{Mode: mode, Paranoia: pl, Packages: pkgs})
+	if err != nil && len(pkgs) > 0 {
+		// 规则包组合编译失败（如包间 rule id 冲突）：退回纯 CRS，绝不能让
+		// 一个坏包把 CRS 引擎整体打瘫。
+		log.Printf("[runtime] CRS+规则包编译失败，退回纯 CRS: %v", err)
+		eng, err = detect.NewCRSEngine(detect.CRSOptions{Mode: mode, Paranoia: pl})
+	}
 	if err != nil {
 		log.Printf("[runtime] CRS 加载失败，本次仍用自研规则: %v", err)
 		return
 	}
 	r.crs.Store(eng)
+}
+
+// loadSeclangPackages 读取启用的 SecLang 规则包。逐包隔离：单包校验失败
+// 只跳过该包并记录 last_error，不影响其他包与 CRS 本体。
+func (r *Runtime) loadSeclangPackages() []detect.CRSPackage {
+	var rows []model.SeclangPackage
+	if err := r.Store.Gorm().Where("enabled = 1").Order("id ASC").Find(&rows).Error; err != nil {
+		return nil
+	}
+	if len(rows) == 0 {
+		return nil
+	}
+	dir := filepath.Join(r.Cfg.BaseDir(), "seclang")
+	out := make([]detect.CRSPackage, 0, len(rows))
+	for _, row := range rows {
+		path := filepath.Join(dir, row.Slug+".conf")
+		data, err := os.ReadFile(path)
+		if err != nil {
+			r.Store.Gorm().Model(&model.SeclangPackage{}).Where("id = ?", row.ID).
+				Update("last_error", "读取包文件失败: "+err.Error())
+			log.Printf("[seclang] 包 %s 文件缺失，跳过: %v", row.Slug, err)
+			continue
+		}
+		content := string(data)
+		if _, verr := detect.ValidateSecLang(content); verr != nil {
+			r.Store.Gorm().Model(&model.SeclangPackage{}).Where("id = ?", row.ID).
+				Update("last_error", verr.Error())
+			log.Printf("[seclang] 包 %s 编译失败，跳过: %v", row.Slug, verr)
+			continue
+		}
+		out = append(out, detect.CRSPackage{ID: row.Slug, Content: content})
+	}
+	return out
 }
 
 // ReloadIntel 拉取情报源并重建快照。网络失败不影响主流程。

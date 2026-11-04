@@ -2,7 +2,9 @@ package detect
 
 import (
 	"fmt"
+	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -31,6 +33,8 @@ type CRSEngine struct {
 	mode     string // block / log
 	paranoia int
 	version  string
+	packages int // 编译进来的 SecLang 规则包数量
+	pkgIDs   map[int]struct{}
 }
 
 // CRSOptions 构造参数。
@@ -39,6 +43,9 @@ type CRSOptions struct {
 	Mode string
 	// Paranoia 偏执等级 1-4，越高越严（误报也越多）。
 	Paranoia int
+	// Packages 追加编译进引擎的 SecLang 规则包（按导入顺序 Include）。
+	// 调用方负责先逐包 ValidateSecLang，编译失败的包不要传进来。
+	Packages []CRSPackage
 }
 
 // 只保留请求阶段（911xxx-944xxx）的检测规则，过滤初始化/评分/关联这类噪声规则。
@@ -88,24 +95,67 @@ func NewCRSEngine(opt CRSOptions) (*CRSEngine, error) {
 
 	// 顺序很重要：偏执等级必须在 901-INITIALIZATION 之前写入 TX，
 	// 否则 CRS 会先按默认 PL1 初始化，后面的设置不生效。
-	directives := fmt.Sprintf(`
+	var sb strings.Builder
+	fmt.Fprintf(&sb, `
 SecRuleEngine %s
 SecAction "id:900900,phase:1,pass,nolog,setvar:tx.blocking_paranoia_level=%d,setvar:tx.detection_paranoia_level=%d"
 Include @coraza.conf-recommended
 Include @crs-setup.conf.example
 Include @owasp_crs/*.conf
 `, engineMode, pl, pl)
+	// SecLang 规则包排在 CRS 之后：CRS 的 901/949/959 评分框架先就位，
+	// 包里的排除规则（RemoveById）和自定义检测才能按预期叠加。
+	// 注意：内容直接内联而非 Include——Coraza 对相对路径 Include 读的是
+	// 进程工作目录而非 RootFS，虚拟 FS 里的文件解析不到。
+	for _, p := range opt.Packages {
+		sb.WriteString("\n# seclang package: " + p.ID + "\n")
+		sb.WriteString(strings.TrimRight(p.Content, "\n"))
+		sb.WriteString("\n")
+	}
+
+	// 登记规则包里的 rule id：Inspect 的命中过滤只认 CRS 号段
+	// （910000-949000），自定义包的 id（1-99999 / 100000+）必须单独放行，
+	// 否则包规则只拦不记，面板上看不到命中。
+	pkgIDs := collectPkgRuleIDs(opt.Packages)
 
 	// crs/v4 提供 @owasp_crs/ 与 @crs-setup.conf.example（内嵌 CRS v4.30.0），
 	// coraza/v3 提供 @coraza.conf-recommended，两者用 mergefs 合并成根 FS；
 	// crspatch 补 v4.30.0 打包遗漏的 web-shells-php.data（排第一，优先级最高）。
+	rootFS := mergefs.Merge(crspatch.FS, crsv4.FS, corazaconf.FS)
+
 	waf, err := coraza.NewWAF(coraza.NewWAFConfig().
-		WithRootFS(mergefs.Merge(crspatch.FS, crsv4.FS, corazaconf.FS)).
-		WithDirectives(directives))
+		WithRootFS(rootFS).
+		WithDirectives(sb.String()))
 	if err != nil {
 		return nil, fmt.Errorf("加载 CRS 失败: %w", err)
 	}
-	return &CRSEngine{waf: waf, mode: mode, paranoia: pl, version: "crs-" + crsv4.Version}, nil
+	return &CRSEngine{waf: waf, mode: mode, paranoia: pl, version: "crs-" + crsv4.Version,
+		packages: len(opt.Packages), pkgIDs: pkgIDs}, nil
+}
+
+// pkgIDRe 从 SecLang 文本里粗提取 rule id（id:123 / id: 123 / id:'123'）。
+var pkgIDRe = regexp.MustCompile(`\bid\s*[:=]\s*'?(\d{1,7})`)
+
+// collectPkgRuleIDs 汇总所有包定义的 rule id。解析失败就漏登记，
+// 后果只是该规则不进命中列表，不影响拦截（interruption 仍生效）。
+func collectPkgRuleIDs(pkgs []CRSPackage) map[int]struct{} {
+	ids := map[int]struct{}{}
+	for _, p := range pkgs {
+		for _, m := range pkgIDRe.FindAllStringSubmatch(p.Content, -1) {
+			if n, err := strconv.Atoi(m[1]); err == nil && n > 0 {
+				ids[n] = struct{}{}
+			}
+		}
+	}
+	return ids
+}
+
+// Packages 返回编译进当前引擎的规则包数量。
+func (c *CRSEngine) Packages() int {
+	if c == nil {
+		return 0
+	}
+	return c.packages
 }
 
 // Mode 返回生效模式。
@@ -207,8 +257,11 @@ func (c *CRSEngine) Inspect(in *Input) (res Result) {
 	for _, mr := range tx.MatchedRules() {
 		rule := mr.Rule()
 		id := rule.ID()
+		_, isPkg := c.pkgIDs[id]
 		if id < crsMinRuleID || id >= crsMaxRuleID {
-			continue
+			if !isPkg {
+				continue
+			}
 		}
 		if _, ok := seen[id]; ok {
 			continue
@@ -216,6 +269,10 @@ func (c *CRSEngine) Inspect(in *Input) (res Result) {
 		seen[id] = struct{}{}
 
 		weight := severityWeight(rule.Severity())
+		if weight == 0 && isPkg && (id < crsMinRuleID || id >= crsMaxRuleID) {
+			// 包规则没标 severity 时给默认 40 分，保证能进评分。
+			weight = 40
+		}
 		if weight == 0 {
 			continue
 		}
@@ -234,6 +291,12 @@ func (c *CRSEngine) Inspect(in *Input) (res Result) {
 		}
 		score += weight
 		cat := crsCategory(id)
+		prefix := "crs"
+		if isPkg && (id < crsMinRuleID || id >= crsMaxRuleID) {
+			// 规则包自定义 id 不在 CRS 号段：单独归类，便于面板区分来源。
+			cat = "seclang"
+			prefix = "seclang"
+		}
 		evidence := mr.Data()
 		if evidence == "" {
 			if ds := mr.MatchedDatas(); len(ds) > 0 {
@@ -244,14 +307,14 @@ func (c *CRSEngine) Inspect(in *Input) (res Result) {
 			evidence = evidence[:120]
 		}
 		res.Hits = append(res.Hits, Hit{
-			RuleID:   fmt.Sprintf("crs-%d", id),
+			RuleID:   fmt.Sprintf("%s-%d", prefix, id),
 			Name:     mr.Message(),
 			Category: cat,
 			Score:    weight,
 			Target:   "crs",
 			Evidence: evidence,
 		})
-		res.RuleIDs = append(res.RuleIDs, fmt.Sprintf("crs-%d", id))
+		res.RuleIDs = append(res.RuleIDs, fmt.Sprintf("%s-%d", prefix, id))
 		res.Categories = appendUnique(res.Categories, cat)
 	}
 	if score > crsMaxScore {

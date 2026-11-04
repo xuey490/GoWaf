@@ -117,6 +117,10 @@ func NewRouter(o Options) *gin.Engine {
 				w.POST("/rules/reload", middleware.RequirePerm(o.Store, "rule:write"), h.RuleReload)
 				w.POST("/rules/batch", middleware.RequirePerm(o.Store, "rule:write"), h.RuleBatch)
 				w.POST("/rules/import", middleware.RequirePerm(o.Store, "rule:write"), h.RuleImport)
+				w.GET("/seclang/packages", h.SecLangPackages)
+				w.POST("/seclang/import", middleware.RequirePerm(o.Store, "rule:write"), h.SecLangImport)
+				w.POST("/seclang/:id/toggle", middleware.RequirePerm(o.Store, "rule:write"), h.SecLangToggle)
+				w.DELETE("/seclang/:id", middleware.RequirePerm(o.Store, "rule:write"), h.SecLangDelete)
 
 				w.POST("/exceptions", middleware.RequirePerm(o.Store, "rule:write"), h.ExceptionCreate)
 				w.PUT("/exceptions/:id", middleware.RequirePerm(o.Store, "rule:write"), h.ExceptionUpdate)

@@ -96,3 +96,67 @@ func TestCRSVersionV430(t *testing.T) {
 		t.Fatalf("CRS 版本不符: got %q, want crs-v4.30.0", got)
 	}
 }
+
+// TestSecLangPackageFlow 验证 SecLang 规则包：校验 → 编译进引擎 → 命中透出。
+func TestSecLangPackageFlow(t *testing.T) {
+	content := `# 测试规则包
+SecRule ARGS:token "@rx evilpack" "id:1001234,phase:2,deny,log,msg:'SecLang pack rule',severity:'CRITICAL'"
+`
+	n, err := ValidateSecLang(content)
+	if err != nil {
+		t.Fatalf("SecLang 校验失败: %v", err)
+	}
+	if n != 1 {
+		t.Fatalf("规则条数不符: got %d, want 1", n)
+	}
+	// 引擎全局开关必须被拒
+	if _, err := ValidateSecLang("SecRuleEngine On\n" + content); err == nil {
+		t.Fatal("包含 SecRuleEngine 的包应该被拒绝")
+	}
+	// 空/非 SecLang 内容必须被拒
+	if _, err := ValidateSecLang(""); err == nil {
+		t.Fatal("空包应该被拒绝")
+	}
+	if _, err := ValidateSecLang("this is not seclang at all"); err == nil {
+		t.Fatal("非 SecLang 内容应该编译失败")
+	}
+
+	eng, err := NewCRSEngine(CRSOptions{
+		Mode: "block", Paranoia: 1,
+		Packages: []CRSPackage{{ID: "test", Content: content}},
+	})
+	if err != nil {
+		t.Fatalf("加载 CRS+包失败: %v", err)
+	}
+	if eng.Packages() != 1 {
+		t.Fatalf("包数量不符: %d", eng.Packages())
+	}
+	// 命中包规则
+	res := eng.Inspect(&Input{
+		Method: "GET", Host: "example.com", Path: "/",
+		Query: "token=evilpack", UA: "Mozilla/5.0",
+	})
+	found := false
+	for _, h := range res.Hits {
+		if h.RuleID == "seclang-1001234" {
+			found = true
+			if h.Category != "seclang" {
+				t.Fatalf("包规则分类不符: %s", h.Category)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("包规则未命中, hits=%v", res.RuleIDs)
+	}
+	if res.Score < 40 {
+		t.Fatalf("包规则未计分: %d", res.Score)
+	}
+	// 正常请求不受影响
+	ok := eng.Inspect(&Input{Method: "GET", Host: "example.com", Path: "/", UA: "Mozilla/5.0"})
+	if ok.Score >= 30 && ok.Action != "block" {
+		t.Fatalf("正常请求误拦: score=%d", ok.Score)
+	}
+	if ok.Action == "block" {
+		t.Fatalf("正常请求被包规则误拦: hits=%v", ok.RuleIDs)
+	}
+}
