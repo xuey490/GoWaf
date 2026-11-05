@@ -23,6 +23,12 @@
   `seclang_packages`，接口 `/api/seclang/*`）。包规则命中以 `seclang-<id>` 透出，
   未标 severity 默认计 40 分。隔离机制：单包编译失败自动跳过并记录 `last_error`；
   多包组合编译失败（如 rule id 冲突）退回纯 CRS，绝不让一个坏包打瘫引擎。
+- **管理后台支持检查 CRS 上游新版本**
+  新增 `GET /api/crs/check-update`（需登录，只读）：数据源依次回退 GitHub release →
+  Go 模块代理（proxy.golang.org → goproxy.cn），结果服务端缓存 10 分钟（`?force=1`
+  强制重查），语义化版本比较判定 `updateAvailable`。设置页「CRS 规则版本」行新增
+  「检查更新」按钮：已是最新显示绿色标签；有新版给出 release 链接与升级提示
+  （CRS 内嵌于二进制，升级需更新依赖重新构建发版，不做在线热更新）。
 
 ---
 

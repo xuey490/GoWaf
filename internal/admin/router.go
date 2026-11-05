@@ -93,6 +93,7 @@ func NewRouter(o Options) *gin.Engine {
 			authed.GET("/intel/status", h.IntelStatus)
 			authed.GET("/intel/presets", h.IntelPresets)
 			authed.GET("/geo/status", h.GeoStatus)
+			authed.GET("/crs/check-update", h.CRSCheckUpdate)
 			authed.GET("/notify/logs", h.NotifyLogs)
 			authed.GET("/sites", h.SiteList)
 			authed.GET("/settings", h.SettingsGet)
