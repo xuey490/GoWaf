@@ -33,9 +33,12 @@ var cloudflareCIDRs = []string{
 	"2c0f:f248::/32",
 }
 
-// cloudflarePrefixes 是解析后的只读快照。
+// cloudflarePrefixes 是解析后的只读快照，包初始化时构建一次，运行期不再变化。
 var cloudflarePrefixes = parseAllPrefixes(cloudflareCIDRs)
 
+// parseAllPrefixes 把 CIDR 字符串列表解析为前缀切片。
+// 参数 list：CIDR 字符串列表。
+// 返回 []netip.Prefix：解析成功且已 Masked（主机位清零）的前缀；非法条目静默跳过。
 func parseAllPrefixes(list []string) []netip.Prefix {
 	out := make([]netip.Prefix, 0, len(list))
 	for _, s := range list {
@@ -46,16 +49,20 @@ func parseAllPrefixes(list []string) []netip.Prefix {
 	return out
 }
 
-// CloudflarePrefixes 返回 Cloudflare 回源网段。调用方只读，不要修改切片。
+// CloudflarePrefixes 返回 Cloudflare 回源网段列表。
+// 返回 []netip.Prefix：共享的只读切片，调用方只读，不要修改切片及其元素。
 func CloudflarePrefixes() []netip.Prefix { return cloudflarePrefixes }
 
 // IsCloudflare 判断地址是否属于 Cloudflare 回源网段。
+// 参数 addr：待判定的连接对端地址。
+// 返回 bool：命中任一 CF 网段返回 true；非法地址返回 false。
 //
 // 注意：判定的对象是「连接对端」，不是 XFF 里的访客 IP。
 func IsCloudflare(addr netip.Addr) bool {
 	if !addr.IsValid() {
 		return false
 	}
+	// 去掉 IPv4-mapped IPv6 前缀，统一按原生地址比较
 	addr = addr.Unmap()
 	for _, p := range cloudflarePrefixes {
 		if p.Contains(addr) {
@@ -66,6 +73,8 @@ func IsCloudflare(addr netip.Addr) bool {
 }
 
 // MissingCloudflare 返回 trusted 未完整覆盖的 Cloudflare 网段（已 Masked 的字符串）。
+// 参数 trusted：trusted_proxies 配置解析出的可信网段列表。
+// 返回 []string：未被完整覆盖的 CF 网段字符串，全部覆盖时长度为 0。
 //
 // 语义是「覆盖率」而不是「有交集」：trusted_proxies 里只写了 104.16.0.0/13
 // 也算缺失，因为从 172.64.0.0/13 回源的流量仍会被当成直连访客。
@@ -88,13 +97,17 @@ func MissingCloudflare(trusted []netip.Prefix) []string {
 }
 
 // ParseTrusted 解析 trusted_proxies 配置，跳过非法条目。
+// 参数 list：配置字符串列表，支持 CIDR（如 "10.0.0.0/8"）与单 IP（如 "127.0.0.1"）混写。
+// 返回 []netip.Prefix：解析结果；单 IP 转为 /32（IPv4）或 /128（IPv6）前缀，非法条目被跳过。
 func ParseTrusted(list []string) []netip.Prefix {
 	out := make([]netip.Prefix, 0, len(list))
 	for _, s := range list {
+		// 优先按 CIDR 解析，并清零主机位
 		if p, err := netip.ParsePrefix(s); err == nil {
 			out = append(out, p.Masked())
 			continue
 		}
+		// 再按单 IP 解析，转成覆盖单个地址的整段前缀
 		if a, err := netip.ParseAddr(s); err == nil {
 			out = append(out, netip.PrefixFrom(a.Unmap(), a.Unmap().BitLen()))
 		}

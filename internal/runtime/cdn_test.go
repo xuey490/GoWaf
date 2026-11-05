@@ -10,7 +10,9 @@ import (
 	"gowaf/internal/store/model"
 )
 
-// buildRT 构造一个只有路由快照的最小 Runtime，够跑配置自检。
+// buildRT 构造只带路由快照与 trusted_proxies 的最小 Runtime，够跑配置自检。
+// 参数 sites：进入路由表的站点；参数 trusted：server.trusted_proxies 的配置值。
+// 返回 *Runtime：可直接调用 CDNWarnings 的实例。
 func buildRT(t *testing.T, sites []model.Site, trusted []string) *Runtime {
 	t.Helper()
 	router, err := proxy.BuildRouter(sites, nil)
@@ -23,6 +25,8 @@ func buildRT(t *testing.T, sites []model.Site, trusted []string) *Runtime {
 	return rt
 }
 
+// cfTrustedAll 返回全部 Cloudflare 网段的 CIDR 字符串，模拟 trusted_proxies 已正确配置。
+// 返回 []string：网段字符串列表。
 func cfTrustedAll() []string {
 	out := make([]string, 0, 24)
 	for _, p := range guard.CloudflarePrefixes() {
@@ -31,6 +35,9 @@ func cfTrustedAll() []string {
 	return out
 }
 
+// TestCDNWarnings 验证 CDN 风险自检的判定规则：
+// 橙云站点未信任 CF 网段时必须告警且点名站点；信任网段后不再告警；
+// 全直连站点与被禁用站点不产生噪声；多个橙云站点合并为一条告警。
 func TestCDNWarnings(t *testing.T) {
 	orangeSite := model.Site{
 		ID: 1, Name: "橙云站", Hosts: `["a.example.com"]`,

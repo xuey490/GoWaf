@@ -5,11 +5,15 @@ import (
 	"testing"
 )
 
-// 默认策略：10 分钟窗口、5 次命中、封 1 小时、连 3 次永久。
+// defaultPolicy 返回测试用的默认策略：10 分钟窗口、5 次命中、封 1 小时、
+// 单次封禁上限 24 小时、连续 3 次永久。
+// 返回 banPolicy：与线上常见配置对应的策略对象。
 func defaultPolicy() banPolicy {
 	return banPolicy{windowSec: 600, threshold: 5, ttlSec: 3600, maxTTLSec: 86400, maxStrikes: 3}
 }
 
+// TestBanPolicyTemporary 验证前两次触发只做限时封禁：到期时间为 now+ttl，
+// 不升级永久，且文案带「第 x/3 次」的升级提示。
 func TestBanPolicyTemporary(t *testing.T) {
 	p := defaultPolicy()
 	now := int64(1_700_000_000_000)
@@ -28,6 +32,8 @@ func TestBanPolicyTemporary(t *testing.T) {
 	}
 }
 
+// TestBanPolicyPermanentOnThirdStrike 验证第 3 次触发（达到 maxStrikes）升级为永久：
+// expires 必须为 0（永久封禁），文案写明「永久」。
 func TestBanPolicyPermanentOnThirdStrike(t *testing.T) {
 	p := defaultPolicy()
 	expires, reason, permanent := p.decide(3, 1_700_000_000_000)
@@ -42,6 +48,8 @@ func TestBanPolicyPermanentOnThirdStrike(t *testing.T) {
 	}
 }
 
+// TestBanPolicyNoPermanentWhenDisabled 验证 maxStrikes=0（关闭连击升级）时，
+// 无论累计触发多少次都不会永久封禁，始终按 ttl 限时封禁。
 func TestBanPolicyNoPermanentWhenDisabled(t *testing.T) {
 	p := defaultPolicy()
 	p.maxStrikes = 0
@@ -54,6 +62,8 @@ func TestBanPolicyNoPermanentWhenDisabled(t *testing.T) {
 	}
 }
 
+// TestBanPolicyTTLCapped 验证 ttlSec 超过 maxTTLSec 时被封禁时长上限截断：
+// 想封 48 小时的请求被压到 24 小时。
 func TestBanPolicyTTLCapped(t *testing.T) {
 	p := defaultPolicy()
 	p.ttlSec = 48 * 3600 // 想封 48 小时
@@ -64,6 +74,8 @@ func TestBanPolicyTTLCapped(t *testing.T) {
 	}
 }
 
+// TestBanPolicyZeroTTLFallsBack 验证 ttlSec=0 时使用 60 秒兜底时长，
+// 避免「封了但立刻过期」等于没封。
 func TestBanPolicyZeroTTLFallsBack(t *testing.T) {
 	p := defaultPolicy()
 	p.ttlSec = 0
@@ -74,6 +86,9 @@ func TestBanPolicyZeroTTLFallsBack(t *testing.T) {
 	}
 }
 
+// itoa 测试辅助：把非负整数转为十进制字符串，供断言拼接「第 x/3 次」文案。
+// 参数 n：非负整数。
+// 返回 string：十进制表示；负数行为未定义（测试中不会出现）。
 func itoa(n int) string {
 	if n == 0 {
 		return "0"

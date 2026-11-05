@@ -26,24 +26,28 @@ import (
 	"gowaf/internal/store/model"
 )
 
-// 内置任务名。
+// 内置任务名（tasks 表主键，同时作为任务分发依据）。
 const (
-	TaskCleanEvents = "clean_events"
-	TaskBackupRules = "backup_rules"
+	TaskCleanEvents = "clean_events" // 清理过期攻击事件
+	TaskBackupRules = "backup_rules" // 备份检测规则快照
 )
 
 // defTask 内置任务定义。
 type defTask struct {
-	intervalH  int
-	paramsJSON string
+	intervalH  int    // 默认执行间隔（小时）
+	paramsJSON string // 默认参数（JSON 字符串）
 }
 
+// builtinTasks 内置任务及其默认配置：首次启动由 EnsureSeeded 播种进 tasks 表，
+// 之后以表中行为准（用户可调整间隔与参数）。
 var builtinTasks = map[string]defTask{
-	TaskCleanEvents: {intervalH: 6, paramsJSON: `{"retainDays":30}`},
-	TaskBackupRules: {intervalH: 24, paramsJSON: `{"keep":10}`},
+	TaskCleanEvents: {intervalH: 6, paramsJSON: `{"retainDays":30}`}, // 默认每 6 小时清理，保留 30 天
+	TaskBackupRules: {intervalH: 24, paramsJSON: `{"keep":10}`},      // 默认每 24 小时备份，保留 10 份
 }
 
-// validParams 校验并规范参数，返回错误信息（空串=通过）。
+// validParams 校验任务参数的合法性与取值范围。
+// 参数 name：任务名；参数 params：待校验的参数键值对（JSON 反序列化后的数值）。
+// 返回：空串表示校验通过；否则返回可直接展示给用户的错误信息（含未知任务）。
 func validParams(name string, params map[string]float64) string {
 	switch name {
 	case TaskCleanEvents:
@@ -68,25 +72,31 @@ func validParams(name string, params map[string]float64) string {
 	return ""
 }
 
-// Runner 计划任务运行器。
+// Runner 计划任务运行器：调度、执行内置任务，并把每次运行结果写回 tasks 表。
 type Runner struct {
-	st        *store.Store
-	backupDir string
+	st        *store.Store // 存储句柄
+	backupDir string       // 规则快照输出目录
 
-	mu     sync.Mutex // 串行化任务执行
-	stopCh chan struct{}
-	once   sync.Once
+	mu     sync.Mutex    // 串行化任务执行：手动触发与定时触发互斥
+	stopCh chan struct{} // 停止信号：关闭后 Loop 退出
+	once   sync.Once     // 保证 stopCh 只被关闭一次（Stop 可安全重复调用）
 }
 
-// New 创建运行器。backupDir 为规则快照输出目录。
+// New 创建运行器。
+// 参数 st：存储句柄；参数 backupDir：规则快照输出目录。
+// 返回：初始化完成的 *Runner。
 func New(st *store.Store, backupDir string) *Runner {
 	return &Runner{st: st, backupDir: backupDir, stopCh: make(chan struct{})}
 }
 
 // Stop 停止调度循环。
+// 参数：无。
+// 返回：无。通过关闭 stopCh 通知 Loop 退出；sync.Once 保证重复调用安全。
 func (r *Runner) Stop() { r.once.Do(func() { close(r.stopCh) }) }
 
-// EnsureSeeded 首次启动补齐内置任务行（INSERT OR IGNORE，不覆盖用户改动）。
+// EnsureSeeded 首次启动补齐内置任务行。
+// 参数：无。使用 INSERT OR IGNORE 播种，已存在的任务行（含用户改动）不会被覆盖。
+// 返回：播种失败时返回带任务名的包装错误；全部成功返回 nil。
 func (r *Runner) EnsureSeeded() error {
 	now := store.NowMS()
 	for name, def := range builtinTasks {
@@ -101,9 +111,11 @@ func (r *Runner) EnsureSeeded() error {
 	return nil
 }
 
-// Loop 调度主循环。每 30 秒检查一次到期任务。
+// Loop 调度主循环：每 30 秒轮询一次，执行所有到期任务，直到 Stop 被调用。
+// 参数：无。
+// 返回：无（stopCh 关闭后返回）。
 func (r *Runner) Loop() {
-	ticker := time.NewTicker(30 * time.Second)
+	ticker := time.NewTicker(30 * time.Second) // 轮询周期：30 秒检查一次到期任务
 	defer ticker.Stop()
 	for {
 		select {
@@ -115,7 +127,10 @@ func (r *Runner) Loop() {
 	}
 }
 
-// runDue 执行所有到期的启用任务。
+// runDue 执行所有已启用且到期的内置任务。
+// 参数：无。逐行检查 enabled=1 的任务：不在内置白名单的跳过；
+// 未到执行间隔（now - last_run_ms < interval_h 小时）的跳过。
+// 返回：无。单个任务失败只记日志，不中断后续任务。
 func (r *Runner) runDue() {
 	var rows []model.Task
 	if err := r.st.Gorm().Where("enabled = 1").Find(&rows).Error; err != nil {
@@ -125,10 +140,10 @@ func (r *Runner) runDue() {
 	now := store.NowMS()
 	for _, t := range rows {
 		if _, ok := builtinTasks[t.Name]; !ok {
-			continue
+			continue // 白名单之外的任务不自动执行
 		}
 		if t.LastRunMs > 0 && now-t.LastRunMs < int64(t.IntervalH)*3600*1000 {
-			continue
+			continue // 未到执行间隔
 		}
 		if _, err := r.Run(t.Name); err != nil {
 			log.Printf("[tasks] 任务 %s 执行失败: %v", t.Name, err)
@@ -136,7 +151,10 @@ func (r *Runner) runDue() {
 	}
 }
 
-// List 返回任务列表（附下次运行时间估算）。
+// List 返回任务列表（按任务名排序，附下次运行时间估算）。
+// 参数：无。
+// 返回：任务信息切片（params 已反序列化为对象，启用中的任务带 nextRunMs 估算）与错误；
+// 查询失败时返回 (nil, err)。
 func (r *Runner) List() ([]ginH, error) {
 	var rows []model.Task
 	if err := r.st.Gorm().Order("name").Find(&rows).Error; err != nil {
@@ -175,7 +193,10 @@ func (r *Runner) List() ([]ginH, error) {
 	return out, nil
 }
 
-// Update 修改任务配置。enabled/intervalH/params 均为可选。
+// Update 修改任务配置，三个可变字段均为可选（传 nil 表示不修改该项）。
+// 参数 name：任务名；参数 enabled：启停（0/1）；参数 intervalH：执行间隔（1~720 小时）；
+// 参数 params：任务参数（各值必须是数字，并按任务分别校验范围）。
+// 返回：任务不存在、校验失败或落库失败时返回错误；成功返回 nil。
 func (r *Runner) Update(name string, enabled *int, intervalH *int, params map[string]any) error {
 	if _, ok := builtinTasks[name]; !ok {
 		return fmt.Errorf("未知任务: %s", name)
@@ -197,6 +218,7 @@ func (r *Runner) Update(name string, enabled *int, intervalH *int, params map[st
 		row.IntervalH = *intervalH
 	}
 	if params != nil {
+		// JSON 反序列化后数字一律是 float64，这里统一转成数值再走校验
 		nums := map[string]float64{}
 		for k, v := range params {
 			f, ok := v.(float64)
@@ -220,7 +242,10 @@ func (r *Runner) Update(name string, enabled *int, intervalH *int, params map[st
 		}).Error
 }
 
-// Run 立即执行任务（手动触发与定时触发共用，锁保证不并发）。
+// Run 立即执行指定任务，手动触发与定时触发共用；互斥锁保证同一时刻只执行一个任务。
+// 参数 name：任务名。
+// 返回：result 为结果描述（失败时带错误信息），err 非 nil 表示执行失败；
+// 无论成败都会把耗时、结果、累计次数写回 tasks 行（面板可见）。
 func (r *Runner) Run(name string) (result string, err error) {
 	if _, ok := builtinTasks[name]; !ok {
 		return "", fmt.Errorf("未知任务: %s", name)
@@ -230,7 +255,7 @@ func (r *Runner) Run(name string) (result string, err error) {
 		return "", err
 	}
 
-	r.mu.Lock()
+	r.mu.Lock() // 串行化：避免手动触发与定时触发并发执行同一任务
 	defer r.mu.Unlock()
 
 	start := time.Now()
@@ -241,7 +266,7 @@ func (r *Runner) Run(name string) (result string, err error) {
 		result, err = r.runBackupRules(row.Params)
 	}
 
-	elapsed := time.Since(start).Milliseconds()
+	elapsed := time.Since(start).Milliseconds() // 本次执行耗时（毫秒）
 	if err != nil {
 		result = "失败: " + err.Error()
 	}
@@ -256,6 +281,9 @@ func (r *Runner) Run(name string) (result string, err error) {
 	return result, err
 }
 
+// get 按名称查询单个任务行。
+// 参数 name：任务名。
+// 返回：任务行指针；不存在或查询失败时返回 (nil, 包装错误)。
 func (r *Runner) get(name string) (*model.Task, error) {
 	var row model.Task
 	if err := r.st.Gorm().Where("name = ?", name).First(&row).Error; err != nil {
@@ -265,14 +293,16 @@ func (r *Runner) get(name string) (*model.Task, error) {
 }
 
 // runCleanEvents 清理超过保留期的攻击事件。
+// 参数 paramsJSON：任务参数 JSON（字段 retainDays）；解析失败或非正数时回退默认 30 天。
+// 返回：结果描述字符串（清理条数）；清理执行失败时返回错误。
 func (r *Runner) runCleanEvents(paramsJSON string) (string, error) {
 	var p struct {
 		RetainDays int `json:"retainDays"`
 	}
 	if err := json.Unmarshal([]byte(paramsJSON), &p); err != nil || p.RetainDays <= 0 {
-		p.RetainDays = 30
+		p.RetainDays = 30 // 参数非法时回退默认保留 30 天
 	}
-	cutoff := time.Now().AddDate(0, 0, -p.RetainDays).UnixMilli()
+	cutoff := time.Now().AddDate(0, 0, -p.RetainDays).UnixMilli() // 保留期截止时间（Unix 毫秒）
 	n, err := r.st.PurgeBefore(cutoff)
 	if err != nil {
 		return "", err
@@ -283,13 +313,15 @@ func (r *Runner) runCleanEvents(paramsJSON string) (string, error) {
 	return fmt.Sprintf("已清理过期事件 %d 条（保留 %d 天）", n, p.RetainDays), nil
 }
 
-// runBackupRules 导出全部检测规则为 JSON 快照，滚动保留 keep 份。
+// runBackupRules 导出全部检测规则为 JSON 快照，并滚动保留最新 keep 份。
+// 参数 paramsJSON：任务参数 JSON（字段 keep）；解析失败或非正数时回退默认 10。
+// 返回：结果描述字符串（规则数、文件名、清理份数）；查询规则、建目录或写文件失败时返回错误。
 func (r *Runner) runBackupRules(paramsJSON string) (string, error) {
 	var p struct {
 		Keep int `json:"keep"`
 	}
 	if err := json.Unmarshal([]byte(paramsJSON), &p); err != nil || p.Keep <= 0 {
-		p.Keep = 10
+		p.Keep = 10 // 参数非法时回退默认保留 10 份
 	}
 
 	var rules []map[string]any
@@ -318,7 +350,9 @@ func (r *Runner) runBackupRules(paramsJSON string) (string, error) {
 	return fmt.Sprintf("已备份 %d 条规则 → %s（清理旧快照 %d 份）", len(rules), filepath.Base(file), removed), nil
 }
 
-// pruneBackups 按文件名（即时间）降序保留最新 keep 份。
+// pruneBackups 按文件名（含时间戳，字典序即时间序）降序排序，保留最新 keep 份，删除其余。
+// 参数 dir：快照目录；参数 prefix：文件名前缀（如 "rules-"）；参数 keep：保留份数。
+// 返回：实际删除的文件数；目录不存在或读取失败时返回 0。
 func pruneBackups(dir, prefix string, keep int) int {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -340,6 +374,9 @@ func pruneBackups(dir, prefix string, keep int) int {
 	return removed
 }
 
+// min 返回两个整数中的较小值。
+// 参数 a、b：待比较的两个整数。
+// 返回：较小者。
 func min(a, b int) int {
 	if a < b {
 		return a
@@ -347,6 +384,9 @@ func min(a, b int) int {
 	return b
 }
 
+// truncate 把字符串截断到最多 n 个字节。
+// 参数 s：原始字符串；参数 n：最大保留字节数。
+// 返回：不超过 n 字节的前缀（按字节截断，可能切断多字节字符，仅用于结果摘要展示）。
 func truncate(s string, n int) string {
 	if len(s) <= n {
 		return s
@@ -354,5 +394,5 @@ func truncate(s string, n int) string {
 	return s[:n]
 }
 
-// ginH 避免处理器包依赖，这里用类型别名。
+// ginH 任务信息响应对象的类型别名，避免 tasks 包直接依赖 gin 框架。
 type ginH = map[string]any

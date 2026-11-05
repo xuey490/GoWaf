@@ -6,6 +6,8 @@ import (
 	"gowaf/internal/store/model"
 )
 
+// TestSelfListenPorts 验证 selfListenPorts 能从各类监听地址提取端口，
+// 并跳过空串与非法地址（bogus），结果恰好为 80/443/8899 三个端口。
 func TestSelfListenPorts(t *testing.T) {
 	ports := selfListenPorts("0.0.0.0:80", "[::]:443", "127.0.0.1:8899", "", "bogus")
 	for _, p := range []string{"80", "443", "8899"} {
@@ -18,6 +20,8 @@ func TestSelfListenPorts(t *testing.T) {
 	}
 }
 
+// TestUpstreamHitsPorts 验证上游端口命中判定，覆盖生产事故场景（兜底上游 127.0.0.1:80）、
+// 无 scheme 写法、http/https 默认端口、非 http scheme 与空串等边界。
 func TestUpstreamHitsPorts(t *testing.T) {
 	ports := map[string]struct{}{"80": {}, "443": {}, "8899": {}}
 	cases := []struct {
@@ -40,6 +44,8 @@ func TestUpstreamHitsPorts(t *testing.T) {
 	}
 }
 
+// TestDropSelfLoopSites 验证 dropSelfLoopSites 只剔除自环站点、保留正常站点，
+// 且端口集合为空时不过滤任何站点。
 func TestDropSelfLoopSites(t *testing.T) {
 	ports := map[string]struct{}{"80": {}, "443": {}}
 	sites := []model.Site{

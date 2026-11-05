@@ -7,7 +7,8 @@ import (
 	"gowaf/internal/store/model"
 )
 
-// 站点作用域名单只在该站点命中；全局名单对所有站点生效。
+// TestIPListSiteScope 验证名单作用域：全局名单对所有站点生效，
+// 站点名单（含精确 IP 与 CIDR）只在该站点命中，并核对 Count 的统计结果。
 func TestIPListSiteScope(t *testing.T) {
 	list := BuildIPList([]model.IPRule{
 		{IP: "10.0.0.1", Kind: "black", Scope: "global"},
@@ -53,6 +54,8 @@ func TestIPListSiteScopeMissingSite(t *testing.T) {
 	}
 }
 
+// TestBanListSiteScope 验证封禁表作用域：站点封禁只影响该站点、
+// 全局封禁对所有站点生效、两种解封互不影响，Size 对同一 IP 去重计数。
 func TestBanListSiteScope(t *testing.T) {
 	b := NewBanList()
 	b.Ban("1.2.3.4", "a.com", 0)

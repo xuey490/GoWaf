@@ -24,6 +24,8 @@ type CRSPackage struct {
 // secLangRootFS 返回编译 SecLang 包用的根 FS：
 //   - crspatch 补打包仓库缺失文件；
 //   - crs/v4 + coraza/v3 让第三方包能 Include @owasp_crs/*（CRS 插件包场景）。
+//
+// 返回 fs.FS：三者合并而成的根文件系统。
 func secLangRootFS() fs.FS {
 	return mergefs.Merge(crspatch.FS, crsv4.FS, corazaconf.FS)
 }
@@ -31,7 +33,8 @@ func secLangRootFS() fs.FS {
 // ValidateSecLang 独立编译校验一段 SecLang 文本，返回可读错误。
 // 用 DetectionOnly + 内嵌 CRS 根 FS 编译，只验语法/语义，不执行规则；
 // 包引用 @owasp_crs/* 文件也能通过（CRS 插件包场景）。
-// 返回 (规则条数, nil) 或 (0, err)。
+// 参数 content：待校验的 SecLang 指令文本。
+// 返回 (int, error)：校验通过时为 (SecRule/SecAction 指令条数, nil)，失败时为 (0, err)。
 func ValidateSecLang(content string) (int, error) {
 	content = strings.TrimSpace(content)
 	if content == "" {
@@ -53,7 +56,9 @@ func ValidateSecLang(content string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
+	// 编译成功即代表校验通过，WAF 实例用完即弃
 	_ = waf
+	// 统计 SecRule/SecAction 指令条数，作为规则数返回
 	count := 0
 	for _, line := range strings.Split(content, "\n") {
 		t := strings.TrimSpace(line)

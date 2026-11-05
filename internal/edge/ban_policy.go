@@ -15,6 +15,9 @@ type banPolicy struct {
 //
 // 返回 expires = 0 表示永久封禁；reason 会原样写进 bans 表，面板上直接可见，
 // 所以文案必须让人一眼看懂"为什么封、封多久、还有几次就永久"。
+// 参数 strikes：这是第几次触发（小于 1 按 1 处理）；参数 nowMS：当前毫秒时间戳。
+// 返回 (expires, reason, permanent)：expires 为封禁到期毫秒时间戳（永久封禁时为 0）；
+// reason 为写库原因文案；permanent 标识是否永久封禁。
 func (p banPolicy) decide(strikes int, nowMS int64) (expires int64, reason string, permanent bool) {
 	if strikes < 1 {
 		strikes = 1

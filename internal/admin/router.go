@@ -1,4 +1,5 @@
-// Package admin 装配控制面路由。
+// Package admin 装配管理后台（控制面）的 HTTP 路由：注册全局中间件链、
+// 公开/鉴权/写操作分组接口、SSE 推送以及前端静态资源。
 package admin
 
 import (
@@ -19,18 +20,20 @@ import (
 	"gowaf/internal/web"
 )
 
-// Options 装配参数。
+// Options 路由装配所需的全部依赖，由应用入口在启动时注入。
 type Options struct {
-	Cfg     *config.Config
-	Store   *store.Store
-	RT      *runtime.Runtime
-	Auth    *auth.Manager
-	Login   *middleware.LoginLimiter
-	Handler *handler.Server
-	Version string
+	Cfg     *config.Config           // 全局配置（CORS、CSRF、IP 白名单、演示模式等）。
+	Store   *store.Store             // 存储层，供审计与权限校验查询用户。
+	RT      *runtime.Runtime         // WAF 运行时句柄。
+	Auth    *auth.Manager            // JWT 令牌管理器。
+	Login   *middleware.LoginLimiter // 登录失败限速器。
+	Handler *handler.Server          // 业务 handler 集合。
+	Version string                   // 控制面版本号。
 }
 
-// NewRouter 构建 Gin 路由。
+// NewRouter 构建 Gin 引擎并注册控制面全部路由。
+// 参数 o：装配参数，携带配置、存储与各业务依赖。
+// 返回：配置完成的 Gin 引擎（由调用方负责启动监听）。
 func NewRouter(o Options) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
@@ -40,6 +43,7 @@ func NewRouter(o Options) *gin.Engine {
 	// "X-Forwarded-For: 127.0.0.1" 就能绕过 admin.allowed_ips 白名单和登录失败计数。
 	_ = r.SetTrustedProxies(nil)
 
+	// 全局中间件链：panic 恢复 → 请求 ID → 慢/错日志 → CORS → IP 白名单
 	r.Use(middleware.Recover(), middleware.RequestID(), middleware.AccessLog())
 	r.Use(middleware.CORS(o.Cfg.Admin.CORS, o.Cfg.Demo.Enabled))
 	r.Use(middleware.IPAllowlist(o.Cfg.Admin.AllowedIPs))
@@ -50,6 +54,7 @@ func NewRouter(o Options) *gin.Engine {
 	r.GET("/healthz", h.Healthz)
 	r.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
+	// /api 分组：REST 接口，按「公开 → 需登录 → 写操作」三层组织
 	api := r.Group("/api")
 	{
 		// 公开接口
@@ -98,6 +103,8 @@ func NewRouter(o Options) *gin.Engine {
 			authed.POST("/rules/test", h.RuleTest)
 
 			// 写操作：CSRF → DemoGuard → 审计 → 权限
+			// 顺序含义：先做 CSRF 双提交校验，再拦演示只读，随后记录审计，
+			// 最后按路由逐个做按钮级权限校验
 			w := authed.Group("", middleware.CSRF(o.Cfg.Admin.CSRF),
 				middleware.DemoGuard(o.Cfg.Demo.Enabled && o.Cfg.Demo.ReadOnly),
 				middleware.Audit(o.Store))
@@ -156,11 +163,15 @@ func NewRouter(o Options) *gin.Engine {
 	// SSE 单独一组：不套 Audit（长连接会让审计中间件一直挂着），也不套 CSRF
 	r.GET("/api/stream/events", middleware.Auth(o.Auth), h.EventStream)
 
+	// 挂载内嵌前端静态资源，处理 history 路由回退
 	mountSPA(r)
 	return r
 }
 
-// mountSPA 挂载前端，并处理 history 路由 fallback。
+// mountSPA 挂载内嵌的前端静态资源，并处理 history 路由回退：
+// 命中静态文件直接返回，其余路径一律回 index.html 交给前端路由。
+// 参数 r：Gin 引擎。
+// 返回：无（通过 NoRoute 注册处理逻辑）。
 func mountSPA(r *gin.Engine) {
 	sub, err := web.Sub()
 	if err != nil {
@@ -174,6 +185,7 @@ func mountSPA(r *gin.Engine) {
 
 	r.NoRoute(func(c *gin.Context) {
 		path := c.Request.URL.Path
+		// API 与内置端点的未知路径一律返回 404，不回退到前端页面
 		if strings.HasPrefix(path, "/api/") || path == "/healthz" || path == "/metrics" {
 			response.NotFound(c, "接口不存在")
 			return
@@ -194,6 +206,9 @@ func mountSPA(r *gin.Engine) {
 	})
 }
 
+// serveIndex 返回前端入口页 index.html。
+// 参数 c：Gin 上下文；sub：内嵌的前端文件系统。
+// 返回：无（直接写出 HTML 响应；读取失败时返回 404 文本）。
 func serveIndex(c *gin.Context, sub fs.FS) {
 	body, err := fs.ReadFile(sub, "index.html")
 	if err != nil {

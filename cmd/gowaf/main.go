@@ -19,11 +19,15 @@ import (
 
 // 以下三个变量由构建脚本通过 -ldflags -X 注入，源码内的值仅作默认。
 var (
-	version   = "dev"
-	commit    = "none"
-	buildTime = "unknown"
+	version   = "dev"     // 版本号
+	commit    = "none"    // 构建所用的 git commit
+	buildTime = "unknown" // 构建时间
 )
 
+// main 是 gowaf 的程序入口：优先处理 Windows 服务模式与 svc 子命令，
+// 否则按前台模式解析命令行参数、加载配置并启动应用，随后阻塞等待退出信号。
+// 参数：无（命令行支持 -c 指定配置路径、-v 打印版本、-t 仅校验配置不启动）。
+// 返回：无（配置错误或初始化/启动失败时经 log.Fatalf 以状态码 1 退出）。
 func main() {
 	// 被 Windows SCM 拉起：进服务模式，不解析 flag
 	if maybeRunAsService() {
@@ -67,5 +71,5 @@ func main() {
 		log.Fatalf("[main] 启动失败: %v", err)
 	}
 
-	_ = runForeground(cfg, a, nil)
+	_ = runForeground(cfg, a, nil) // stopCh 传 nil：前台模式只监听 Ctrl-C/SIGTERM 系统信号
 }

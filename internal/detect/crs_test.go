@@ -5,6 +5,9 @@ import (
 	"testing"
 )
 
+// TestCRSDetectsCommonAttacks 验证 CRS 引擎对常见攻击的检出能力：
+// SQL 注入应命中 crs-942 族、扫描器 UA 应命中 crs-913 族、
+// 敏感文件探测应命中 crs-930 族，且每组用例评分必须大于 0。
 func TestCRSDetectsCommonAttacks(t *testing.T) {
 	eng, err := NewCRSEngine(CRSOptions{Mode: "block", Paranoia: 1})
 	if err != nil {
@@ -43,6 +46,7 @@ func TestCRSDetectsCommonAttacks(t *testing.T) {
 		},
 	}
 
+	// 逐例验证：必须产生评分，且命中规则 ID 以期望的规则族前缀开头
 	for _, c := range cases {
 		res := eng.Inspect(&c.in)
 		if res.Score == 0 {
@@ -62,6 +66,8 @@ func TestCRSDetectsCommonAttacks(t *testing.T) {
 	}
 }
 
+// TestCRSNormalRequestLowScore 验证带常规查询参数的正常浏览请求
+// 不会被 CRS 误判，评分必须低于拦截阈值（60 分）。
 func TestCRSNormalRequestLowScore(t *testing.T) {
 	eng, err := NewCRSEngine(CRSOptions{Mode: "block", Paranoia: 1})
 	if err != nil {
@@ -78,6 +84,8 @@ func TestCRSNormalRequestLowScore(t *testing.T) {
 	}
 }
 
+// TestCRSPanicSafe 验证对 nil 引擎调用 Inspect 不会 panic，
+// 而是返回零分、无命中的空结果（防御式兜底）。
 func TestCRSPanicSafe(t *testing.T) {
 	var eng *CRSEngine
 	res := eng.Inspect(&Input{})
@@ -99,6 +107,7 @@ func TestCRSVersionV430(t *testing.T) {
 
 // TestSecLangPackageFlow 验证 SecLang 规则包：校验 → 编译进引擎 → 命中透出。
 func TestSecLangPackageFlow(t *testing.T) {
+	// 一条最小可用的包规则：phase:2 对参数 token 匹配 evilpack 即 deny
 	content := `# 测试规则包
 SecRule ARGS:token "@rx evilpack" "id:1001234,phase:2,deny,log,msg:'SecLang pack rule',severity:'CRITICAL'"
 `

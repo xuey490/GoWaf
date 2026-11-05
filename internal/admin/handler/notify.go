@@ -15,6 +15,10 @@ import (
 /* ================================================== 告警通知 */
 
 // NotifyTest 用已保存的配置发一封测试邮件。
+// 参数 c：Gin 上下文，请求体可选 {"to": "收件人列表"}，可临时覆盖收件人。
+// 返回：成功返回 200 与 {"ok":true,"to":[...]}；未启用通知、未填收件人或发送失败返回 400。
+// 无论成败都会写入一条 notify_log 发送记录。
+// 路由：POST /api/notify/test（要求 settings:write 权限）。
 //
 // 设计上不接收完整的 SMTP 参数：密码在库里是掩码，前端拿不到明文，
 // 传上来再校验会绕一圈还可能把明文写进日志。要求先保存再测试，
@@ -32,7 +36,7 @@ func (s *Server) NotifyTest(c *gin.Context) {
 
 	// 允许临时指定收件人，方便"只发给我自己看看"
 	var in struct {
-		To string `json:"to"`
+		To string `json:"to"` // 临时收件人，逗号/分号/空白分隔；留空则沿用已保存配置
 	}
 	if err := c.ShouldBindJSON(&in); err == nil && strings.TrimSpace(in.To) != "" {
 		cfg.To = strings.FieldsFunc(in.To, func(r rune) bool {
@@ -58,7 +62,11 @@ func (s *Server) NotifyTest(c *gin.Context) {
 	response.OK(c, gin.H{"ok": true, "to": cfg.To})
 }
 
-// NotifyLogs 最近的发送记录，用于排障。
+// NotifyLogs 返回最近的告警发送记录与当前生效的通道摘要，用于排障。
+// 参数 c：Gin 上下文，查询参数 size（返回条数，默认 20，上限 200）。
+// 返回：list 按 id 倒序的发送记录；channel 邮件通道摘要（时间字段已换算为秒）；
+// intelBan 情报命中自动封禁的开关与 TTL。
+// 路由：GET /api/notify/logs。
 func (s *Server) NotifyLogs(c *gin.Context) {
 	size := 20
 	if v := c.Query("size"); v != "" {

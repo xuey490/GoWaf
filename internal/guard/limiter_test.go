@@ -2,6 +2,8 @@ package guard
 
 import "testing"
 
+// TestHitTrackerReachesThreshold 验证连续命中达到阈值时触发封禁：
+// 未达阈值前逐次递增计数，第 5 次达到阈值 5 触发，且触发后计数归零、重新开窗。
 func TestHitTrackerReachesThreshold(t *testing.T) {
 	tr := NewHitTracker()
 	base := int64(1_700_000_000_000)
@@ -26,6 +28,8 @@ func TestHitTrackerReachesThreshold(t *testing.T) {
 	}
 }
 
+// TestHitTrackerWindowExpires 验证窗口过期后计数重新累计：
+// 超过窗口时长后再命中，不能与旧窗口累计合并触发封禁，新窗口计数从 1 开始。
 func TestHitTrackerWindowExpires(t *testing.T) {
 	tr := NewHitTracker()
 	base := int64(1_700_000_000_000)
@@ -44,6 +48,8 @@ func TestHitTrackerWindowExpires(t *testing.T) {
 	}
 }
 
+// TestHitTrackerThresholdZeroNeverBans 验证阈值为 0 表示关闭自动封禁：
+// 任意多次命中都不会触发封禁。
 func TestHitTrackerThresholdZeroNeverBans(t *testing.T) {
 	tr := NewHitTracker()
 	for i := 0; i < 100; i++ {
@@ -53,6 +59,8 @@ func TestHitTrackerThresholdZeroNeverBans(t *testing.T) {
 	}
 }
 
+// TestHitTrackerResetClearsWindow 验证 Reset 清空指定 IP 的窗口计数，
+// 之后 WindowHits 返回 0。
 func TestHitTrackerResetClearsWindow(t *testing.T) {
 	tr := NewHitTracker()
 	base := int64(1_700_000_000_000)

@@ -45,6 +45,8 @@ func TestCRSProtocolRulesDoNotBlock(t *testing.T) {
 		}},
 	}
 
+	// 每个用例双重校验：总分不得达到 30（挑战/拦截阈值），
+	// 单条协议类命中的权重也必须已降级到 60 分以下
 	for _, c := range cases {
 		res := eng.Inspect(c.in)
 		if res.Score >= 30 {
@@ -89,6 +91,7 @@ func TestCRSMethodEnforcementREST(t *testing.T) {
 	hdr := "Host: demo.local\nContent-Length: 2\n" +
 		"Content-Type: application/json\n" +
 		"User-Agent: Mozilla/5.0 Chrome/131.0.0.0\n"
+	// 默认白名单覆盖 REST 写方法：PUT/DELETE/PATCH 都不应命中 911100 或被拦截
 	for _, m := range []string{"PUT", "DELETE", "PATCH"} {
 		res := eng.Inspect(&Input{
 			Method: m, Host: "demo.local", Path: "/prod/api/flow/category/update/2",
@@ -125,7 +128,7 @@ func TestCRSMethodEnforcementREST(t *testing.T) {
 		t.Errorf("Methods() 不符: %q", eng2.Methods())
 	}
 
-	// sanitizeMethods 防注入
+	// sanitizeMethods 防注入：转大写后只保留大写字母与空格，逗号引号等符号剔除
 	if got := sanitizeMethods("GET' HEAD,\\ DELETE\"; SecRuleEngine On"); got != "GET HEAD DELETE SECRULEENGINE ON" {
 		t.Errorf("sanitizeMethods 异常: %q", got)
 	}

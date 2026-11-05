@@ -8,7 +8,8 @@ import (
 	"gowaf/internal/store/model"
 )
 
-// TestRenderDigest 摘要邮件要包含所有封禁 IP 与中文原因标签。
+// TestRenderDigest 验证摘要邮件渲染：主题须包含去重后的 IP 数量，
+// 正文须包含各事件的 IP、站点、中文来源标签，且脚本标签必须被转义。
 func TestRenderDigest(t *testing.T) {
 	cfg := Config{Subject: "【GoWAF 告警】"}
 	evs := []Event{
@@ -29,7 +30,8 @@ func TestRenderDigest(t *testing.T) {
 	}
 }
 
-// TestRenderDigestEscapes 事件字段来自请求（路径/UA），必须转义防注入。
+// TestRenderDigestEscapes 验证 HTML 转义：事件字段来自请求（路径/UA），
+// 含 <script> 的恶意输入进正文前必须被转义，防止邮件内容注入。
 func TestRenderDigestEscapes(t *testing.T) {
 	_, body := RenderDigest(Config{}, []Event{{
 		IP: "1.2.3.4", Path: `/<script>alert(1)</script>`, Reason: "x", At: time.Now(),
@@ -39,8 +41,8 @@ func TestRenderDigestEscapes(t *testing.T) {
 	}
 }
 
-// TestNotifierAggregates 一个窗口内的多条事件应合并成一次发送，
-// 同一 IP 在冷却期内不重复通知。
+// TestNotifierAggregates 验证聚合与冷却：一个窗口内的多条事件合并成一次发送，
+// 同一 IP 在冷却期内的重复事件被丢弃；SMTP 连不上时发送失败也要落记录且不 panic。
 func TestNotifierAggregates(t *testing.T) {
 	cfg := Config{
 		Enabled: true, Host: "127.0.0.1", Port: 1, To: []string{"ops@example.com"},
@@ -53,6 +55,7 @@ func TestNotifierAggregates(t *testing.T) {
 	n.Send(Event{IP: "1.1.1.1", At: now})
 	n.Send(Event{IP: "2.2.2.2", At: now})
 	n.Send(Event{IP: "1.1.1.1", At: now}) // 冷却期内，应被丢弃
+	// 直接调用 tick（不走后台协程与真实定时器），Window=0 表示凑批即发，便于确定性断言
 	n.tick(now.Add(time.Second))
 
 	if len(logs) != 1 {
@@ -70,11 +73,13 @@ func TestNotifierAggregates(t *testing.T) {
 	}
 }
 
-// TestNotifierDisabled 关闭状态不入队、不发送。
+// TestNotifierDisabled 验证总开关：Enabled=false 时不入队、不发送，
+// 即便手动推进 tick 也不应产生任何通知记录。
 func TestNotifierDisabled(t *testing.T) {
 	var logs []model.NotifyLog
 	n := New(func() Config { return Config{Enabled: false} }, func(l model.NotifyLog) { logs = append(logs, l) })
 	n.Send(Event{IP: "1.1.1.1", At: time.Now()})
+	// 手动推进时间触发冲刷，模拟后台协程到点的行为
 	n.tick(time.Now().Add(time.Minute))
 	if len(logs) != 0 {
 		t.Fatal("关闭时不应发送任何通知")

@@ -16,6 +16,7 @@ func TestExceptionSkipsSelfBuiltRule(t *testing.T) {
 		t.Fatalf("载入规则失败: %v", err)
 	}
 
+	// 无例外时应正常命中（用例前提）
 	in := &Input{Method: "GET", Path: "/a", Query: "id=1 union select 2", Site: "s1"}
 	if res := eng.Inspect(in); res.Score == 0 {
 		t.Fatal("未命中规则，用例前提不成立")
@@ -39,6 +40,7 @@ func TestFilterByExceptionOnCRSResult(t *testing.T) {
 	eng := NewEngine(60, 30, "protect")
 	eng.SetExceptions([]Exception{{RuleID: "crs-942100"}})
 
+	// 构造带两条命中的 CRS 结果：crs-942100 已在例外中，crs-942190 不在
 	res := &Result{
 		Score:      100,
 		Hits:       []Hit{{RuleID: "crs-942100", Category: "sqli", Score: 60}, {RuleID: "crs-942190", Category: "sqli", Score: 40}},
