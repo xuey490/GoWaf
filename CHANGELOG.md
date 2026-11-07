@@ -4,7 +4,10 @@
 
 ---
 
-## [未发布]
+## [v1.2.2] - 2026-11-07
+
+本版合并 v1.2.0 之后 dev 分支的全部迭代：CRS 升级到 v4.30.0、支持导入 SecLang 规则包、
+管理后台可检查 CRS 上游版本，并修复前后端分离站点批量 403 的线上事故。
 
 ### 新增
 
@@ -29,6 +32,18 @@
   强制重查），语义化版本比较判定 `updateAvailable`。设置页「CRS 规则版本」行新增
   「检查更新」按钮：已是最新显示绿色标签；有新版给出 release 链接与升级提示
   （CRS 内嵌于二进制，升级需更新依赖重新构建发版，不做在线热更新）。
+
+### 修复
+
+- **前后端分离站点批量 403（线上事故）**
+  CRS 默认 `tx.allowed_methods` 只有 `GET HEAD POST OPTIONS`，管理 API 的
+  `PUT`/`DELETE`/`PATCH` 全部命中 911100（CRITICAL 60），叠加 920620 重复
+  `Content-Type`（协议降权 15）正好达到拦截阈值 75；SPA 一屏十几个请求全 403 后
+  触发 `guard.auto_ban`，误报被放大成整站不可用。新增 `detect.CRSOptions.AllowedMethods`，
+  在 901-INITIALIZATION 之前写入 TX 覆盖 CRS 默认值（默认 REST 常规集，`sanitizeMethods`
+  防指令注入），并新增设置项 `engine.crs.methods`（纯表单业务可收紧为
+  `GET HEAD POST OPTIONS`）。回归：`PUT`/`DELETE`/`PATCH` 不再命中 911100，
+  收紧后 `PUT` 恢复命中，SQLi 仍正常拦截。
 
 ---
 
