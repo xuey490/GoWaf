@@ -39,24 +39,28 @@ func TestBuildMessageLineLength(t *testing.T) {
 		t.Fatal("报文缺少头部/正文分隔")
 	}
 	if !strings.Contains(head, "Subject: =?UTF-8?") {
+		// 中文主题必须走 RFC 2047 编码（=?UTF-8?...?= 形式），否则乱码
 		t.Fatalf("中文主题未做 RFC 2047 编码: %s", head)
 	}
 	decoded, err := io.ReadAll(quotedprintable.NewReader(strings.NewReader(encoded)))
 	if err != nil {
 		t.Fatalf("quoted-printable 解码失败: %v", err)
 	}
+	// 编码必须无损：解码回来应与原始 HTML 完全一致
 	if string(decoded) != body {
 		t.Fatalf("正文解码不一致：got %d 字节, want %d 字节", len(decoded), len(body))
 	}
 }
 
-// TestFoldAddressList 收件人很多时头部要折行，且不能把地址拆断。
+// TestFoldAddressList 验证收件人列表折行：收件人很多时头部要折行（每行不超限），
+// 且折行点只能落在逗号之后，还原后必须与原列表完全等价。
 func TestFoldAddressList(t *testing.T) {
 	var to []string
 	for i := 0; i < 10; i++ {
 		to = append(to, "security-team-"+string(rune('a'+i))+"@example.com")
 	}
 	got := foldAddressList(to)
+	// 逐行检查折行后的宽度
 	for _, line := range strings.Split(got, "\r\n") {
 		if len(line) > 78 {
 			t.Fatalf("折行后仍有 %d 字符的行: %q", len(line), line)

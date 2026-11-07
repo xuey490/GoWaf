@@ -6,6 +6,10 @@ import (
 	"testing"
 )
 
+// TestLookupKnownIPs 验证 LookupString 的核心查询路径：
+// 回环/内网/IPv6 的特殊标注；公网 IP 能查到非空归属地；
+// 并抽查 114.114.114.114 应带「中国」前缀、8.8.8.8 应为「美国」。
+// 数据库未打包时跳过。
 func TestLookupKnownIPs(t *testing.T) {
 	d := Default()
 	if !d.Ready() {
@@ -42,6 +46,9 @@ func TestLookupKnownIPs(t *testing.T) {
 	}
 }
 
+// TestNormalizeRegion 验证国家/省/市字段的归一化规则：
+// 国内省市后缀裁剪与去重、港澳台专名、海外英文国名翻译、
+// 脏数据（"0"、未知国家）的兜底输出。
 func TestNormalizeRegion(t *testing.T) {
 	cases := []struct{ country, province, city, want string }{
 		{"中国", "广东省", "深圳市", "中国 广东 深圳"},
@@ -60,6 +67,7 @@ func TestNormalizeRegion(t *testing.T) {
 	}
 }
 
+// BenchmarkLookup 测量共享实例上单次 Lookup 的耗时（二分查找路径）。
 func BenchmarkLookup(b *testing.B) {
 	d := Default()
 	addr := netip.MustParseAddr("114.114.114.114")

@@ -4,6 +4,34 @@
 
 ---
 
+## [未发布]
+
+### 新增
+
+- **内嵌 CRS 升级 v4.0.0 → v4.30.0**
+  `coraza-coreruleset` 改用 multi-module 布局（`crs/v4` 提供 CRS 规则、`coraza/v3` 提供
+  `@coraza.conf-recommended`，`mergefs` 合并根 FS）。协议降权号段扩展至 922xxx
+  （v4.30 新增 multipart 合规检查，全部 CRITICAL，与 920/921 同类降权封顶 29 分）。
+  打包仓库 v4.30.0 遗漏 `web-shells-php.data`（上游 tag 存在），新增 `crspatch`
+  补丁包以 base64 入库、运行时内存解码补入根 FS——该文件含真实 webshell 特征，
+  明文落盘会被 Windows Defender 查杀，故不入库明文。
+- **导入规则包支持 SecLang（第三方 .conf 包）**
+  检测规则模块可直接粘贴/上传 SecLang 文本（`SecRule`/`SecAction`），服务端独立编译
+  校验（失败整包拒绝；禁止包内改 `SecRuleEngine` 等引擎全局开关），落盘
+  `data/seclang/<slug>.conf` 并随 CRS 一起编译执行。同 slug 重复导入视为升级覆盖。
+  新增「SecLang 规则包」管理面板：启停 / 删除 / 错误回显（migration 007 新表
+  `seclang_packages`，接口 `/api/seclang/*`）。包规则命中以 `seclang-<id>` 透出，
+  未标 severity 默认计 40 分。隔离机制：单包编译失败自动跳过并记录 `last_error`；
+  多包组合编译失败（如 rule id 冲突）退回纯 CRS，绝不让一个坏包打瘫引擎。
+- **管理后台支持检查 CRS 上游新版本**
+  新增 `GET /api/crs/check-update`（需登录，只读）：数据源依次回退 GitHub release →
+  Go 模块代理（proxy.golang.org → goproxy.cn），结果服务端缓存 10 分钟（`?force=1`
+  强制重查），语义化版本比较判定 `updateAvailable`。设置页「CRS 规则版本」行新增
+  「检查更新」按钮：已是最新显示绿色标签；有新版给出 release 链接与升级提示
+  （CRS 内嵌于二进制，升级需更新依赖重新构建发版，不做在线热更新）。
+
+---
+
 ## [v1.2.0] - 2026-11-04
 
 威胁情报闭环 + 告警通知能力落地，同时修掉三处会导致「整站被拦」的严重缺陷。

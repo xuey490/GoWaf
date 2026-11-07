@@ -5,6 +5,8 @@ import (
 	"testing"
 )
 
+// TestIsCloudflare 验证 CF 回源网段判定：IPv4 与 IPv6 网段内的地址应命中，
+// 网段外地址不命中，非法地址（零值 Addr）不命中且不能 panic。
 func TestIsCloudflare(t *testing.T) {
 	cases := []struct {
 		addr string
@@ -28,6 +30,9 @@ func TestIsCloudflare(t *testing.T) {
 	}
 }
 
+// TestMissingCloudflare 验证 MissingCloudflare 的「覆盖率」语义：
+// 完全不信任时全部缺失、全量信任时无缺失、只信任部分网段仍算缺失、
+// 更大前缀（默认路由 0.0.0.0/0）可覆盖全部段。
 func TestMissingCloudflare(t *testing.T) {
 	all := CloudflarePrefixes()
 	if len(all) == 0 {
@@ -75,6 +80,8 @@ func TestMissingCloudflare(t *testing.T) {
 	})
 }
 
+// TestParseTrusted 验证 trusted_proxies 解析：单 IP 转为 /32 前缀、
+// CIDR 正常解析，垃圾值与空串被跳过而不报错、不 panic。
 func TestParseTrusted(t *testing.T) {
 	// 单 IP 与 CIDR 混写、以及垃圾值都要能处理：配置是手写 YAML，不能因为一行写错就 panic
 	got := ParseTrusted([]string{"127.0.0.1", "10.0.0.0/8", "not-a-cidr", ""})

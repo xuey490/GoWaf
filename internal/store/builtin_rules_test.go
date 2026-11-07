@@ -14,17 +14,17 @@ import (
 
 // builtinRuleForTest 与 store.builtinRule 结构一致（那边不导出，这里单独声明）。
 type builtinRuleForTest struct {
-	ID       string   `yaml:"id"`
-	Name     string   `yaml:"name"`
-	Category string   `yaml:"category"`
-	Score    int      `yaml:"score"`
-	Targets  []string `yaml:"targets"`
-	Keywords []string `yaml:"keywords"`
-	Pattern  string   `yaml:"pattern"`
-	Action   string   `yaml:"action"`
-	Priority int      `yaml:"priority"`
-	Remark   string   `yaml:"remark"`
-	Group    string   `yaml:"group"`
+	ID       string   `yaml:"id"`       // 规则唯一标识
+	Name     string   `yaml:"name"`     // 规则名称
+	Category string   `yaml:"category"` // 攻击类别
+	Score    int      `yaml:"score"`    // 命中加分
+	Targets  []string `yaml:"targets"`  // 检测目标
+	Keywords []string `yaml:"keywords"` // 关键字列表
+	Pattern  string   `yaml:"pattern"`  // 正则表达式主体
+	Action   string   `yaml:"action"`   // 处置动作
+	Priority int      `yaml:"priority"` // 优先级
+	Remark   string   `yaml:"remark"`   // 备注说明
+	Group    string   `yaml:"group"`    // 规则组
 }
 
 // TestBuiltinRulesCompile 保证规则库能被解析、每条正则都能编译。

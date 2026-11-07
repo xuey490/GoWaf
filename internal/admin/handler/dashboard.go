@@ -11,7 +11,10 @@ import (
 	"gowaf/internal/admin/response"
 )
 
-// Overview 汇总指标。
+// Overview 返回仪表盘汇总指标：请求总量、放行/拦截/人机挑战数、5xx 数、QPS 与拦截率。
+// 路由：GET /api/dashboard/overview（需登录）。
+// 参数 c：Gin 上下文，查询参数 range/from/to 控制时间范围，site 过滤站点。
+// 返回：无（200 返回指标 JSON；数据库失败返回 500）。
 func (s *Server) Overview(c *gin.Context) {
 	from, to, label := parseRange(c)
 	site := c.Query("site")
@@ -21,6 +24,7 @@ func (s *Server) Overview(c *gin.Context) {
 		s.failDB(c, err)
 		return
 	}
+	// 拦截率 = 拦截数 / 请求总数；总数为 0 时取 0，避免除零
 	blockRate := 0.0
 	if ov.Total > 0 {
 		blockRate = float64(ov.Blocked) / float64(ov.Total)
@@ -40,7 +44,10 @@ func (s *Server) Overview(c *gin.Context) {
 	})
 }
 
-// Timeseries 时间序列。
+// Timeseries 返回时间序列统计点，聚合桶宽度按时间跨度自动选择。
+// 路由：GET /api/dashboard/timeseries（需登录）。
+// 参数 c：Gin 上下文，查询参数 range/from/to 控制时间范围，site 过滤站点。
+// 返回：无（200 返回 range/bucket/points；数据库失败返回 500）。
 func (s *Server) Timeseries(c *gin.Context) {
 	from, to, label := parseRange(c)
 	site := c.Query("site")
@@ -58,11 +65,15 @@ func (s *Server) Timeseries(c *gin.Context) {
 	})
 }
 
-// Top TopN。
+// Top 返回指定维度的 TopN 统计（默认按 IP 维度）。
+// 路由：GET /api/dashboard/top（需登录）。
+// 参数 c：Gin 上下文，查询参数 field 指定统计维度、limit 指定条数、range/from/to 控制时间范围、site 过滤站点。
+// 返回：无（200 返回 field 与 items；数据库失败返回 500）。
 func (s *Server) Top(c *gin.Context) {
 	from, to, _ := parseRange(c)
 	field := c.DefaultQuery("field", "ip")
 	site := c.Query("site")
+	// limit 夹在 1~100 之间，缺省或非法时取 10
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
 	if limit <= 0 || limit > 100 {
 		limit = 10
@@ -76,7 +87,10 @@ func (s *Server) Top(c *gin.Context) {
 	response.OK(c, gin.H{"field": field, "items": items})
 }
 
-// Categories 攻击类型分布。
+// Categories 返回时间范围内各攻击类型的分布统计。
+// 路由：GET /api/dashboard/categories（需登录）。
+// 参数 c：Gin 上下文，查询参数 range/from/to 控制时间范围，site 过滤站点。
+// 返回：无（200 返回 items；数据库失败返回 500）。
 func (s *Server) Categories(c *gin.Context) {
 	from, to, _ := parseRange(c)
 	site := c.Query("site")
@@ -89,7 +103,10 @@ func (s *Server) Categories(c *gin.Context) {
 	response.OK(c, gin.H{"items": items})
 }
 
-// SystemInfo 系统信息，前端用它判断是否演示模式。
+// SystemInfo 返回系统运行信息：版本、运行时长、内存/Goroutine、规则与站点数量、演示模式开关等。
+// 路由：GET /api/system/info（需登录）。
+// 参数 c：Gin 上下文（无查询参数）。
+// 返回：无（200 返回信息 JSON）。
 func (s *Server) SystemInfo(c *gin.Context) {
 	var mem runtime.MemStats
 	runtime.ReadMemStats(&mem)
@@ -127,12 +144,18 @@ func (s *Server) SystemInfo(c *gin.Context) {
 	response.OK(c, resp)
 }
 
-// Healthz 健康检查（不回环也安全，只返回极简信息）。
+// Healthz 健康检查端点，只返回状态与版本等极简信息，不鉴权也不会泄露敏感数据。
+// 路由：GET /healthz（公开，挂在 /api 鉴权分组之外）。
+// 参数 c：Gin 上下文。
+// 返回：无（200 返回 {"status":"ok","version":"..."}）。
 func (s *Server) Healthz(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "ok", "version": s.Version})
 }
 
-// MetricsDebug 返回关键计数（Prometheus 指标另走 /metrics）。
+// MetricsDebug 返回关键运行计数（封禁数、事件写入/丢弃数、限流器大小），便于面板排障。
+// 路由：GET /api/system/debug（需登录）。完整 Prometheus 指标另走 /metrics。
+// 参数 c：Gin 上下文。
+// 返回：无（200 返回计数字典）。
 func (s *Server) MetricsDebug(c *gin.Context) {
 	response.OK(c, gin.H{
 		"banned":        s.RT.Bans.Size(),

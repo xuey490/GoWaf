@@ -14,7 +14,8 @@ import (
 	"gowaf/internal/store/model"
 )
 
-// allowedSettingKeys 白名单，防止写入任意键污染配置。
+// allowedSettingKeys 允许通过 HTTP 修改的设置键白名单，防止写入任意键污染配置。
+// 各键名与取值语义定义见 internal/runtime。
 var allowedSettingKeys = map[string]struct{}{
 	runtime.KeyMode:           {},
 	runtime.KeyBlockScore:     {},
@@ -50,7 +51,11 @@ var allowedSettingKeys = map[string]struct{}{
 	runtime.KeyNotifyCooldown: {},
 }
 
-// SettingsGet 返回全部设置。
+// SettingsGet 返回全部设置与引擎概要。
+// 参数 c：Gin 上下文，无查询参数。
+// 返回：settings 键值表（SMTP 密码以掩码 ****** 回显）、engine 引擎信息、
+// demo 与 banner 演示模式标志。
+// 路由：GET /api/settings。
 func (s *Server) SettingsGet(c *gin.Context) {
 	sm := s.RT.Settings()
 	out := make(map[string]string, len(sm))
@@ -71,7 +76,11 @@ func (s *Server) SettingsGet(c *gin.Context) {
 	})
 }
 
-// SettingsUpdate 修改设置并热加载。
+// SettingsUpdate 批量修改设置并触发热加载。
+// 参数 c：Gin 上下文，请求体为 key-value 对象，仅白名单内的键可写。
+// 返回：全部成功返回 200 与最新设置及当前模式；任一键校验失败或落库失败即整体终止
+// （此前已写入的键不回滚）；保存成功但重载失败返回 500 并提示。
+// 路由：PUT /api/settings（要求 settings:write 权限，经 CSRF/DemoGuard/审计中间件）。
 func (s *Server) SettingsUpdate(c *gin.Context) {
 	var in map[string]string
 	if err := c.ShouldBindJSON(&in); err != nil {
@@ -119,7 +128,9 @@ func (s *Server) SettingsUpdate(c *gin.Context) {
 	response.OK(c, gin.H{"settings": s.RT.Settings(), "mode": s.RT.Engine.Mode()})
 }
 
-// validateSetting 关键项做范围校验，避免把系统调到不可用。
+// validateSetting 校验单个设置项取值的格式与范围，避免把系统调到不可用。
+// 参数 key：设置键名；value：待写入的字符串值。
+// 返回：空串表示合法；否则返回可直接展示给前端的中文错误信息。
 func validateSetting(key, value string) string {
 	switch key {
 	case runtime.KeyMode:
@@ -187,7 +198,10 @@ func validateSetting(key, value string) string {
 	return ""
 }
 
-// SettingsReload 手动触发全量重载。
+// SettingsReload 手动触发配置全量重载，把数据库中的最新设置刷进运行时。
+// 参数 c：Gin 上下文，无请求体。
+// 返回：成功返回 200 与引擎信息、当前模式、已加载站点数；失败返回 500（旧配置继续生效）。
+// 路由：POST /api/settings/reload（要求 settings:write 权限）。
 func (s *Server) SettingsReload(c *gin.Context) {
 	if err := s.reloadRuntime(c); err != nil {
 		response.Internal(c, "重载失败，已保留旧配置: "+err.Error())
@@ -200,7 +214,10 @@ func (s *Server) SettingsReload(c *gin.Context) {
 	})
 }
 
-// SettingsVersions 配置历史。
+// SettingsVersions 分页返回配置变更历史（每次保存设置都会生成一份快照）。
+// 参数 c：Gin 上下文，查询参数 current/size 由 pageParams 解析。
+// 返回：按版本号倒序的分页列表，含操作者、备注与完整快照。
+// 路由：GET /api/settings/versions。
 func (s *Server) SettingsVersions(c *gin.Context) {
 	current, size := pageParams(c)
 	var total int64
@@ -227,10 +244,13 @@ func (s *Server) SettingsVersions(c *gin.Context) {
 	response.OK(c, response.NewPage(list, current, size, total))
 }
 
-// SettingsRollback 回滚到指定版本。
+// SettingsRollback 把设置整体回滚到指定历史版本，再触发一次全量重载。
+// 参数 c：Gin 上下文，请求体为 {"version": 目标版本号}。
+// 返回：成功返回 200 与回滚目标版本及最新设置；版本不存在返回 404，快照解析失败返回 500。
+// 路由：POST /api/settings/rollback（要求 settings:write 权限）。
 func (s *Server) SettingsRollback(c *gin.Context) {
 	var in struct {
-		Version int `json:"version" binding:"required"`
+		Version int `json:"version" binding:"required"` // 目标配置版本号，必填
 	}
 	if err := c.ShouldBindJSON(&in); err != nil {
 		response.BadRequest(c, "version 必填")
@@ -263,7 +283,11 @@ func (s *Server) SettingsRollback(c *gin.Context) {
 	response.OK(c, gin.H{"rolledBackTo": in.Version, "settings": s.RT.Settings()})
 }
 
-// AuditList 审计日志。
+// AuditList 分页查询审计日志，支持按时间段与操作者/动作/对象过滤。
+// 参数 c：Gin 上下文，查询参数：current/size（分页）、from/to（毫秒时间戳区间）、
+// operator（模糊匹配）、action 与 object（精确匹配）。
+// 返回：按 id 倒序的分页列表，含变更前后值（before/after）与执行结果。
+// 路由：GET /api/audit。
 func (s *Server) AuditList(c *gin.Context) {
 	current, size := pageParams(c)
 	from, to, _ := parseRange(c)

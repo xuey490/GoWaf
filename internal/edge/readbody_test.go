@@ -9,10 +9,15 @@ import (
 )
 
 // routeWithBodyLimit 构造一个指定 body 上限的 Route。
+// 参数 n：body 检测上限（字节）。
+// 返回 *proxy.Route：只设置 MaxBodyBytes 的最小路由对象。
 func routeWithBodyLimit(n int) *proxy.Route {
 	return &proxy.Route{MaxBodyBytes: n}
 }
 
+// TestReadBody_OversizeKnownLength_PassesThrough 验证 ContentLength 已知且超限的场景：
+// 请求体一个字节都不读、标记 skipBody 原样透传，体积上限交由上游裁决。
+// 关键断言：tooLarge=false（不拒绝）、body=nil、透传后 r.Body 仍完整可读。
 func TestReadBody_OversizeKnownLength_PassesThrough(t *testing.T) {
 	// ContentLength 已知且超限：不读不关 body，跳过检测透传（大文件上传场景）
 	h := &Handler{}
@@ -34,6 +39,8 @@ func TestReadBody_OversizeKnownLength_PassesThrough(t *testing.T) {
 	}
 }
 
+// TestReadBody_Chunked_SkipsDetection 验证 ContentLength 未知（chunked）的场景：
+// 不读 body、跳过检测、透传——读满才知道超限时 body 已被消费，无法回退。
 func TestReadBody_Chunked_SkipsDetection(t *testing.T) {
 	// ContentLength 未知（chunked）：不读、跳过检测、透传
 	h := &Handler{}
@@ -47,6 +54,8 @@ func TestReadBody_Chunked_SkipsDetection(t *testing.T) {
 	}
 }
 
+// TestReadBody_UnderLimit_Buffered 验证上限内的正常小 body：内容被完整读出，
+// 且回填进 r.Body 供规则检测与转发阶段重读。
 func TestReadBody_UnderLimit_Buffered(t *testing.T) {
 	// 正常小 body：读入缓冲并回填，供规则检测复用
 	h := &Handler{}
@@ -68,6 +77,8 @@ func TestReadBody_UnderLimit_Buffered(t *testing.T) {
 	}
 }
 
+// TestReadBody_LyingContentLength_Rejects 验证 ContentLength 谎报的场景：
+// 声明小、实际大，读到 max+1 才发现、body 已被消费，只能拒绝（tooLarge=true）。
 func TestReadBody_LyingContentLength_Rejects(t *testing.T) {
 	// ContentLength 谎报（声明小于上限、实际超限）：body 已被消费，只能拒绝
 	h := &Handler{}
@@ -81,6 +92,8 @@ func TestReadBody_LyingContentLength_Rejects(t *testing.T) {
 	}
 }
 
+// TestReadBody_GET_NoBody 验证 GET 请求不触发任何 body 逻辑：
+// body、skipBody、tooLarge 三个返回值均为零值。
 func TestReadBody_GET_NoBody(t *testing.T) {
 	h := &Handler{}
 	r := httptest.NewRequest("GET", "/x", nil)

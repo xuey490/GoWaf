@@ -15,21 +15,21 @@ import (
 	"gowaf/internal/store/model"
 )
 
-// builtinRule 是 rules/*.yaml 的结构。
+// builtinRule 是 rules/*.yaml 内置规则文件中单条规则的结构。
 type builtinRule struct {
-	ID       string   `yaml:"id"`
-	Name     string   `yaml:"name"`
-	Category string   `yaml:"category"`
-	Score    int      `yaml:"score"`
-	Targets  []string `yaml:"targets"`
-	Keywords []string `yaml:"keywords"`
-	Pattern  string   `yaml:"pattern"`
-	Action   string   `yaml:"action"`
-	Priority int      `yaml:"priority"`
-	Remark   string   `yaml:"remark"`
-	Group    string   `yaml:"group"`
-	Mode     string   `yaml:"mode"`
-	Version  string   `yaml:"version"`
+	ID       string   `yaml:"id"`       // 规则唯一标识（主键），如 sqli-union-select
+	Name     string   `yaml:"name"`     // 规则名称（展示用）
+	Category string   `yaml:"category"` // 攻击类别，如 sqli / xss / scanner
+	Score    int      `yaml:"score"`    // 命中后累加的风险分
+	Targets  []string `yaml:"targets"`  // 检测目标（path/query/body 等），空则默认 path,query,body
+	Keywords []string `yaml:"keywords"` // 关键字列表（JSON 落库，供 AC 自动机预筛），空表示不预筛
+	Pattern  string   `yaml:"pattern"`  // 正则表达式主体
+	Action   string   `yaml:"action"`   // 处置动作（block/challenge/log/ban 等），空则默认 block
+	Priority int      `yaml:"priority"` // 优先级，空则默认 100
+	Remark   string   `yaml:"remark"`   // 备注说明
+	Group    string   `yaml:"group"`    // 规则组，空则取 Category
+	Mode     string   `yaml:"mode"`     // 匹配模式（inherit/log/block），空则默认 inherit
+	Version  string   `yaml:"version"`  // 规则版本号，空则默认 "2"
 }
 
 // AllButtons 是权限按钮全集，管理员默认全给，viewer/demo 只读。
@@ -37,7 +37,9 @@ var AllButtons = []string{
 	"ip:ban", "rule:write", "rule:delete", "site:write", "settings:write", "audit:read",
 }
 
-// HashPassword 统一 bcrypt cost=12。
+// HashPassword 用 bcrypt 生成口令哈希，cost 固定为 12。
+// 参数 pwd：明文口令。
+// 返回 (string, error)：bcrypt 哈希文本；生成失败时返回错误。
 func HashPassword(pwd string) (string, error) {
 	b, err := bcrypt.GenerateFromPassword([]byte(pwd), 12)
 	if err != nil {
@@ -46,7 +48,9 @@ func HashPassword(pwd string) (string, error) {
 	return string(b), nil
 }
 
-// RandomPassword 生成 16 位随机口令。
+// RandomPassword 生成 16 字符的随机口令。
+// 实现：读取 12 字节密码学安全随机数并做 base64url 编码。
+// 返回 string：随机口令；系统熵源不可用时返回固定兜底口令。
 func RandomPassword() string {
 	buf := make([]byte, 12)
 	if _, err := rand.Read(buf); err != nil {
@@ -55,7 +59,9 @@ func RandomPassword() string {
 	return base64.RawURLEncoding.EncodeToString(buf)
 }
 
-// SeedAdmin 用户表为空时创建初始管理员，返回明文口令（仅首次）。
+// SeedAdmin 用户表为空时创建初始管理员账号（role=admin，拥有全部按钮权限），保证首次部署可登录。
+// 参数 userName：管理员用户名。
+// 返回 (string, error)：随机明文口令（仅首次创建时返回，调用方需展示给用户；已存在用户时为空串）；查询或创建失败时返回错误。
 func (s *Store) SeedAdmin(userName string) (string, error) {
 	var count int64
 	if err := s.gorm.Model(&model.User{}).Where("deleted_at = 0").Count(&count).Error; err != nil {
@@ -87,7 +93,9 @@ func (s *Store) SeedAdmin(userName string) (string, error) {
 	return pwd, nil
 }
 
-// SeedDemoUser 演示账号。
+// SeedDemoUser 创建演示账号（role=demo，无任何按钮权限），同名用户已存在则跳过。
+// 参数 userName：用户名；password：明文口令。
+// 返回 error：查询或创建失败时返回错误；跳过时返回 nil。
 func (s *Store) SeedDemoUser(userName, password string) error {
 	var count int64
 	if err := s.gorm.Model(&model.User{}).Where("user_name = ?", userName).Count(&count).Error; err != nil {
@@ -113,7 +121,9 @@ func (s *Store) SeedDemoUser(userName, password string) error {
 	}).Error
 }
 
-// SeedSettings 写入默认设置（已存在则不覆盖）。
+// SeedSettings 逐项写入默认设置，键已存在则跳过（幂等，不覆盖用户修改）。
+// 参数 values：默认设置的键值对。
+// 返回 error：任一键查询或写入失败时返回错误。
 func (s *Store) SeedSettings(values map[string]string) error {
 	now := NowMS()
 	for k, v := range values {
@@ -131,7 +141,9 @@ func (s *Store) SeedSettings(values map[string]string) error {
 	return nil
 }
 
-// SeedSites 把配置里的站点写入库（按 name 去重）。
+// SeedSites 把配置中的站点种子写入库，同名站点已存在则跳过（幂等）。
+// 参数 sites：待初始化的站点列表。
+// 返回 error：任一站点查询或写入失败时返回错误。
 func (s *Store) SeedSites(sites []config.SiteSeed) error {
 	now := NowMS()
 	for _, item := range sites {
@@ -162,7 +174,9 @@ func (s *Store) SeedSites(sites []config.SiteSeed) error {
 	return nil
 }
 
-// ImportBuiltinRules 从 YAML 同步内置规则。
+// ImportBuiltinRules 从 YAML 文件同步内置规则到 rules 表。
+// 参数 path：内置规则 YAML 文件路径；文件不存在时静默返回（视为无内置规则）。
+// 返回 error：读取、解析或写库失败时返回错误。
 //
 // 语义：新增缺失的规则；已存在的内置规则**更新规则内容但保留 enabled 状态**。
 // 这样升级二进制后规则库会跟着更新，而用户手动停用的规则不会被强行打开。
@@ -191,6 +205,7 @@ func (s *Store) ImportBuiltinRules(path string) error {
 
 	now := NowMS()
 	for _, r := range list {
+		// 缺省值兜底：targets/action/priority/group/mode/version 为空时取内置默认
 		targets := strings.Join(r.Targets, ",")
 		if targets == "" {
 			targets = "path,query,body"
@@ -273,7 +288,8 @@ func (s *Store) ImportBuiltinRules(path string) error {
 	return nil
 }
 
-// SeedDemoData 为演示库灌模拟数据（站点、规则、事件）。
+// SeedDemoData 为演示库写入演示站点与 2000 条模拟攻击事件；站点或事件已存在则跳过（幂等）。
+// 返回 error：写站点或灌事件失败时返回错误。
 func (s *Store) SeedDemoData() error {
 	var siteCount int64
 	if err := s.gorm.Model(&model.Site{}).Count(&siteCount).Error; err != nil {
@@ -344,10 +360,12 @@ func (s *Store) SeedDemoData() error {
 			score = 60
 		}
 		if i%17 == 0 {
+			// 每 17 条混入一条 challenge，避免事件分布全是 block/pass 两类
 			action = "challenge"
 			status = 403
 			score = 35
 		}
+		// 时间戳从当前时刻向前铺开约 20.5 小时（每条间隔 37 秒），让趋势图与统计有时序数据
 		ts := now - int64((2000-i)*1000*37)
 		ip := fmt.Sprintf("198.51.100.%d", (i%250)+1)
 		_, err := stmt.Exec(ts, "演示站点", ip, "GET", "demo.example.com", p, "",
@@ -363,7 +381,8 @@ func (s *Store) SeedDemoData() error {
 	return tx.Commit()
 }
 
-// ResetDemo 清空演示库事件，保证每次演示从同一状态开始。
+// ResetDemo 清空事件、封禁与审计日志后重新灌入演示数据，保证每次演示从相同状态开始。
+// 返回 error：清表或灌数失败时返回错误。
 func (s *Store) ResetDemo() error {
 	if _, err := s.write.Exec(`DELETE FROM events`); err != nil {
 		return err

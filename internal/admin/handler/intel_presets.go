@@ -16,20 +16,21 @@ import (
 // Approx 是 2026-11 实测的压缩后区间数，仅作面板展示参考，源方随时会变；
 // Risk 是误杀风险评级，用来提示「全局开还是按站点开」。
 type intelPreset struct {
-	ID         string `json:"id"`
-	Name       string `json:"name"`
-	URL        string `json:"url"`
-	Kind       string `json:"kind"`
-	Risk       string `json:"risk"`
-	Approx     int    `json:"approx"`
-	Note       string `json:"note"`
-	NeedsKey   bool   `json:"needsKey"`
-	HeaderName string `json:"headerName"`
+	ID         string `json:"id"`         // 模板唯一标识
+	Name       string `json:"name"`       // 面板展示名称
+	URL        string `json:"url"`        // 拉取地址；空表示需用户自备（配合 Manual）
+	Kind       string `json:"kind"`       // 清单格式：ip 或 json
+	Risk       string `json:"risk"`       // 误杀风险评级：low / medium / high
+	Approx     int    `json:"approx"`     // 压缩后约含的区间/IP 条数
+	Note       string `json:"note"`       // 面板上展示的说明文字
+	NeedsKey   bool   `json:"needsKey"`   // 是否需要在请求头携带 API Key
+	HeaderName string `json:"headerName"` // 携带 API Key 的请求头名称
 	// Manual=true 表示地址必须由用户自备（如 CrowdSec Console 生成的 blocklist 地址），
 	// 选中后不直接创建，而是把模板填进表单让用户补地址。
-	Manual bool `json:"manual"`
+	Manual bool `json:"manual"` // 是否为「用户自备地址」类型
 }
 
+// intelPresets 内置公共情报源模板清单，数组顺序即面板展示顺序。
 var intelPresets = []intelPreset{
 	{
 		ID: "spamhaus-drop", Name: "Spamhaus DROP",
@@ -81,11 +82,11 @@ var intelPresets = []intelPreset{
 	},
 	{
 		ID: "abuseipdb", Name: "AbuseIPDB 黑名单",
-		URL:       "https://api.abuseipdb.com/api/v2/blacklist?plaintext=true&confidenceMinimum=90&limit=10000",
-		Kind:      "ip", Risk: "medium", Approx: 10000,
-		NeedsKey:  true,
+		URL:  "https://api.abuseipdb.com/api/v2/blacklist?plaintext=true&confidenceMinimum=90&limit=10000",
+		Kind: "ip", Risk: "medium", Approx: 10000,
+		NeedsKey:   true,
 		HeaderName: "Key",
-		Note:      "需要免费账号的 API Key（写入请求头 Key）。免费额度：1 万条/次、每天 5 次拉取，后台 3 小时同步一次刚好够",
+		Note:       "需要免费账号的 API Key（写入请求头 Key）。免费额度：1 万条/次、每天 5 次拉取，后台 3 小时同步一次刚好够",
 	},
 	{
 		ID: "crowdsec-cti", Name: "CrowdSec CTI",
@@ -96,6 +97,9 @@ var intelPresets = []intelPreset{
 }
 
 // IntelPresets 返回内置公共源模板，并标出哪些已经添加过。
+// 参数 c：Gin 上下文，无查询参数。
+// 返回：list，每个模板附带 installed 标记（按 URL 与库中现有源比对；查询失败时视为全部未添加）。
+// 路由：GET /api/intel/presets。
 func (s *Server) IntelPresets(c *gin.Context) {
 	var rows []model.IntelSource
 	_ = s.Store.Gorm().Select("id", "url", "name").Find(&rows).Error
@@ -115,14 +119,19 @@ func (s *Server) IntelPresets(c *gin.Context) {
 	response.OK(c, gin.H{"list": list})
 }
 
+// presetAddInput 是批量添加预设源的请求体。
 type presetAddInput struct {
-	IDs   []string `json:"ids"`
-	Token string   `json:"token"`
-	Scope string   `json:"scope"`
-	Site  string   `json:"site"`
+	IDs   []string `json:"ids"`   // 要添加的模板 ID 列表，至少一个
+	Token string   `json:"token"` // API Key，仅 NeedsKey 的模板需要
+	Scope string   `json:"scope"` // 作用范围：global / site，空默认 global
+	Site  string   `json:"site"`  // scope=site 时必填的目标站点标识
 }
 
 // IntelPresetAdd 批量添加预设源。已存在同 URL 的源会被跳过，可重复点击。
+// 参数 c：Gin 上下文，请求体为 presetAddInput。
+// 返回：created 实际新建数、skipped 因同 URL 已存在而跳过数；选中需自备地址或
+// 缺少 API Key 的模板时返回 400 且一个都不创建。
+// 路由：POST /api/intel/presets（要求 ip:ban 权限）。
 func (s *Server) IntelPresetAdd(c *gin.Context) {
 	var in presetAddInput
 	if err := c.ShouldBindJSON(&in); err != nil || len(in.IDs) == 0 {

@@ -11,6 +11,9 @@ import (
 	"gowaf/internal/store"
 )
 
+// newTestRunner 构造用于测试的 Runner。
+// 参数 t：测试对象；在临时目录中创建 SQLite 库与备份目录，测试结束后自动关闭库并清理目录。
+// 返回：已完成内置任务播种的 *Runner；任一步骤失败时直接终止测试。
 func newTestRunner(t *testing.T) *Runner {
 	t.Helper()
 	dir := t.TempDir()
@@ -26,6 +29,8 @@ func newTestRunner(t *testing.T) *Runner {
 	return r
 }
 
+// TestEnsureSeeded 验证首次播种后任务列表包含且仅包含两个内置任务
+// （clean_events 与 backup_rules），且均可按名称检索到。
 func TestEnsureSeeded(t *testing.T) {
 	r := newTestRunner(t)
 	list, err := r.List()
@@ -44,6 +49,9 @@ func TestEnsureSeeded(t *testing.T) {
 	}
 }
 
+// TestUpdateValidation 验证 Update 的参数校验：未知任务、enabled 取 2、
+// intervalH=0、非数字参数、retainDays=0 均应报错；enabled=0/1 与 retainDays=7 应合法，
+// 且合法更新后的值必须真正写进 tasks 表。
 func TestUpdateValidation(t *testing.T) {
 	r := newTestRunner(t)
 
@@ -89,6 +97,8 @@ func TestUpdateValidation(t *testing.T) {
 	}
 }
 
+// TestCleanEventsRun 验证 clean_events 任务的清理行为：
+// 插入一条 40 天前的事件，按保留 30 天执行后应清理恰好 1 条；再次执行应提示无过期事件。
 func TestCleanEventsRun(t *testing.T) {
 	r := newTestRunner(t)
 	// 灌一条 40 天前的事件
@@ -117,6 +127,8 @@ func TestCleanEventsRun(t *testing.T) {
 	}
 }
 
+// TestBackupRulesRun 验证 backup_rules 任务：生成包含规则的 JSON 快照；
+// keep=2 时连续执行 4 次后目录应只保留最新 2 份，且快照内容可解析、规则数大于 0。
 func TestBackupRulesRun(t *testing.T) {
 	r := newTestRunner(t)
 	// 测试库没有业务种子，插一条规则保证快照非空
@@ -129,7 +141,7 @@ func TestBackupRulesRun(t *testing.T) {
 	if err := r.Update(TaskBackupRules, nil, nil, map[string]any{"keep": float64(2)}); err != nil {
 		t.Fatal(err)
 	}
-	for i := 0; i < 4; i++ {
+	for i := 0; i < 4; i++ { // 连续执行 4 次，超过 keep=2 的保留份数
 		res, err := r.Run(TaskBackupRules)
 		if err != nil {
 			t.Fatal(err)
@@ -159,6 +171,8 @@ func TestBackupRulesRun(t *testing.T) {
 	}
 }
 
+// TestRunDueRespectsInterval 验证调度尊重执行间隔：
+// 刚运行过的任务在间隔期内不会被 runDue 重复执行（total_runs 保持不变）。
 func TestRunDueRespectsInterval(t *testing.T) {
 	r := newTestRunner(t)
 	// 刚跑过 → 6 小时内不应再跑

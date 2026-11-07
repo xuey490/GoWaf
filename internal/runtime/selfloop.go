@@ -19,10 +19,13 @@ import (
 //
 // 这类配置错误必须在这一层拒绝，而不是等绑定/转发时才暴露：
 // 运行时无法区分「故意」与「手滑」，一律按事故处理——丢弃该路由并打日志。
+// 参数 sites：本次 Reload 读出的启用站点；参数 listenPorts：WAF 自身监听端口集合（键为十进制端口字符串）。
+// 返回 []model.Site：过滤后的站点列表；被剔除的站点逐个打日志说明原因。
 func dropSelfLoopSites(sites []model.Site, listenPorts map[string]struct{}) []model.Site {
 	if len(listenPorts) == 0 {
 		return sites
 	}
+	// 三索引切片：新建底层数组，避免原地覆盖调用方切片的内容
 	out := sites[:0:0]
 	for _, s := range sites {
 		if upstreamHitsPorts(s.Upstream, listenPorts) {
@@ -35,7 +38,10 @@ func dropSelfLoopSites(sites []model.Site, listenPorts map[string]struct{}) []mo
 	return out
 }
 
-// upstreamHitsPorts 判断上游 URL 的端口是否命中给定端口集合。
+// upstreamHitsPorts 判断上游地址的端口是否命中给定端口集合。
+// 参数 raw：上游地址（可以不带 scheme）；参数 ports：WAF 自身监听端口集合。
+// 返回 bool：true 表示该上游会连回 WAF 自身（自环），需剔除；
+// 地址为空或解析失败时按不命中处理，交给后续绑定/转发阶段兜底。
 func upstreamHitsPorts(raw string, ports map[string]struct{}) bool {
 	if raw == "" {
 		return false
@@ -57,13 +63,18 @@ func upstreamHitsPorts(raw string, ports map[string]struct{}) bool {
 	return has(ports, u.Port())
 }
 
+// has 判断键是否存在于集合。
+// 参数 m：目标集合；参数 k：待查键。
+// 返回 bool：存在为 true。
 func has(m map[string]struct{}, k string) bool {
 	_, ok := m[k]
 	return ok
 }
 
-// ensureScheme 补全无 scheme 的上游（如 "127.0.0.1:80" 会被 url.Parse
-// 误认为 scheme），统一按 http 处理后再解析。
+// ensureScheme 补全无 scheme 的上游地址。
+// 如 "127.0.0.1:80" 会被 url.Parse 误认为 scheme=127.0.0.1，因此统一按 http 处理后再解析。
+// 参数 raw：原始地址。
+// 返回 string：已带 http:// 或 https:// 前缀的地址。
 func ensureScheme(raw string) string {
 	if len(raw) > 0 && !(len(raw) > 7 && raw[:7] == "http://") && !(len(raw) > 8 && raw[:8] == "https://") {
 		return "http://" + raw
@@ -71,7 +82,9 @@ func ensureScheme(raw string) string {
 	return raw
 }
 
-// selfListenPorts 从配置的监听地址里提取端口集合。
+// selfListenPorts 从 WAF 配置的监听地址里提取端口集合，作为自环判定的基准。
+// 参数 listens：形如 "0.0.0.0:80"、"[::]:443" 的监听地址列表。
+// 返回 map[string]struct{}：端口字符串集合；空串、缺端口或端口非数字的项被跳过。
 func selfListenPorts(listens ...string) map[string]struct{} {
 	ports := make(map[string]struct{}, len(listens))
 	for _, l := range listens {

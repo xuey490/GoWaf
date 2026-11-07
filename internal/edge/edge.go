@@ -31,16 +31,19 @@ import (
 	"gowaf/internal/store/model"
 )
 
-// Handler 数据面主处理器。
+// Handler 数据面主处理器：按「识别 → 名单 → 限流 → 检测 → 转发」的顺序处理每个请求。
 type Handler struct {
-	rt         *runtime.Runtime
-	trusted    []netip.Prefix
-	maxBody    int
-	sampleRate float64
-	rand       *rand.Rand
+	rt         *runtime.Runtime // 运行时共享上下文：配置、路由、检测引擎、封禁表、事件队列等
+	trusted    []netip.Prefix   // 可信代理网段：直连方命中这些网段时才采信 XFF 等转发头
+	maxBody    int              // 全局默认请求体检测上限（字节），站点未单独配置时使用
+	sampleRate float64          // 正常请求的事件采样率（0~1）；拦截/挑战类事件始终全量记录
+	rand       *rand.Rand       // 处理器私有随机源：按采样率抽签用，避免争用全局随机源
 }
 
 // New 创建数据面处理器。
+// 参数 rt：运行时共享上下文，提供配置、路由表、检测引擎、封禁表等依赖。
+// 返回 *Handler：初始化后的数据面处理器；可信代理网段、body 上限、采样率均取自配置，
+// 配置缺省或非法时回退内置默认值（body 上限 256KB）。
 func New(rt *runtime.Runtime) *Handler {
 	var trusted []netip.Prefix
 	for _, cidr := range rt.Cfg.Server.TrustedProxies {
@@ -61,9 +64,13 @@ func New(rt *runtime.Runtime) *Handler {
 	}
 }
 
-// ServeHTTP 实现 http.Handler。
+// ServeHTTP 实现 http.Handler，是所有客户端流量的必经入口。
+// 参数 w：响应写出器；参数 r：客户端请求。
+// 返回值无：请求按「黑名单 → 封禁 → 白名单 → 情报 → 限流 → 检测」的顺序过闸，
+// 最终要么转发上游（forward），要么被拦截（reject）或下发挑战（serveChallenge）。
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
+	// 优先复用上游链路带来的请求 ID，没有则现场生成，并写回响应头便于问题排查
 	reqID := r.Header.Get("X-Request-ID")
 	if reqID == "" {
 		reqID = newRequestID()
@@ -71,6 +78,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Request-ID", reqID)
 
 	clientIP := h.clientIP(r)
+	// 按请求头 Host 匹配站点路由；未配置的域名不属于任何站点，直接 404
 	route := h.rt.Router().Match(r.Host)
 	if route == nil {
 		http.Error(w, "404 站点未配置", http.StatusNotFound)
@@ -195,6 +203,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.reject(w, r, route, clientIP, reqID, start, "block", "rule", http.StatusForbidden, &result)
 		return
 	case "challenge":
+		// 已持有有效通行证则放行；否则下发挑战页，本次请求不转发（只落事件）
 		if !h.challengePassed(w, r, clientIP) {
 			h.serveChallenge(w, r, clientIP)
 			h.recordEvent(route, clientIP, reqID, start, r, 403, "challenge", &result, 0, "", false)
@@ -206,11 +215,13 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.forward(w, r, route, clientIP, reqID, start, &result)
 }
 
-// fieldValue 上限。
+// maxFieldLog 事件字段（路径、Query 等）落库前的最大保留字节数，防止超长 URL 撑爆事件表。
 const maxFieldLog = 512
 
 // decideByGuard 用站点级生效阈值重判动作，语义与 detect.Engine.decide 一致。
-// mode 传引擎当前全局模式，仅当站点未显式覆盖模式时使用。
+// 参数 score：两引擎合并后的总分数；参数 g：站点自定义防护配置；参数 globalMode：
+// 引擎当前全局模式，仅当站点未显式覆盖模式（g.Mode 为空）时使用。
+// 返回 string：处置动作 "pass"/"log"/"challenge"/"block"；观察模式下一律降级为 "log"。
 func decideByGuard(score int, g *proxy.SiteGuard, globalMode string) string {
 	if score <= 0 {
 		return "pass"
@@ -234,6 +245,10 @@ func decideByGuard(score int, g *proxy.SiteGuard, globalMode string) string {
 	return verdict
 }
 
+// buildInput 把 HTTP 请求拼装成规则引擎的检测输入。
+// 参数 r：客户端请求；参数 body：已读出的请求体内容（可为空）。
+// 返回 detect.Input：包含方法、路径、Query、请求体、UA、请求头、Cookie 等字段；
+// Cookie 和 Authorization 头不进 headers（又长又没检测价值），头与 Cookie 各截断到 4KB。
 func buildInput(r *http.Request, body []byte) detect.Input {
 	headers := ""
 	for k, vs := range r.Header {
@@ -268,7 +283,9 @@ func buildInput(r *http.Request, body []byte) detect.Input {
 	}
 }
 
-// mergeResult 把 CRS 结果并入自研引擎结果。
+// mergeResult 把 CRS 第二引擎的结果并入自研引擎结果。
+// 参数 dst：自研引擎结果，作为合并目标就地修改；参数 src：CRS 结果，可为 nil 或空结果。
+// 返回值无：分数累加、命中与规则 ID 去重合并、分类去重、耗时累加，全部写回 dst。
 func mergeResult(dst, src *detect.Result) {
 	if src == nil || (len(src.Hits) == 0 && src.Score == 0) {
 		return
@@ -302,6 +319,8 @@ func mergeResult(dst, src *detect.Result) {
 }
 
 // collectParams 收集 query 与 form 表单的参数名，供规则例外按参数匹配。
+// 参数 r：客户端请求；参数 body：请求体内容（仅 x-www-form-urlencoded 会被解析）。
+// 返回 []string：去重后的参数名列表，最多 64 个，空名与重复名直接丢弃。
 func collectParams(r *http.Request, body []byte) []string {
 	limit := 64
 	out := make([]string, 0, 16)
@@ -332,9 +351,12 @@ func collectParams(r *http.Request, body []byte) []string {
 	return out
 }
 
-// readBody 读取并回填请求体。
+// readBody 读取并截断请求体，读到的内容回填进 r.Body 供规则检测与转发阶段复用。
 //
-// 返回值：body、skipBody（跳过 body 检测并原样透传）、tooLarge（拒绝 413）。
+// 参数 w：响应写出器（当前实现未使用，保留以备扩展）；参数 r：客户端请求；
+// 参数 route：站点路由，其 MaxBodyBytes 决定本站点的 body 检测上限。
+// 返回 (body, skipBody, tooLarge)：body 为读到的请求体内容；skipBody=true 表示跳过
+// body 规则检测并原样透传；tooLarge=true 表示 body 已被消费，只能拒绝并返回 413。
 //
 // 只对「ContentLength 已知且不超过上限」的请求做 body 检测：
 //   - 已知超限：body 一个字节都不读，直接透传（上游才是体积上限的裁决者）；
@@ -359,12 +381,15 @@ func (h *Handler) readBody(w http.ResponseWriter, r *http.Request, route *proxy.
 	if int64(len(buf)) > int64(route.MaxBodyBytes) {
 		return nil, false, true
 	}
+	// 把已读内容回填进 r.Body：转发阶段还能再读一遍；同步修正 ContentLength 与实际一致
 	r.Body = io.NopCloser(bytes.NewReader(buf))
 	r.ContentLength = int64(len(buf))
 	return buf, false, false
 }
 
-// clientIP 只在直连方是可信代理时才采信 XFF。
+// clientIP 还原客户端真实 IP，只在直连方是可信代理时才采信转发头。
+// 参数 r：客户端请求。
+// 返回 netip.Addr：客户端 IP；直连方不可信时返回直连地址本身，解析失败返回零值。
 func (h *Handler) clientIP(r *http.Request) netip.Addr {
 	peerStr, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
@@ -412,6 +437,9 @@ func (h *Handler) clientIP(r *http.Request) netip.Addr {
 	return peer
 }
 
+// isTrusted 判断地址是否落在可信代理网段内。
+// 参数 addr：待判断的 IP 地址。
+// 返回 bool：命中任一可信网段返回 true。
 func (h *Handler) isTrusted(addr netip.Addr) bool {
 	for _, p := range h.trusted {
 		if p.Contains(addr) {
@@ -421,7 +449,11 @@ func (h *Handler) isTrusted(addr netip.Addr) bool {
 	return false
 }
 
-// forward 转发并记录事件。
+// forward 把请求转发到上游并记录事件。
+// 参数 w：响应写出器；参数 r：客户端请求；参数 route：匹配到的站点路由；
+// 参数 ip：客户端 IP；参数 reqID：请求 ID；参数 start：请求进入时间；
+// 参数 result：检测结果，白名单等未检测场景可为 nil。
+// 返回值无：上游响应原样写回 w；状态码、延迟、采样决定随事件异步落库。
 func (h *Handler) forward(w http.ResponseWriter, r *http.Request, route *proxy.Route,
 	ip netip.Addr, reqID string, start time.Time, result *detect.Result) {
 
@@ -449,12 +481,23 @@ func (h *Handler) forward(w http.ResponseWriter, r *http.Request, route *proxy.R
 	h.recordEvent(route, ip, reqID, start, r, rec.status, action, result, latency.Microseconds(), route.UpstreamRaw, shouldSample(h.sampleRate, action, h.rand))
 }
 
-// reject 返回拒绝响应并记录事件。
+// reject 返回默认文案的拒绝响应并记录事件。
+// 参数 w：响应写出器；参数 r：客户端请求；参数 route：站点路由；参数 ip：客户端 IP；
+// 参数 reqID：请求 ID；参数 start：请求进入时间；参数 action：处置动作（block/ban 等）；
+// 参数 reason：拦截原因（写入指标标签与 X-WAF-Reason 响应头）；参数 status：HTTP 状态码；
+// 参数 result：检测结果，可为 nil。
+// 返回值无：写出 HTML 拦截页并异步落事件。
 func (h *Handler) reject(w http.ResponseWriter, r *http.Request, route *proxy.Route,
 	ip netip.Addr, reqID string, start time.Time, action, reason string, status int, result *detect.Result) {
 	h.rejectWithBody(w, r, route, ip, reqID, start, action, reason, status, "", result)
 }
 
+// rejectWithBody 返回携带自定义提示文案的拒绝响应并记录事件，是 reject 的底层实现。
+// 参数 w：响应写出器；参数 r：客户端请求；参数 route：站点路由；参数 ip：客户端 IP；
+// 参数 reqID：请求 ID；参数 start：请求进入时间；参数 action：处置动作；
+// 参数 reason：拦截原因（指标标签）；参数 status：HTTP 状态码；参数 text：拦截页提示文案，
+// 为空时使用默认文案；参数 result：可变参数，取第一个元素作为检测结果（可不传）。
+// 返回值无：写出 HTML 拦截页并异步落事件。
 func (h *Handler) rejectWithBody(w http.ResponseWriter, r *http.Request, route *proxy.Route,
 	ip netip.Addr, reqID string, start time.Time, action, reason string, status int, text string, result ...*detect.Result) {
 
@@ -489,10 +532,14 @@ func (h *Handler) rejectWithBody(w http.ResponseWriter, r *http.Request, route *
 //
 // 连击数存库（bans 表 source='auto' 的记录数），所以重启、升级都不会丢。
 // 自动封禁一律全局：扫描器/爆破往往同时打多个站点，按站点封容易顾此失彼。
+// 参数 ip：客户端 IP 字符串；参数 site：命中所在站点名；参数 method、path：命中请求的
+// 方法与路径，仅用于告警展示。
+// 返回值无：未启用自动封禁或未达阈值时直接返回；达阈值则写内存封禁表、同步落库并告警。
 func (h *Handler) recordAutoBan(ip, site, method, path string) {
 	if !h.rt.SettingBool(runtime.KeyAutoBan, h.rt.Cfg.Guard.AutoBan) {
 		return
 	}
+	// 以下阈值全部经 Setting* 读取：控制台改完立即生效，无需重启进程
 	cfg := h.rt.Cfg.Guard
 	threshold := h.rt.SettingInt(runtime.KeyBanThreshold, cfg.BanThreshold)
 	windowSec := h.rt.SettingInt(runtime.KeyBanWindow, int(cfg.BanWindow.Duration()/time.Second))
@@ -500,6 +547,7 @@ func (h *Handler) recordAutoBan(ip, site, method, path string) {
 	maxStrikes := h.rt.SettingInt(runtime.KeyBanMaxStrikes, cfg.BanMaxStrikes)
 	resetSec := h.rt.SettingInt(runtime.KeyBanStrikeReset, int(cfg.BanStrikeReset.Duration()/time.Second))
 
+	// 固定窗口内命中计数 +1；reached 表示窗口内命中次数已达封禁阈值
 	_, reached := h.rt.Hits.Add(ip, store.NowMS(), int64(windowSec)*1000, threshold)
 	if !reached {
 		return
@@ -547,6 +595,9 @@ func (h *Handler) recordAutoBan(ip, site, method, path string) {
 // 与 recordAutoBan（N 次阈值 + 连击升级）不同，这里不做任何频次累计——
 // 规则本身被标记为高危（如扫描器 UA、爆破端点），触发这一次就该走。
 // 封禁时长沿用 ban_ttl 设置，source 记为 rule_ban，面板上一眼可辨。
+// 参数 ip：客户端 IP；参数 result：检测结果（取规则 ID 拼原因文案，可为 nil）；
+// 参数 site：站点名；参数 method、path：请求方法与路径，用于告警展示。
+// 返回值无：直接写内存封禁表、落库并投递告警。
 func (h *Handler) recordDirectBan(ip string, result *detect.Result, site, method, path string) {
 	cfg := h.rt.Cfg.Guard
 	ttlSec := h.rt.SettingInt(runtime.KeyBanTTL, int(cfg.BanTTL.Duration()/time.Second))
@@ -592,6 +643,9 @@ func (h *Handler) recordDirectBan(ip string, result *detect.Result, site, method
 // 只在「首次命中」写入：调用前已经过 Bans.Banned 判定，能走到这里说明内存里还没有
 // 这条封禁，因此不会每个请求都插一行。作用域跟随情报源——站点级情报只封该站点，
 // 全局情报封全局，这样封禁管理里的「作用域」列能真实反映拦截范围。
+// 参数 ip：客户端 IP；参数 site：当前请求的站点名；参数 hit：情报命中描述，
+// 以「站点」开头视为站点级情报（只封该站点），否则按全局情报封全局。
+// 返回 uint：新建封禁记录的 ID；未启用情报封禁或写库失败返回 0。
 func (h *Handler) banFromIntel(ip netip.Addr, site, hit string) uint {
 	if !h.rt.SettingBool(runtime.KeyIntelBanOnHit, true) {
 		return 0
@@ -622,6 +676,8 @@ func (h *Handler) banFromIntel(ip netip.Addr, site, hit string) uint {
 }
 
 // notifyBan 投递封禁告警。去重与聚合都在通知器内部完成，这里只管调用。
+// 参数 ev：封禁告警事件（IP、站点、原因、来源、命中的请求信息等）。
+// 返回值无：通知器未配置时静默跳过。
 func (h *Handler) notifyBan(ev notify.Event) {
 	if h.rt.Notify == nil {
 		return
@@ -630,6 +686,8 @@ func (h *Handler) notifyBan(ev notify.Event) {
 }
 
 // countryOfString 与 countryOf 同义，供只拿到字符串 IP 的调用点使用。
+// 参数 ip：字符串形式的 IP 地址。
+// 返回 string：ISO 国家代码；Geo 库未加载或查询失败返回空串。
 func (h *Handler) countryOfString(ip string) string {
 	if h.rt.Geo == nil {
 		return ""
@@ -642,6 +700,8 @@ func (h *Handler) countryOfString(ip string) string {
 // 只统计「没被手动释放」的记录：手动解封会写 released_at，
 // 于是解封后连击数自动归零 —— 相当于给了一次干净的机会。
 // resetMS<=0 表示不限时间窗。
+// 参数 ip：客户端 IP；参数 resetMS：连击计数时间窗（毫秒）。
+// 返回 int：符合条件的自动封禁记录数；查询失败记日志并返回 0。
 func (h *Handler) autoBanStrikes(ip string, resetMS int64) int {
 	q := h.rt.Store.Gorm().Model(&model.Ban{}).
 		Where("ip = ? AND source = ? AND released_at = 0", ip, "auto")
@@ -656,7 +716,13 @@ func (h *Handler) autoBanStrikes(ip string, resetMS int64) int {
 	return int(n)
 }
 
-// recordEvent 异步落事件。
+// recordEvent 累加请求指标，并把事件异步入队落库。
+// 参数 route：站点路由；参数 ip：客户端 IP；参数 reqID：请求 ID；参数 start：请求进入时间；
+// 参数 r：客户端请求；参数 status：响应状态码；参数 action：处置动作；
+// 参数 result：检测结果（可为 nil，用于取分数与命中的规则/分类）；
+// 参数 latencyUS：处理耗时（微秒）；参数 upstream：上游地址（拦截时为空）；
+// 参数 sample：本次事件是否落库（拦截/挑战全量，正常请求按采样率）。
+// 返回值无：指标始终累加；sample=false 时只更新指标不落事件。
 func (h *Handler) recordEvent(route *proxy.Route, ip netip.Addr, reqID string, start time.Time,
 	r *http.Request, status int, action string, result *detect.Result, latencyUS int64, upstream string, sample bool) {
 
@@ -724,7 +790,9 @@ func (h *Handler) recordEvent(route *proxy.Route, ip netip.Addr, reqID string, s
 	}
 }
 
-// countryOf 查归属地。查询是纯内存二分，失败返回空串不影响事件落库。
+// countryOf 查询 IP 归属地。查询是纯内存二分，失败返回空串不影响事件落库。
+// 参数 ip：客户端 IP。
+// 返回 string：ISO 国家代码；Geo 库未加载或查询失败返回空串。
 func (h *Handler) countryOf(ip netip.Addr) string {
 	if h.rt.Geo == nil {
 		return ""
@@ -732,7 +800,10 @@ func (h *Handler) countryOf(ip netip.Addr) string {
 	return h.rt.Geo.Lookup(ip)
 }
 
-// shouldSample 拦截/挑战全量记录，正常请求按采样率。
+// shouldSample 决定事件是否落库：拦截/挑战/日志动作全量记录，正常请求按采样率。
+// 参数 rate：采样率（0~1）；参数 action：处置动作；参数 rnd：随机源，用于按概率抽签。
+// 返回 bool：block/challenge/log 返回 true；其余当 rate<=0 返回 false、rate>=1 返回
+// true，否则以 rate 的概率随机决定。
 func shouldSample(rate float64, action string, rnd *rand.Rand) bool {
 	if action == "block" || action == "challenge" || action == "log" {
 		return true
@@ -746,6 +817,10 @@ func shouldSample(rate float64, action string, rnd *rand.Rand) bool {
 	return rnd.Float64() < rate
 }
 
+// scheme 推断请求协议。
+// 参数 r：客户端请求。
+// 返回 string：TLS 直连返回 "https"；否则返回 X-Forwarded-Proto 头的值（若存在）；
+// 都没有时返回 "http"。
 func scheme(r *http.Request) string {
 	if r.TLS != nil {
 		return "https"
@@ -756,6 +831,9 @@ func scheme(r *http.Request) string {
 	return "http"
 }
 
+// truncate 按字节数截断字符串。
+// 参数 s：原始字符串；参数 n：最大保留字节数。
+// 返回 string：长度不超过 n 的前缀；按字节截断，超长的多字节字符可能被截在中间。
 func truncate(s string, n int) string {
 	if len(s) <= n {
 		return s
@@ -766,11 +844,11 @@ func truncate(s string, n int) string {
 // statusRecorder 捕获状态码，同时保留 Flusher/Hijacker 能力（WebSocket 必需）。
 type statusRecorder struct {
 	http.ResponseWriter
-	status  int
-	written bool
+	status  int  // 捕获到的响应状态码，初始默认 200
+	written bool // 是否已写过响应；状态码只认第一次 WriteHeader/Write
 }
 
-// WriteHeader 记录状态码。
+// WriteHeader 记录首次写入的状态码并透传给底层 writer；重复调用仍正常透传。
 func (s *statusRecorder) WriteHeader(code int) {
 	if !s.written {
 		s.status = code
@@ -779,7 +857,8 @@ func (s *statusRecorder) WriteHeader(code int) {
 	s.ResponseWriter.WriteHeader(code)
 }
 
-// Write 隐式 200。
+// Write 隐式 200：未显式调用 WriteHeader 就写 body 时，状态码按 200 记录。
+// 参数 b：待写出的字节。返回 (int, error)：写出的字节数与错误，原样透传底层结果。
 func (s *statusRecorder) Write(b []byte) (int, error) {
 	if !s.written {
 		s.status = http.StatusOK
@@ -788,14 +867,15 @@ func (s *statusRecorder) Write(b []byte) (int, error) {
 	return s.ResponseWriter.Write(b)
 }
 
-// Flush 支持 SSE。
+// Flush 转发 Flush 调用，支持 SSE 等流式响应；底层不支持 Flusher 时静默忽略。
 func (s *statusRecorder) Flush() {
 	if f, ok := s.ResponseWriter.(http.Flusher); ok {
 		f.Flush()
 	}
 }
 
-// Hijack 支持 WebSocket 升级。
+// Hijack 转发 Hijack 调用，支持 WebSocket 升级；底层不支持时返回错误。
+// 返回 (net.Conn, *bufio.ReadWriter, error)：劫持后的连接与读写器，或错误。
 func (s *statusRecorder) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	if hj, ok := s.ResponseWriter.(http.Hijacker); ok {
 		return hj.Hijack()

@@ -2,13 +2,17 @@ package model
 
 import "testing"
 
+// TestParseSiteProtect 验证 ParseSiteProtect 对 protect_cfg 各种输入的解析与校验行为。
+// 覆盖：空串与 "null" 视为跟随全局（返回 nil）、非法 JSON 报错、enabled/mode 取值校验、
+// blockScore 与 challengeScore 的范围及大小关系约束、负数参数报错，
+// 以及合法配置的完整解析与仅覆盖部分维度（其余字段保持零值=跟随全局）。
 func TestParseSiteProtect(t *testing.T) {
 	cases := []struct {
-		name    string
-		raw     string
-		wantNil bool
-		wantErr bool
-		want    *SiteProtect
+		name    string       // 子测试名称
+		raw     string       // protect_cfg 原始输入
+		wantNil bool         // 期望返回 nil（跟随全局）
+		wantErr bool         // 期望返回错误
+		want    *SiteProtect // 期望解析出的配置（结构体整体相等比较）
 	}{
 		{name: "空串=跟随全局", raw: "", wantNil: true},
 		{name: "null=跟随全局", raw: "null", wantNil: true},

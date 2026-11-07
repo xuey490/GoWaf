@@ -1,4 +1,8 @@
-// Package app 负责把所有组件装配起来并管理生命周期。
+// Package app 负责应用的整体装配与生命周期管理。
+//
+// 启动时按依赖顺序构建存储、检测引擎、数据面代理、管理后台等组件并监听端口；
+// 运行期维护事件落盘、威胁情报同步、规则命中刷库等后台循环；
+// 退出时统一执行优雅关闭（停止接新请求 → 等事件落盘 → 关闭数据库）。
 package app
 
 import (
@@ -27,32 +31,35 @@ import (
 	"gowaf/internal/tasks"
 )
 
-// App 是完整应用实例。
+// App 是完整应用实例：持有全部核心组件与三个 HTTP 服务，统一负责启动与优雅关闭。
 type App struct {
-	cfg     *config.Config
-	store   *store.Store
-	rt      *runtime.Runtime
-	certs   *proxy.CertManager
-	authMgr *auth.Manager
-	login   *middleware.LoginLimiter
-	events  *store.EventWriter
-	handler *handler.Server
-	tasks   *tasks.Runner
+	cfg     *config.Config           // 全局配置：启动时加载，运行期只读
+	store   *store.Store             // SQLite 存储层：站点/规则/事件等持久化数据
+	rt      *runtime.Runtime         // 运行时：检测引擎与内存态站点/规则/名单
+	certs   *proxy.CertManager       // 证书管理器：未启用 TLS 时为 nil
+	authMgr *auth.Manager            // 管理后台的 JWT 认证管理器
+	login   *middleware.LoginLimiter // 登录失败限流器：防止后台口令被爆破
+	events  *store.EventWriter       // 拦截事件异步落盘器：带缓冲 channel，后台批量写库
+	handler *handler.Server          // 管理后台业务处理器：含 SSE 实时推送
+	tasks   *tasks.Runner            // 计划任务中心：备份、事件清理等定时任务
 
-	httpSrv  *http.Server
-	httpsSrv *http.Server
-	adminSrv *http.Server
+	httpSrv  *http.Server // 数据面 HTTP 服务（明文）
+	httpsSrv *http.Server // 数据面 HTTPS 服务：未启用 TLS 时为 nil
+	adminSrv *http.Server // 控制面（管理后台）服务
 
-	mu       sync.Mutex
-	closed   bool
-	stopOnce sync.Once
-	stopCh   chan struct{}
+	mu       sync.Mutex    // 保护 closed 标志的互斥锁
+	closed   bool          // 应用是否已（开始）关闭
+	stopOnce sync.Once     // 保证 stopCh 只被关闭一次，使 Shutdown 可重复调用
+	stopCh   chan struct{} // 停机信号：关闭后所有后台循环依次退出
 
-	lastDropped int64
+	lastDropped int64 // 上次采样时的事件丢弃累计值，用于换算增量喂给监控指标
 }
 
-// New 构建应用（不监听端口）。
+// New 构建应用实例：按依赖顺序装配各组件，但不监听任何端口（监听由 Start 负责）。
+// 参数 cfg：已加载并校验通过的配置；version：程序版本号，用于展示与日志。
+// 返回 (*App, error)：全部组件装配成功返回应用实例；任一组件初始化失败返回错误。
 func New(cfg *config.Config, version string) (*App, error) {
+	// 默认使用主库；演示模式切换到独立演示库，保证演示数据与生产数据隔离
 	dsn := cfg.Storage.DSN
 	if cfg.Demo.Enabled {
 		dsn = cfg.Demo.DBPath
@@ -85,6 +92,7 @@ func New(cfg *config.Config, version string) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
+	// 拦截事件异步落盘：缓冲 8192 条，每满 200 条或每隔 1 秒批量写入
 	rt.Events = st.NewEventWriter(8192, 200, time.Second)
 
 	// 计划任务中心：内置任务种子 + 调度循环在 Start 里启动
@@ -186,7 +194,9 @@ func New(cfg *config.Config, version string) (*App, error) {
 	return a, nil
 }
 
-// seed 首次启动初始化数据。
+// seed 首次启动时初始化数据库种子数据：默认设置、内置规则、管理员账号与站点列表。
+// 参数 cfg：当前配置；st：已打开的存储实例。
+// 返回 error：种子写入失败返回错误；内置规则导入失败仅记录日志，不视为致命错误。
 func seed(cfg *config.Config, st *store.Store) error {
 	if err := st.SeedSettings(runtime.DefaultSettings(cfg)); err != nil {
 		return err
@@ -202,10 +212,12 @@ func seed(cfg *config.Config, st *store.Store) error {
 		return st.SeedDemoData()
 	}
 
+	// 创建初始管理员；仅数据库中尚无 admin 时才返回新生成的随机口令
 	pwd, err := st.SeedAdmin("admin")
 	if err != nil {
 		return err
 	}
+	// 口令非空表示本次新建：把随机口令写入文件供首次登录查看，避免只在日志里闪现
 	if pwd != "" {
 		path := filepath.Join(cfg.BaseDir(), "initial-password.txt")
 		_ = os.MkdirAll(filepath.Dir(path), 0o750)
@@ -219,7 +231,8 @@ func seed(cfg *config.Config, st *store.Store) error {
 	return st.SeedSites(cfg.Sites)
 }
 
-// Start 启动所有监听与后台任务。
+// Start 启动所有监听与后台任务：数据面 HTTP/HTTPS、控制面，以及各类后台维护循环。
+// 返回 error：任一端口绑定失败或服务启动初期出错返回错误；全部就绪返回 nil。
 func (a *App) Start() error {
 	// 先同步绑定所有端口，再打日志、再提供服务。
 	// 否则端口被占用时日志已经打出"监听 xxx"，实际却 bind 失败，排查时会被误导。
@@ -246,6 +259,7 @@ func (a *App) Start() error {
 		return fmt.Errorf("控制面: %w", err)
 	}
 
+	// 缓冲 3：与 HTTP/HTTPS/控制面三个服务一一对应，保证出错 goroutine 发送不阻塞
 	errCh := make(chan error, 3)
 
 	go func() {
@@ -282,6 +296,8 @@ func (a *App) Start() error {
 		a.rt.Notify.Start()
 	}
 
+	// 启动初期若收到错误立即返回；等 300ms 无报错即视为启动成功，
+	// 之后的运行期错误由各服务 goroutine 写入 errCh（此处不再等待，否则 Start 会一直阻塞）。
 	select {
 	case err := <-errCh:
 		return err
@@ -290,7 +306,8 @@ func (a *App) Start() error {
 	}
 }
 
-// intelLoop 定时同步威胁情报。启动后先等 5 秒，避免和监听抢时间。
+// intelLoop 定时同步威胁情报：启动后先等 5 秒再首次拉取（避免与端口监听抢资源），之后每 3 小时刷新一次。
+// 无参数；stopCh 关闭时退出，无返回值。
 func (a *App) intelLoop() {
 	select {
 	case <-a.stopCh:
@@ -315,6 +332,7 @@ func (a *App) intelLoop() {
 //
 // 命中统计走在热路径上，不能每个请求写库；这里每 60 秒批量落一次，
 // 面板上的「命中次数 / 最后命中时间」最多滞后一分钟，足够做规则取舍。
+// 无参数；stopCh 关闭时退出，无返回值。
 func (a *App) ruleHitsLoop() {
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
@@ -336,7 +354,8 @@ func (a *App) ruleHitsLoop() {
 	}
 }
 
-// streamLoop 每秒推一次汇总给 SSE 订阅者。
+// streamLoop 每秒向 SSE 订阅者推送一次实时汇总统计（请求量、拦截量等面板数据）。
+// 无参数；stopCh 关闭时退出，无返回值。
 func (a *App) streamLoop() {
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
@@ -350,15 +369,16 @@ func (a *App) streamLoop() {
 	}
 }
 
-// maintenance 周期任务：清理、指标、归档、证书热加载。
+// maintenance 周期维护循环：30 秒一轮的清理与指标采集、6 小时一次的证书热加载、每小时一次的低频维护。
+// 无参数；stopCh 关闭时退出，无返回值。
 func (a *App) maintenance() {
-	cleanTicker := time.NewTicker(30 * time.Second)
+	cleanTicker := time.NewTicker(30 * time.Second) // 内存态清理：限流器、命中计数、封禁列表等
 	defer cleanTicker.Stop()
 
-	certTicker := time.NewTicker(6 * time.Hour)
+	certTicker := time.NewTicker(6 * time.Hour) // 证书热加载：续期脚本更新证书目录后无需重启
 	defer certTicker.Stop()
 
-	hourTicker := time.NewTicker(time.Hour)
+	hourTicker := time.NewTicker(time.Hour) // 每小时低频任务：见 hourly
 	defer hourTicker.Stop()
 
 	for {
@@ -402,7 +422,8 @@ func (a *App) maintenance() {
 	}
 }
 
-// hourly 归档与清理，凌晨 4 点重置演示库。
+// hourly 每小时执行一次的低频维护：演示模式在每天 04:00 重置演示库，并吊销已过期的刷新令牌。
+// 无参数；无返回值，内部错误仅记录日志。
 func (a *App) hourly() {
 	now := time.Now()
 
@@ -422,8 +443,11 @@ func (a *App) hourly() {
 	a.store.Gorm().Exec(`DELETE FROM sys_refresh_tokens WHERE expires_at < ?`, store.NowMS())
 }
 
-// Shutdown 优雅退出：停止接新请求 → 等事件落盘 → 关库。
+// Shutdown 优雅退出：按「停止接新请求 → 等事件落盘 → 关闭数据库」的顺序收尾。
+// 参数 ctx：控制各 HTTP 服务等待在途请求完成的超时，超时后未完成的连接被中断。
+// 返回 error：各阶段产生的错误合并返回；全部顺利返回 nil。重复调用安全（stopOnce 保证收尾逻辑只执行一次）。
 func (a *App) Shutdown(ctx context.Context) error {
+	// 先广播停机信号：maintenance/streamLoop/intelLoop/ruleHitsLoop 等后台循环随之退出
 	a.stopOnce.Do(func() { close(a.stopCh) })
 	a.tasks.Stop()
 	// 通知器先停：它持有独立的发送协程，关库前必须收干净
@@ -431,6 +455,7 @@ func (a *App) Shutdown(ctx context.Context) error {
 		a.rt.Notify.Stop()
 	}
 
+	// 依次关闭三个服务（先数据面后控制面）：Shutdown 停止接收新连接并等待在途请求处理完
 	var errs []error
 	if a.httpsSrv != nil {
 		if err := a.httpsSrv.Shutdown(ctx); err != nil {
