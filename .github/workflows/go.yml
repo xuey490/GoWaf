@@ -1,6 +1,5 @@
-# This workflow will build a golang project
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-go
-
+# 构建与测试：Go 版本以 go.mod 为准（当前 1.27.3），不要在这里写死。
+# 前端产物已随仓库提交（internal/web/dist），因此无需 node/pnpm 步骤。
 name: Go
 
 on:
@@ -9,17 +8,28 @@ on:
   pull_request:
     branches: [ "main" ]
 
-jobs:
+permissions:
+  contents: read
 
+jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      CGO_ENABLED: "0"
     steps:
     - uses: actions/checkout@v4
 
     - name: Set up Go
-      uses: actions/setup-go@v4
+      uses: actions/setup-go@v5
       with:
-        go-version: '1.20'
+        go-version-file: go.mod
+        cache: true
+
+    - name: Verify embedded frontend
+      run: test -f internal/web/dist/index.html
+
+    - name: Vet
+      run: go vet ./...
 
     - name: Build
       run: go build -v ./...
