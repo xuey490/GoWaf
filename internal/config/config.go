@@ -125,17 +125,22 @@ type Engine struct {
 
 // Guard 限流与封禁参数。
 type Guard struct {
-	GlobalRPS          int      `yaml:"global_rps"`           // 全局每秒请求数上限（预留字段，当前版本未使用）
-	IPRPS              int      `yaml:"ip_rps"`               // 单 IP 每秒请求数阈值（令牌桶速率）
-	IPBurst            int      `yaml:"ip_burst"`             // 单 IP 令牌桶突发容量，允许的瞬时峰值
-	IPPerMinute        int      `yaml:"ip_per_minute"`        // 单 IP 每分钟请求数上限
-	ChallengePerMinute int      `yaml:"challenge_per_minute"` // 每分钟挑战发放上限（预留字段，当前版本未使用）
-	BanPerMinute       int      `yaml:"ban_per_minute"`       // 每分钟封禁次数上限（预留字段，当前版本未使用）
-	Ban1hPerMinute     int      `yaml:"ban_1h_per_minute"`    // 每分钟 1 小时长封次数上限（预留字段，当前版本未使用）
-	BanTTL             Duration `yaml:"ban_ttl"`              // 默认封禁时长
-	BanMaxTTL          Duration `yaml:"ban_max_ttl"`          // 连击升级后允许的最长封禁时长
-	AutoBan            bool     `yaml:"auto_ban"`             // 是否启用自动封禁（可被后台设置覆盖）
-	WhitelistStatic    bool     `yaml:"whitelist_static"`     // 静态资源是否绕过限流（预留字段，当前版本未使用）
+	GlobalRPS          int `yaml:"global_rps"`           // 全局每秒请求数上限（预留字段，当前版本未使用）
+	IPRPS              int `yaml:"ip_rps"`               // 单 IP 每秒请求数阈值（令牌桶速率）
+	IPBurst            int `yaml:"ip_burst"`             // 单 IP 令牌桶突发容量，允许的瞬时峰值
+	IPPerMinute        int `yaml:"ip_per_minute"`        // 单 IP 每分钟请求数上限
+	ChallengePerMinute int `yaml:"challenge_per_minute"` // 单 IP 每分钟超过该请求数后下发人机校验（0=关闭）
+	ChallengeRPS       int `yaml:"challenge_rps"`        // 单 IP 每秒超过该请求数后下发人机校验（0=关闭）
+	// ChallengeReferer 跨站来路是否触发人机校验：外站跳转进来（Referer 域名不属于本站，
+	// 且不在允许清单里）的页面导航先过一道自动校验，挡掉广告链/群发链接带来的脚本流量。
+	ChallengeReferer      *bool    `yaml:"challenge_referer"`
+	ChallengeRefererAllow string   `yaml:"challenge_referer_allow"` // 允许的跨站来路（逗号分隔，搜索引擎等）
+	BanPerMinute          int      `yaml:"ban_per_minute"`          // 每分钟封禁次数上限（预留字段，当前版本未使用）
+	Ban1hPerMinute        int      `yaml:"ban_1h_per_minute"`       // 每分钟 1 小时长封次数上限（预留字段，当前版本未使用）
+	BanTTL                Duration `yaml:"ban_ttl"`                 // 默认封禁时长
+	BanMaxTTL             Duration `yaml:"ban_max_ttl"`             // 连击升级后允许的最长封禁时长
+	AutoBan               bool     `yaml:"auto_ban"`                // 是否启用自动封禁（可被后台设置覆盖）
+	WhitelistStatic       bool     `yaml:"whitelist_static"`        // 静态资源是否绕过限流（预留字段，当前版本未使用）
 
 	// 自动封禁策略：window 内命中 threshold 次 → 封 ban_ttl；
 	// 解封后再次触发，连击数 +1，第 ban_max_strikes 次直接永久（expires_at = 0）。
@@ -302,6 +307,13 @@ func (c *Config) applyDefaults() {
 	}
 	if c.Guard.ChallengePerMinute == 0 {
 		c.Guard.ChallengePerMinute = 300
+	}
+	if c.Guard.ChallengeRPS == 0 {
+		c.Guard.ChallengeRPS = 10
+	}
+	if c.Guard.ChallengeRefererAllow == "" {
+		// 搜索引擎来路不挑战：落地页被挑战会直接影响收录与投放转化。
+		c.Guard.ChallengeRefererAllow = "www.baidu.com,m.baidu.com,www.google.com,www.bing.com,cn.bing.com,www.so.com,www.sogou.com,www.sm.cn"
 	}
 	if c.Guard.BanPerMinute == 0 {
 		c.Guard.BanPerMinute = 600
@@ -480,4 +492,12 @@ func IsLoopbackHost(addr string) bool {
 // 返回 string：DSN 的目录部分。
 func (c *Config) BaseDir() string {
 	return filepath.Dir(c.Storage.DSN)
+}
+
+// RefererChallengeEnabled 返回「跨站来路是否触发人机校验」的生效值。
+// 用指针类型是为了区分「没配置」和「显式关掉」：缺省开启（挡广告链与群发链接），
+// 运维在配置文件或控制台写 false 才关闭。
+// 参数：无；返回 bool：启用时为 true。
+func (g Guard) RefererChallengeEnabled() bool {
+	return g.ChallengeReferer == nil || *g.ChallengeReferer
 }

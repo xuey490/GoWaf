@@ -174,6 +174,10 @@ type EventQuery struct {
 	To       int64  // 结束时间（毫秒时间戳，>0 时生效）
 	Current  int    // 页码，从 1 开始（<=0 视为 1）
 	Size     int    // 每页条数（<=0 取 20，最大 200）
+	// RuleHitOnly 只保留真正命中规则的事件（rule_ids 非空）。
+	// 封禁详情用：封禁生效后的每次请求都会记一条「无规则、0 分」的拦截事件，
+	// 这类重复噪声时间最新，会把真正触发封禁的命中记录挤出首屏。
+	RuleHitOnly bool
 }
 
 // QueryEvents 按条件分页查询安全事件。
@@ -256,6 +260,9 @@ func buildEventWhere(q EventQuery) (string, []any) {
 	if q.To > 0 {
 		conds = append(conds, "ts <= ?")
 		args = append(args, q.To)
+	}
+	if q.RuleHitOnly {
+		conds = append(conds, "rule_ids IS NOT NULL AND rule_ids NOT IN ('', '[]')")
 	}
 	if len(conds) == 0 {
 		return "", nil

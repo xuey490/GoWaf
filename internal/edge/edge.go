@@ -3,7 +3,8 @@
 // 设计纪律：
 //  1. 任何一步出错都不能把请求吞掉（fail-open 优先于 502）；
 //  2. 检测只读快照，不查库、不加全局锁；
-//  3. 静态资源、白名单路径、健康检查不跑规则引擎。
+//  3. 静态资源、白名单路径、健康检查不跑规则引擎；
+//  4. IP 白名单是最高优先级：命中后连黑名单、封禁、情报都不看。
 package edge
 
 import (
@@ -66,7 +67,7 @@ func New(rt *runtime.Runtime) *Handler {
 
 // ServeHTTP 实现 http.Handler，是所有客户端流量的必经入口。
 // 参数 w：响应写出器；参数 r：客户端请求。
-// 返回值无：请求按「黑名单 → 封禁 → 白名单 → 情报 → 限流 → 检测」的顺序过闸，
+// 返回值无：请求按「白名单 → 黑名单 → 封禁 → 情报 → 限流 → 检测」的顺序过闸，
 // 最终要么转发上游（forward），要么被拦截（reject）或下发挑战（serveChallenge）。
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
@@ -85,6 +86,18 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 1) 白名单：最高优先级，命中后整条拦截链路直接跳过。
+	//
+	// 顺序很关键：以前白名单排在黑名单与内存封禁之后，于是「先被封禁、后加白名单」
+	// 的 IP 依然会 403（封禁表里还留着那条记录），运维只能手动去封禁管理里解封，
+	// 非常反直觉。白名单的语义就是「自己人、无条件放行」，所以放到最前面：
+	// 黑名单、封禁、情报、限流、规则引擎一概不参与，也不会有任何自动封禁。
+	// 观察模式下同样放行（观察模式只是不拦，不改变放行结果）。
+	if h.rt.IPList().IsWhitelisted(clientIP, route.SiteName) {
+		h.forward(w, r, route, clientIP, reqID, start, nil)
+		return
+	}
+
 	// 观察模式：整条拦截链路退化为"只看不拦"。
 	//
 	// 这是"只记录不拦截"的字面语义。之前这里只放宽了规则判定，而黑名单、
@@ -94,26 +107,20 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// 命中规则照样落事件，只是不处置。
 	observe := h.rt.Engine.Mode() == "observe"
 
-	// 1) 黑名单：直接拒绝，不读 body（全局名单 + 本站点名单）
+	// 2) 黑名单：直接拒绝，不读 body（全局名单 + 本站点名单）
 	if !observe && h.rt.IPList().IsBlacklisted(clientIP, route.SiteName) {
 		h.reject(w, r, route, clientIP, reqID, start, "block", "ip_blacklist", 403, nil)
 		return
 	}
 
-	// 2) 内存封禁（全局封禁 + 本站点封禁）
+	// 3) 内存封禁（全局封禁 + 本站点封禁）
 	if !observe && h.rt.Bans.Banned(clientIP.String(), route.SiteName, store.NowMS()) {
 		h.reject(w, r, route, clientIP, reqID, start, "block", "ip_banned", 403, nil)
 		return
 	}
 
-	// 3) 白名单：完全跳过检测与限流
-	if h.rt.IPList().IsWhitelisted(clientIP, route.SiteName) {
-		h.forward(w, r, route, clientIP, reqID, start, nil)
-		return
-	}
-
-	// 3.5) 威胁情报：已知恶意 IP 直接拒绝，不进规则引擎。
-	// 白名单在上面已放行，所以「自己人」不会被情报误伤。
+	// 4) 威胁情报：已知恶意 IP 直接拒绝，不进规则引擎。
+	// 白名单在最前面已放行，所以「自己人」不会被情报误伤。
 	if hit := h.rt.Intel.Match(clientIP, route.SiteName); !observe && hit != "" {
 		// 命中即写封禁（可关）：这样封禁管理里能统一看到、能手动解封，
 		// 而不是只在事件列表里留一条"情报拦截"。
@@ -130,13 +137,34 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 4) 静态资源/站点白名单路径：跳过检测（性能关键）
+	// 5) 静态资源/站点白名单路径：跳过检测（性能关键）
 	// 注意：只按扩展名跳过会漏掉 /env.js、/runtime-config.js、/aws-exports.js 这类
 	// 伪装成静态资源的配置泄露探测，所以敏感文件名必须例外。
 	skipDetect := (detect.IsStaticPath(r.URL.Path) && !detect.IsSensitiveAssetPath(r.URL.Path)) ||
 		route.IsPathWhitelisted(r.URL.Path)
 
-	// 5) 限流：启用站点自定义防护的站点用独立计数（不占全局指标），其余走全局
+	// 5.5) 换取通行证的请求：必须放在限流之前。
+	// 校验通过后浏览器会先请求这个路径拿 Cookie；如果它自己被 429 拦掉，
+	// 用户就会卡在「校验中 → 429 → 刷新 → 校验中」的死循环里。
+	if r.URL.Path == h.rt.Chall.PassPath() {
+		h.serveChallenge(w, r, clientIP)
+		return
+	}
+
+	// 5.6) 人机校验：对「可疑但不确定」的流量降级成一次自证，而不是直接拒绝。
+	// 触发条件见 challengeReason：跨站来路的页面导航、单 IP 请求频率超过软阈值。
+	// 已持有通行证的请求直接放过，不再重复校验（30 分钟有效，绑定 IP）。
+	if !skipDetect && !observe {
+		if why := h.challengeReason(r, route, clientIP); why != "" && !h.challengePassed(w, r, clientIP) {
+			h.serveChallenge(w, r, clientIP)
+			// 挑战事件必须落库：看板的「人机校验」计数直接统计 action=challenge 的事件，
+			// 之前这里是 sample=false，只进指标不入库，所以那个数字永远是 0。
+			h.recordEvent(route, clientIP, reqID, start, r, http.StatusForbidden, "challenge", nil, 0, "", true)
+			return
+		}
+	}
+
+	// 6) 限流：启用站点自定义防护的站点用独立计数（不占全局指标），其余走全局
 	if !skipDetect {
 		if ok, reason := h.rt.LimiterFor(route.SiteID).Allow(clientIP.String(), store.NowMS()); !ok {
 			metrics.BlockedTotal.WithLabelValues(route.SiteName, "rate_limit").Inc()
@@ -149,7 +177,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// 6) 读取 body（有上限），供检测与后续转发复用。
+	// 7) 读取 body（有上限），供检测与后续转发复用。
 	// 返回 skipBody=true 表示 body 超过检测上限或为 chunked，不做 body 规则检测、
 	// 原样透传——超大上传（如 64MB 视频）拒绝掉会直接打死业务，体积上限交给上游
 	// （Apache LimitRequestBody）控制；URI/Header 检测不受影响。
@@ -160,7 +188,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 7) 规则检测
+	// 8) 规则检测
 	var result detect.Result
 	if !skipDetect && !skipBody && route.DetectBody {
 		in := buildInput(r, body)
@@ -203,15 +231,16 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.reject(w, r, route, clientIP, reqID, start, "block", "rule", http.StatusForbidden, &result)
 		return
 	case "challenge":
-		// 已持有有效通行证则放行；否则下发挑战页，本次请求不转发（只落事件）
+		// 已持有有效通行证则放行；否则下发挑战页，本次请求不转发
 		if !h.challengePassed(w, r, clientIP) {
 			h.serveChallenge(w, r, clientIP)
-			h.recordEvent(route, clientIP, reqID, start, r, 403, "challenge", &result, 0, "", false)
+			// sample=true：挑战事件必须落库，否则看板「人机校验」永远统计不到
+			h.recordEvent(route, clientIP, reqID, start, r, 403, "challenge", &result, 0, "", true)
 			return
 		}
 	}
 
-	// 8) 转发
+	// 9) 转发
 	h.forward(w, r, route, clientIP, reqID, start, &result)
 }
 

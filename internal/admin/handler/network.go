@@ -10,6 +10,7 @@ import (
 
 	"gowaf/internal/admin/middleware"
 	"gowaf/internal/admin/response"
+	"gowaf/internal/guard"
 	"gowaf/internal/metrics"
 	"gowaf/internal/store"
 	"gowaf/internal/store/model"
@@ -126,7 +127,8 @@ type ipRuleInput struct {
 
 // IPCreate 新增 IP 名单，支持单条或批量。
 // 参数 c：Gin 上下文，JSON 体为 ipRuleInput，ip（单条）与 ips（批量）至少提供一个。
-// 返回：无（200 返回 {"created": 成功处理的条数，已存在的重复项复用原记录并同样计入}；参数非法返回 400，数据库失败返回 500，保存成功但热重载失败返回 500 并提示）。
+// 返回：无（200 返回 {"created": 成功处理的条数（已存在的重复项复用原记录并同样计入）,
+// "unbanned": 因加入白名单而被释放的封禁条数}；参数非法返回 400，数据库失败返回 500，保存成功但热重载失败返回 500 并提示）。
 // 路由：POST /api/ips（需 ip:ban 权限，经 CSRF/DemoGuard/审计中间件）。
 func (s *Server) IPCreate(c *gin.Context) {
 	var in ipRuleInput
@@ -182,8 +184,14 @@ func (s *Server) IPCreate(c *gin.Context) {
 		response.Internal(c, "名单已保存但重载失败: "+err.Error())
 		return
 	}
+	// 白名单是「完全豁免」：新加入白名单的 IP 若还挂着生效封禁，一并释放，
+	// 否则封禁管理里会长期显示「生效中」，而实际请求早已被放行（见 releaseBansForWhitelist）。
+	unbanned := 0
+	if in.Kind == "white" {
+		unbanned = s.releaseBansForWhitelist(items, site)
+	}
 	c.Set(middleware.CtxAuditObj, "ip_rule")
-	response.OK(c, gin.H{"created": created})
+	response.OK(c, gin.H{"created": created, "unbanned": unbanned})
 }
 
 // IPUpdate 修改单条 IP 名单记录。
@@ -246,6 +254,16 @@ func (s *Server) IPUpdate(c *gin.Context) {
 		response.Internal(c, "已保存但重载失败: "+err.Error())
 		return
 	}
+	// 黑名单改成白名单时，同一个 IP 之前攒下的封禁要一起释放，
+	// 否则白名单虽然生效，封禁管理里还挂着一条永远不会再触发拦截的记录。
+	var updated model.IPRule
+	if err := s.Store.Gorm().First(&updated, id).Error; err == nil && updated.Kind == "white" {
+		banSite := ""
+		if updated.Scope == scopeSite {
+			banSite = updated.Site
+		}
+		s.releaseBansForWhitelist([]string{updated.IP}, banSite)
+	}
 	c.Set(middleware.CtxAuditObj, "ip_rule")
 	c.Set(middleware.CtxAuditID, strconv.FormatUint(id, 10))
 	response.OK(c, gin.H{"ok": true})
@@ -302,6 +320,8 @@ func (s *Server) IPImport(c *gin.Context) {
 	operator := c.GetString(middleware.CtxUserName)
 	now := store.NowMS()
 	created, skipped := 0, 0
+	// 白名单导入成功后要统一解封，这里先收集合法行（含已存在的重复行）
+	var whitelisted []string
 	for _, line := range strings.Split(in.Text, "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" || strings.HasPrefix(line, "#") {
@@ -314,6 +334,9 @@ func (s *Server) IPImport(c *gin.Context) {
 		if !validIPCandidate(line) {
 			skipped++
 			continue
+		}
+		if kind == "white" {
+			whitelisted = append(whitelisted, line)
 		}
 		row := model.IPRule{IP: line, Kind: kind, Scope: scope, Site: site,
 			Reason: "批量导入", CreatedBy: operator, CreatedAt: now}
@@ -331,8 +354,13 @@ func (s *Server) IPImport(c *gin.Context) {
 		response.Internal(c, "已导入但重载失败: "+err.Error())
 		return
 	}
+	// 与单条新增保持一致：白名单导入后释放这些 IP 名下的生效封禁
+	unbanned := 0
+	if len(whitelisted) > 0 {
+		unbanned = s.releaseBansForWhitelist(whitelisted, site)
+	}
 	c.Set(middleware.CtxAuditObj, "ip_rule")
-	response.OK(c, gin.H{"created": created, "skipped": skipped})
+	response.OK(c, gin.H{"created": created, "skipped": skipped, "unbanned": unbanned})
 }
 
 // validIPCandidate 校验文本是否为合法的单个 IP 或 CIDR 网段。
@@ -395,6 +423,150 @@ func (s *Server) BanList(c *gin.Context) {
 	response.OK(c, response.NewPage(list, current, size, total))
 }
 
+// BanEvents 查询与某条封禁记录关联的拦截 / 攻击事件，用于在封禁管理里回答
+// 「这条封禁到底是什么触发的」。
+//
+// 关联条件：
+//   - 同一个客户端 IP；
+//   - 时间窗口取「封禁创建时间往前 banEventsBeforeMS，往后 banEventsAfterMS」——
+//     封禁是本次请求处理过程中写入的，触发它的那条事件时间戳略早于 createdAt，
+//     所以窗口必须双向留出余量；
+//   - 站点封禁（scope=site）只看该站点的事件，全局封禁不分站点。
+//
+// 参数 c：Gin 上下文，路径参数 id 为封禁记录 ID；可选查询参数 window（秒，向前回溯窗口，
+// 默认 900，上限 86400）与 size（返回条数，默认 50，上限 200）。
+// 返回：无（200 返回 {ban, window, events, total}；id 非法返回 400，记录不存在返回 404，数据库失败返回 500）。
+// 路由：GET /api/bans/:id/events（仅需登录）。
+func (s *Server) BanEvents(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		response.BadRequest(c, "id 非法")
+		return
+	}
+	var row model.Ban
+	if err := s.Store.Gorm().First(&row, id).Error; err != nil {
+		response.NotFound(c, "封禁记录不存在")
+		return
+	}
+
+	// 回溯窗口：自动封禁的阈值窗口默认是 10 分钟级，15 分钟足够覆盖「触发封禁的那几次命中」；
+	// 手动/情报封禁往往只有 1 条对应事件，窗口取大一些也不会多查到别的 IP。
+	windowSec := 900
+	if v, err := strconv.Atoi(c.Query("window")); err == nil && v > 0 {
+		windowSec = v
+	}
+	if windowSec > 86400 {
+		windowSec = 86400 // 上限 24 小时，避免一次扫全表
+	}
+	size, _ := strconv.Atoi(c.DefaultQuery("size", "50"))
+	if size <= 0 || size > 200 {
+		size = 50
+	}
+
+	from := row.CreatedAt - int64(windowSec)*1000
+	to := row.CreatedAt + banEventsAfterMS
+	q := store.EventQuery{IP: row.IP, From: from, To: to, Current: 1, Size: size}
+	if row.Scope == scopeSite && row.Site != "" {
+		q.Site = row.Site
+	}
+	// 规则类封禁（自动封禁 / 高危规则）只看真正命中规则的那几条：
+	// 封禁生效后攻击者往往还会继续打，这些请求在数据面第一道就被封禁表挡下，
+	// 落库时没有规则、没有分数，时间却最新，会把「是什么触发的封禁」挤到后面。
+	// 情报封禁与手动封禁没有规则命中可看，保持全量（前者靠情报命中事件说明原因）。
+	if row.Source == "auto" || row.Source == "rule_ban" {
+		q.RuleHitOnly = true
+	}
+	rows, total, err := s.Store.QueryEvents(q)
+	if err != nil {
+		s.failDB(c, err)
+		return
+	}
+	// 老数据可能没有 rule_ids（升级前落库）：过滤后为空就退回全量，宁可嘈杂也别给空白
+	if q.RuleHitOnly && total == 0 {
+		q.RuleHitOnly = false
+		if rows, total, err = s.Store.QueryEvents(q); err != nil {
+			s.failDB(c, err)
+			return
+		}
+	}
+	list := make([]eventDTO, 0, len(rows))
+	for _, e := range rows {
+		list = append(list, s.toDTO(e))
+	}
+
+	ip := row.IP
+	// 演示模式下未打码的原始 IP 不能从这里漏出去
+	if s.Cfg.Demo.Enabled && s.Cfg.Demo.MaskIPs {
+		ip = maskIP(ip)
+	}
+	response.OK(c, gin.H{
+		"ban": gin.H{
+			"id": row.ID, "ip": ip, "reason": row.Reason, "source": row.Source,
+			"scope": row.Scope, "site": row.Site, "hitCount": row.HitCount,
+			"createdAt": row.CreatedAt, "expiresAt": row.ExpiresAt, "releasedAt": row.ReleasedAt,
+		},
+		"window": gin.H{"from": from, "to": to},
+		"events": list,
+		"total":  total,
+	})
+}
+
+// banEvents 关联事件的窗口常量：触发封禁的请求在 createdAt 之后才落库，
+// 所以向后留 60 秒；向前由调用方按 window 参数控制。
+const banEventsAfterMS = 60 * 1000
+
+// releaseBansForWhitelist 释放刚被加入白名单的 IP 名下仍然生效的封禁。
+//
+// 白名单在数据面已是最高优先级，历史封禁本身不会再拦到人；但若不在封禁管理里
+// 同步释放，面板会长期挂着一条「生效中」的封禁，运维无法从界面上判断这个 IP
+// 到底还拦不拦——「显示的封禁状态」和「实际拦截结果」必须一致。
+//
+// 作用域：全局白名单（site 为空）释放该 IP 的全部封禁（全局 + 各站点）；
+// 站点白名单只释放该站点的封禁，其他站点的封禁不受影响。
+// 只处理单 IP：封禁表按单个 IP 落键，CIDR 白名单无法逐条对应，跳过即可。
+// 参数 ips：本次新增 / 改成白名单的原始条目（允许混入 CIDR 与脏数据）。
+// 参数 site：白名单生效的站点名，空串表示全局白名单。
+// 返回 int：被释放的数据库封禁记录条数。
+func (s *Server) releaseBansForWhitelist(ips []string, site string) int {
+	now := store.NowMS()
+	released := 0
+	for _, raw := range ips {
+		addr, ok := guard.ParseIP(strings.TrimSpace(raw))
+		if !ok {
+			continue
+		}
+		ip := addr.String()
+
+		// 内存封禁表：按作用域逐个解，避免误伤其他站点的封禁
+		if site == "" {
+			// 全局白名单：把该 IP 的所有作用域键都清掉（键格式见 guard.banKey）
+			for k := range s.RT.Bans.Snapshot() {
+				siteOfKey := ""
+				if i := strings.IndexByte(k, 0); i >= 0 {
+					siteOfKey = k[:i]
+				}
+				s.RT.Bans.Unban(ip, siteOfKey)
+			}
+		} else {
+			s.RT.Bans.Unban(ip, site)
+		}
+
+		q := s.Store.Gorm().Model(&model.Ban{}).Where("ip = ? AND released_at = 0", ip)
+		if site != "" {
+			q = q.Where("scope = ? AND site = ?", scopeSite, site)
+		}
+		res := q.Update("released_at", now)
+		if res.Error != nil {
+			continue
+		}
+		released += int(res.RowsAffected)
+	}
+	if released > 0 {
+		metrics.BannedGauge.Set(float64(s.RT.Bans.Size()))
+	}
+	return released
+}
+
 // BanCreate 手动封禁单个 IP。scope=site 时只对指定站点生效，默认全局。
 // 参数 c：Gin 上下文，JSON 体含 ip（必填，仅支持单个 IP）、duration（秒，0 表示永久）、reason、scope、site。
 // 返回：无（200 返回 {"id","expiresAt","scope","site","operator"}；参数非法返回 400，数据库失败返回 500）。
@@ -424,6 +596,19 @@ func (s *Server) BanCreate(c *gin.Context) {
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return
+	}
+	// 白名单 IP 不允许封禁：数据面第一步就放行白名单，两边同时存在会出现
+	// 「显示封禁中、请求照样通」的鬼状态；直接拒绝，让操作者先决定保留哪一个。
+	// 全局封禁会波及所有站点，因此要查全部作用域的白名单。
+	if addr, ok := guard.ParseIP(in.IP); ok {
+		whitelisted := s.RT.IPList().IsWhitelisted(addr, site)
+		if site == "" {
+			whitelisted = s.RT.IPList().IsWhitelistedAnywhere(addr)
+		}
+		if whitelisted {
+			response.BadRequest(c, "该 IP 在白名单中，白名单优先于封禁；如确需封禁请先从白名单移除")
+			return
+		}
 	}
 
 	now := store.NowMS()

@@ -83,6 +83,8 @@ func NewRouter(o Options) *gin.Engine {
 
 			authed.GET("/ips", h.IPList)
 			authed.GET("/bans", h.BanList)
+			// 封禁详情里的「关联拦截事件」：按封禁记录反查触发它的事件
+			authed.GET("/bans/:id/events", h.BanEvents)
 			authed.GET("/rules", h.RuleList)
 			authed.GET("/rules/groups", h.RuleGroups)
 			authed.GET("/rules/stats", h.RuleStats)
