@@ -81,7 +81,8 @@ func (s *ipSet) black(addr netip.Addr) bool {
 // IPList 是不可变的 IP 名单快照。
 //
 // 全局名单对所有站点生效；站点名单只在该站点命中。
-// 优先级：站点名单 > 全局名单（白名单始终优先于黑名单）。
+// 优先级：站点名单 > 全局名单；白名单 > 黑名单。白名单是「完全豁免」，
+// 数据面第一步即判定，命中后黑名单、内存封禁、威胁情报、限流与规则引擎全部不再参与。
 type IPList struct {
 	global ipSet             // 全局名单，对所有站点生效
 	sites  map[string]*ipSet // 站点名单，键为站点名，只在该站点命中
@@ -96,8 +97,10 @@ func BuildIPList(rows []model.IPRule, nowMS int64) *IPList {
 		sites:  map[string]*ipSet{},
 	}
 	for _, r := range rows {
-		// 只有黑名单受过期时间约束：带过期时间且已过期的直接丢弃
-		if r.ExpiresAt > 0 && r.ExpiresAt < nowMS && r.Kind == "black" {
+		// 黑白名单都受过期时间约束：带过期时间且已过期的条目直接丢弃。
+		// 白名单过期尤其重要——「临时放行某台机器 2 小时」到期后必须重新参与检测，
+		// 否则一条带到期时间的白名单会悄悄变成永久放行。
+		if r.ExpiresAt > 0 && r.ExpiresAt < nowMS {
 			continue
 		}
 		isWhite := r.Kind == "white"
@@ -135,6 +138,9 @@ func BuildIPList(rows []model.IPRule, nowMS int64) *IPList {
 // IsWhitelisted 判断 IP 是否在白名单内，白名单优先级最高，命中后不做任何检测。
 // 参数 addr：待判定 IP；参数 site：当前请求命中的站点名，站点名单只对该站点生效。
 // 返回 bool：站点白名单或全局白名单任一命中返回 true；接收者为 nil 返回 false。
+//
+// 调用方（edge.ServeHTTP）必须在黑名单与内存封禁之前调用本方法，
+// 否则「先被封禁、后加白名单」的 IP 会继续吃 403，与白名单语义矛盾。
 func (l *IPList) IsWhitelisted(addr netip.Addr, site string) bool {
 	if l == nil {
 		return false
@@ -143,6 +149,27 @@ func (l *IPList) IsWhitelisted(addr netip.Addr, site string) bool {
 		return true
 	}
 	return l.global.white(addr)
+}
+
+// IsWhitelistedAnywhere 判断 IP 是否命中任意作用域的白名单（全局或任一站点）。
+//
+// 用于「全局封禁」这类会波及所有站点的管理动作：只要某个站点把它当自己人，
+// 全局封禁就不该落在它头上。全局封禁没有站点参数，所以不能只查全局名单。
+// 参数 addr：待判定 IP。
+// 返回 bool：命中全局白名单或任一站点的白名单返回 true；接收者为 nil 返回 false。
+func (l *IPList) IsWhitelistedAnywhere(addr netip.Addr) bool {
+	if l == nil {
+		return false
+	}
+	if l.global.white(addr) {
+		return true
+	}
+	for _, s := range l.sites {
+		if s.white(addr) {
+			return true
+		}
+	}
+	return false
 }
 
 // IsBlacklisted 判断 IP 是否在黑名单内。

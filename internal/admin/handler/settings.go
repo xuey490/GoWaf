@@ -17,22 +17,26 @@ import (
 // allowedSettingKeys 允许通过 HTTP 修改的设置键白名单，防止写入任意键污染配置。
 // 各键名与取值语义定义见 internal/runtime。
 var allowedSettingKeys = map[string]struct{}{
-	runtime.KeyMode:           {},
-	runtime.KeyBlockScore:     {},
-	runtime.KeyChallengeScore: {},
-	runtime.KeySampleRate:     {},
-	runtime.KeyIPRPS:          {},
-	runtime.KeyIPBurst:        {},
-	runtime.KeyIPPerMinute:    {},
-	runtime.KeyAutoBan:        {},
-	runtime.KeyBanThreshold:   {},
-	runtime.KeyBanWindow:      {},
-	runtime.KeyBanTTL:         {},
-	runtime.KeyBanMaxStrikes:  {},
-	runtime.KeyBanStrikeReset: {},
-	runtime.KeyCRSEnabled:     {},
-	runtime.KeyCRSMode:        {},
-	runtime.KeyCRSParanoia:    {},
+	runtime.KeyMode:                  {},
+	runtime.KeyBlockScore:            {},
+	runtime.KeyChallengeScore:        {},
+	runtime.KeySampleRate:            {},
+	runtime.KeyIPRPS:                 {},
+	runtime.KeyIPBurst:               {},
+	runtime.KeyIPPerMinute:           {},
+	runtime.KeyChallengeRPS:          {},
+	runtime.KeyChallengePerMinute:    {},
+	runtime.KeyChallengeReferer:      {},
+	runtime.KeyChallengeRefererAllow: {},
+	runtime.KeyAutoBan:               {},
+	runtime.KeyBanThreshold:          {},
+	runtime.KeyBanWindow:             {},
+	runtime.KeyBanTTL:                {},
+	runtime.KeyBanMaxStrikes:         {},
+	runtime.KeyBanStrikeReset:        {},
+	runtime.KeyCRSEnabled:            {},
+	runtime.KeyCRSMode:               {},
+	runtime.KeyCRSParanoia:           {},
 
 	runtime.KeyIntelBanOnHit: {},
 	runtime.KeyIntelBanTTL:   {},
@@ -148,6 +152,7 @@ func validateSetting(key, value string) string {
 			return "sample_rate 必须是 0~1 之间"
 		}
 	case runtime.KeyIPRPS, runtime.KeyIPBurst, runtime.KeyIPPerMinute,
+		runtime.KeyChallengeRPS, runtime.KeyChallengePerMinute,
 		runtime.KeyBanThreshold, runtime.KeyBanWindow, runtime.KeyBanTTL,
 		runtime.KeyBanMaxStrikes, runtime.KeyBanStrikeReset:
 		n, err := strconv.Atoi(value)
@@ -170,6 +175,14 @@ func validateSetting(key, value string) string {
 	case runtime.KeyAutoBan:
 		if value != "true" && value != "false" {
 			return "guard.auto_ban 只能是 true/false"
+		}
+	case runtime.KeyChallengeReferer:
+		if value != "true" && value != "false" {
+			return "guard.challenge_referer 只能是 true/false"
+		}
+	case runtime.KeyChallengeRefererAllow:
+		if len(value) > 2000 {
+			return "guard.challenge_referer_allow 过长（上限 2000 字符）"
 		}
 	case runtime.KeyIntelBanOnHit, runtime.KeyNotifyEnabled:
 		if value != "true" && value != "false" {

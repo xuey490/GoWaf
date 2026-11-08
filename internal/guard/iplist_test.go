@@ -85,3 +85,48 @@ func TestBanListSiteScope(t *testing.T) {
 		t.Fatal("解封后不应残留")
 	}
 }
+
+// TestIPListWhitePrecedence 验证白名单是「完全豁免」的两个前提：
+// 1) 白名单与黑名单同时存在时，白名单判定成立（数据面据此先放行）；
+// 2) IsWhitelistedAnywhere 覆盖任意站点作用域，供全局封禁前的校验使用。
+func TestIPListWhitePrecedence(t *testing.T) {
+	list := BuildIPList([]model.IPRule{
+		{IP: "10.0.0.5", Kind: "black", Scope: "global"},
+		{IP: "10.0.0.5", Kind: "white", Scope: "global"},
+		{IP: "10.0.0.6", Kind: "white", Scope: "site", Site: "a.com"},
+	}, 0)
+
+	addr := netip.MustParseAddr("10.0.0.5")
+	if !list.IsWhitelisted(addr, "a.com") {
+		t.Fatal("黑白名单同时命中时，白名单必须成立（优先于黑名单）")
+	}
+
+	// 站点白名单不在该站点时 IsWhitelisted 为 false，但全局封禁前必须能查到
+	siteOnly := netip.MustParseAddr("10.0.0.6")
+	if list.IsWhitelisted(siteOnly, "b.com") {
+		t.Fatal("站点白名单不应在其他站点直接命中")
+	}
+	if !list.IsWhitelistedAnywhere(siteOnly) {
+		t.Fatal("全局封禁前应能查到任意站点作用域的白名单")
+	}
+	if list.IsWhitelistedAnywhere(netip.MustParseAddr("10.0.0.7")) {
+		t.Fatal("未列入白名单的 IP 不应被判定为白名单")
+	}
+}
+
+// TestIPListWhiteExpiry 验证带到期时间的白名单条目过期后不再生效。
+// 若忽略过期时间，「临时放行 2 小时」会变成永久放行，属于安全缺口。
+func TestIPListWhiteExpiry(t *testing.T) {
+	const now = int64(1_700_000_000_000)
+	list := BuildIPList([]model.IPRule{
+		{IP: "10.0.0.8", Kind: "white", Scope: "global", ExpiresAt: now - 1},
+		{IP: "10.0.0.9", Kind: "white", Scope: "global", ExpiresAt: now + 60_000},
+	}, now)
+
+	if list.IsWhitelisted(netip.MustParseAddr("10.0.0.8"), "a.com") {
+		t.Fatal("已过期的白名单条目不应再生效")
+	}
+	if !list.IsWhitelisted(netip.MustParseAddr("10.0.0.9"), "a.com") {
+		t.Fatal("未过期的白名单条目必须生效")
+	}
+}

@@ -39,12 +39,20 @@ const (
 	KeyIPRPS          = "guard.ip_rps"           // 全局单 IP 每秒请求数阈值
 	KeyIPBurst        = "guard.ip_burst"         // 全局单 IP 令牌桶突发容量
 	KeyIPPerMinute    = "guard.ip_per_minute"    // 全局单 IP 每分钟请求数阈值
-	KeyAutoBan        = "guard.auto_ban"         // 是否启用自动封禁
-	KeyBanThreshold   = "guard.ban_threshold"    // 自动封禁触发分数
-	KeyBanWindow      = "guard.ban_window"       // 分数累计窗口（秒）
-	KeyBanTTL         = "guard.ban_ttl"          // 封禁时长（秒）
-	KeyBanMaxStrikes  = "guard.ban_max_strikes"  // 累计 strike 上限，达到即封禁
-	KeyBanStrikeReset = "guard.ban_strike_reset" // strike 计数重置窗口（秒）
+	// 人机校验触发条件：软阈值超限 / 跨站来路。两者都在硬限流（429）之前生效，
+	// 目的是把「可疑但不确定」的流量降级成一次自证，而不是直接拒掉。
+	KeyChallengeRPS       = "guard.challenge_rps"        // 单 IP 每秒超过该值下发人机校验（0=关闭）
+	KeyChallengePerMinute = "guard.challenge_per_minute" // 单 IP 每分钟超过该值下发人机校验（0=关闭）
+	KeyChallengeReferer   = "guard.challenge_referer"    // 跨站来路的页面导航是否下发人机校验
+	// KeyChallengeRefererAllow 允许的跨站来路（逗号分隔），命中的 Referer 域名不挑战，
+	// 用于放行搜索引擎等正常导流来源。
+	KeyChallengeRefererAllow = "guard.challenge_referer_allow"
+	KeyAutoBan               = "guard.auto_ban"         // 是否启用自动封禁
+	KeyBanThreshold          = "guard.ban_threshold"    // 自动封禁触发分数
+	KeyBanWindow             = "guard.ban_window"       // 分数累计窗口（秒）
+	KeyBanTTL                = "guard.ban_ttl"          // 封禁时长（秒）
+	KeyBanMaxStrikes         = "guard.ban_max_strikes"  // 累计 strike 上限，达到即封禁
+	KeyBanStrikeReset        = "guard.ban_strike_reset" // strike 计数重置窗口（秒）
 
 	// CRS 第二引擎（OWASP CRS / Coraza）。
 	KeyCRSEnabled  = "engine.crs.enabled"  // 是否启用 CRS 第二引擎
@@ -102,6 +110,10 @@ type Runtime struct {
 	// key=SiteID。启用自定义防护的站点用独立实例，计数互不挤占。
 	siteLimiters atomic.Pointer[map[uint]*guard.Limiter]
 
+	// challLimiter 是人机校验的软阈值计数器：超过它先下发校验，而不是像硬限流那样直接 429。
+	// 独立实例，避免软限流消耗硬限流的令牌（否则「校验通过后继续正常浏览」会被自己的计数卡死）。
+	challLimiter atomic.Pointer[guard.Limiter]
+
 	router  atomic.Pointer[proxy.Router] // 路由快照：Reload 时整体替换，读路径无锁
 	iplist  guard.Holder                 // IP 名单快照容器（内部 atomic.Pointer，读无锁）
 	started time.Time                    // 进程启动时间：运行时长统计用
@@ -135,8 +147,11 @@ func New(cfg *config.Config, st *store.Store, certs *proxy.CertManager, version 
 	r.cache.Store(&map[string]string{})
 	r.siteLimiters.Store(&map[uint]*guard.Limiter{})
 
-	secret := []byte(cfg.Admin.JWTSecretFile)
+	// 挑战通行证的签名密钥取自 JWT 密钥文件内容（不是文件路径字符串）：
+	// 拿路径当密钥等于用一个公开常量签名，知道默认路径的人就能伪造通行证。
+	secret := challengeSecret(cfg.Admin.JWTSecretFile)
 	r.Chall = guard.NewChallenger(secret, 30*time.Minute)
+	r.challLimiter.Store(newChallengeLimiter(cfg.Guard.ChallengeRPS, cfg.Guard.ChallengePerMinute))
 
 	// 告警通知器：配置每次发送前现读，改完设置立即生效，不需要重启。
 	r.Notify = notify.New(r.NotifyConfig, func(lg model.NotifyLog) {
@@ -358,6 +373,9 @@ func (r *Runtime) Reload(ctx context.Context) error {
 	r.siteLimiters.Store(&slg)
 
 	r.Engine.SetMode(r.settingFrom(sm, KeyMode, r.Cfg.Engine.Mode))
+	r.challLimiter.Store(newChallengeLimiter(
+		r.settingFromInt(sm, KeyChallengeRPS, r.Cfg.Guard.ChallengeRPS),
+		r.settingFromInt(sm, KeyChallengePerMinute, r.Cfg.Guard.ChallengePerMinute)))
 	r.reloadCRS(sm)
 
 	log.Printf("[runtime] 重载完成: 站点 %d, 规则 %d, 例外 %d, IP 名单 %d, 封禁 %d, 模式 %s, CRS %s",
@@ -540,6 +558,9 @@ func (r *Runtime) LimiterFor(siteID uint) *guard.Limiter {
 // 返回 []*guard.Limiter：供后台清理协程遍历，定期清理过期计数，防止内部 map 无限增长。
 func (r *Runtime) SiteLimiters() []*guard.Limiter {
 	out := []*guard.Limiter{r.Limiter}
+	if cl := r.challLimiter.Load(); cl != nil {
+		out = append(out, cl)
+	}
 	if m := r.siteLimiters.Load(); m != nil {
 		for _, l := range *m {
 			out = append(out, l)
@@ -564,16 +585,21 @@ func DefaultSettings(cfg *config.Config) map[string]string {
 		KeyIPRPS:          strconv.Itoa(cfg.Guard.IPRPS),
 		KeyIPBurst:        strconv.Itoa(cfg.Guard.IPBurst),
 		KeyIPPerMinute:    strconv.Itoa(cfg.Guard.IPPerMinute),
-		KeyAutoBan:        strconv.FormatBool(cfg.Guard.AutoBan),
-		KeyBanThreshold:   strconv.Itoa(cfg.Guard.BanThreshold),
-		KeyBanWindow:      strconv.Itoa(int(cfg.Guard.BanWindow.Duration() / time.Second)),
-		KeyBanTTL:         strconv.Itoa(int(cfg.Guard.BanTTL.Duration() / time.Second)),
-		KeyBanMaxStrikes:  strconv.Itoa(cfg.Guard.BanMaxStrikes),
-		KeyBanStrikeReset: strconv.Itoa(int(cfg.Guard.BanStrikeReset.Duration() / time.Second)),
-		KeyCRSEnabled:     "true",
-		KeyCRSMode:        "block",
-		KeyCRSParanoia:    "1",
-		KeyCRSMethods:     detect.DefaultCRSMethods,
+
+		KeyChallengeRPS:          strconv.Itoa(cfg.Guard.ChallengeRPS),
+		KeyChallengePerMinute:    strconv.Itoa(cfg.Guard.ChallengePerMinute),
+		KeyChallengeReferer:      strconv.FormatBool(cfg.Guard.RefererChallengeEnabled()),
+		KeyChallengeRefererAllow: cfg.Guard.ChallengeRefererAllow,
+		KeyAutoBan:               strconv.FormatBool(cfg.Guard.AutoBan),
+		KeyBanThreshold:          strconv.Itoa(cfg.Guard.BanThreshold),
+		KeyBanWindow:             strconv.Itoa(int(cfg.Guard.BanWindow.Duration() / time.Second)),
+		KeyBanTTL:                strconv.Itoa(int(cfg.Guard.BanTTL.Duration() / time.Second)),
+		KeyBanMaxStrikes:         strconv.Itoa(cfg.Guard.BanMaxStrikes),
+		KeyBanStrikeReset:        strconv.Itoa(int(cfg.Guard.BanStrikeReset.Duration() / time.Second)),
+		KeyCRSEnabled:            "true",
+		KeyCRSMode:               "block",
+		KeyCRSParanoia:           "1",
+		KeyCRSMethods:            detect.DefaultCRSMethods,
 
 		KeyIntelBanOnHit: "true",
 		KeyIntelBanTTL:   "3600",

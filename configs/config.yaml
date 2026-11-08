@@ -14,6 +14,12 @@ server:
   idle_timeout: 90s
   max_header_bytes: 32768
   shutdown_timeout: 15s
+  # 可信代理网段：只有来自这些网段的请求，才会采信 CF-Connecting-IP / X-Forwarded-For。
+  #
+  # 站点挂在 Cloudflare 小云朵后面时，这里必须补上 CF 回源网段，否则 gowaf 看到的
+  # 客户端 IP 全是 CF 节点 IP：限流、封禁、人机校验频率阈值都会按「同一个 IP」计算，
+  # 表现是全站访客一起被挑战、一封封一片、日志里 IP 全是 104.x/172.6x。
+  # 一条命令补齐（推荐，含 v4/v6 共 22 段）：deploy/install.sh cloudflare on
   trusted_proxies:
     - "127.0.0.1/32"
     - "::1/128"
