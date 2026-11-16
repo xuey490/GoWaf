@@ -6,7 +6,15 @@
 
 ## [未发布]
 
-暂无待发布变更。
+### 新增
+
+- **Bot 管理 → 设置页签**
+  此前 `bot.enabled` / `bot.score_threshold` / `bot.verify_rdns` / `bot.action` /
+  `bot.window` / `bot.cache_ttl` 只存在于 `settings` 表，控制台没有任何入口
+  （「防护配置」页只渲染 engine/guard/notify，「Bot 管理」页只有策略与蜜罐两个页签），
+  只能改库或手工调 `PUT /api/settings`。现在「Bot 管理」新增第三个页签，六项可直接编辑，
+  保存后热生效无需重启；页面挂载时读取当前值。
+  写入只提交 `bot.*` 六个键，不会连带改动 SMTP 密码、引擎模式等其他设置项。
 
 ## [v1.3.1] - 2026-11-17
 
