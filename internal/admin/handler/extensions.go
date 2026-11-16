@@ -19,8 +19,10 @@ import (
 	"net/netip"
 	"net/url"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -34,6 +36,27 @@ import (
 	"gowaf/internal/store"
 	"gowaf/internal/store/model"
 )
+
+/* ====================================================== 通用 */
+
+// createRow 创建记录，并强制把 enabled 字段按调用方意图落库。
+//
+// 背景：模型的 Enabled 字段带 `default:1` 标签，GORM 在插入时会把零值字段
+// 直接省略、交给数据库默认值，于是「新增时选择停用」（enabled=0）会被悄悄
+// 写成启用。对策略 / 规则类配置而言这是安全隐患——用户以为只是先存着不发，
+// 实际已经对全网生效。这里在创建成功后补一次显式更新把意图纠正回来。
+//
+// 参数 row：已填充的模型指针（创建后 ID 会被回填）；参数 enabled：期望的启用状态。
+// 返回 error：创建或更新失败时返回错误。
+func (s *Server) createRow(row any, enabled int) error {
+	if err := s.Store.Gorm().Create(row).Error; err != nil {
+		return err
+	}
+	if enabled != 0 {
+		return nil
+	}
+	return s.Store.Gorm().Model(row).Update("enabled", 0).Error
+}
 
 /* ====================================================== 精准访问控制 */
 
@@ -79,7 +102,7 @@ func (s *Server) PolicyCreate(c *gin.Context) {
 		response.BadRequest(c, msg)
 		return
 	}
-	if err := s.Store.Gorm().Create(row).Error; err != nil {
+	if err := s.createRow(row, row.Enabled); err != nil {
 		s.failDB(c, err)
 		return
 	}
@@ -244,7 +267,7 @@ func (s *Server) BotCreate(c *gin.Context) {
 		response.BadRequest(c, msg)
 		return
 	}
-	if err := s.Store.Gorm().Create(row).Error; err != nil {
+	if err := s.createRow(row, row.Enabled); err != nil {
 		s.failDB(c, err)
 		return
 	}
@@ -413,7 +436,7 @@ func (s *Server) HoneypotCreate(c *gin.Context) {
 		response.BadRequest(c, msg)
 		return
 	}
-	if err := s.Store.Gorm().Create(row).Error; err != nil {
+	if err := s.createRow(row, row.Enabled); err != nil {
 		s.failDB(c, err)
 		return
 	}
@@ -546,7 +569,7 @@ func (s *Server) CacheRuleCreate(c *gin.Context) {
 		response.BadRequest(c, msg)
 		return
 	}
-	if err := s.Store.Gorm().Create(row).Error; err != nil {
+	if err := s.createRow(row, row.Enabled); err != nil {
 		s.failDB(c, err)
 		return
 	}
@@ -774,6 +797,83 @@ func (s *Server) CacheStats(c *gin.Context) {
 	response.OK(c, s.RT.Cache.Stats())
 }
 
+// CacheEntryList 列出当前内存中的缓存对象。
+// 路由：GET /api/cache/entries（仅需登录）。
+//
+// 参数：site 站点过滤、keyword 路径/文件名/域名模糊匹配、sort 排序字段、
+// order 升/降序、page/size 分页。返回 list 只包含当前页，另附过滤后的总数。
+func (s *Server) CacheEntryList(c *gin.Context) {
+	all := s.RT.Cache.Entries(time.Now())
+
+	site := strings.TrimSpace(c.Query("site"))
+	kw := strings.ToLower(strings.TrimSpace(c.Query("keyword")))
+	matched := make([]cache.EntryInfo, 0, len(all))
+	var matchedBytes int64
+	for _, e := range all {
+		if site != "" && !strings.EqualFold(e.Site, site) {
+			continue
+		}
+		if kw != "" &&
+			!strings.Contains(strings.ToLower(e.Path), kw) &&
+			!strings.Contains(strings.ToLower(e.Filename), kw) &&
+			!strings.Contains(strings.ToLower(e.Host), kw) {
+			continue
+		}
+		matched = append(matched, e)
+		matchedBytes += e.Size
+	}
+	sortCacheEntries(matched, c.DefaultQuery("sort", "storedAt"), c.DefaultQuery("order", "desc"))
+
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	size, _ := strconv.Atoi(c.DefaultQuery("size", "20"))
+	if page < 1 {
+		page = 1
+	}
+	if size < 1 {
+		size = 20
+	}
+	if size > 200 {
+		size = 200
+	}
+	start := (page - 1) * size
+	if start > len(matched) {
+		start = len(matched)
+	}
+	end := start + size
+	if end > len(matched) {
+		end = len(matched)
+	}
+
+	response.OK(c, gin.H{
+		"list": matched[start:end], "total": len(matched),
+		"entries": len(all), "bytes": matchedBytes,
+		"page": page, "size": size, "now": time.Now().UnixMilli(),
+	})
+}
+
+// sortCacheEntries 按指定字段排序；order=asc 时反转比较结果。
+// 未知字段回落到写入时间倒序，避免前端传入脏值导致顺序不可预期。
+func sortCacheEntries(list []cache.EntryInfo, field, order string) {
+	var less func(i, j int) bool
+	switch field {
+	case "size":
+		less = func(i, j int) bool { return list[i].Size > list[j].Size }
+	case "hits":
+		less = func(i, j int) bool { return list[i].Hits > list[j].Hits }
+	case "expiresAt":
+		less = func(i, j int) bool { return list[i].ExpiresAt < list[j].ExpiresAt }
+	case "remain":
+		less = func(i, j int) bool { return list[i].RemainSeconds < list[j].RemainSeconds }
+	default:
+		less = func(i, j int) bool { return list[i].StoredAt > list[j].StoredAt }
+	}
+	if strings.EqualFold(order, "asc") {
+		base := less
+		less = func(i, j int) bool { return base(j, i) }
+	}
+	sort.SliceStable(list, less)
+}
+
 // CachePurge 清空缓存对象。
 // 路由：POST /api/cache/purge（cache:write）。
 func (s *Server) CachePurge(c *gin.Context) {
@@ -946,7 +1046,8 @@ func (s *Server) NodeCreate(c *gin.Context) {
 		response.BadRequest(c, msg)
 		return
 	}
-	if err := s.Store.Gorm().Create(row).Error; err != nil {
+	// 节点没有 enabled 字段，走统一的创建逻辑但不需要纠正开关
+	if err := s.createRow(row, 1); err != nil {
 		s.failDB(c, err)
 		return
 	}

@@ -21,6 +21,14 @@ import (
 	"gowaf/internal/cache"
 )
 
+// flushGrace 是缓冲期的宽限时长。
+//
+// ReverseProxy 配置了 FlushInterval=-1（每写一段就 Flush），如果 Flush 把缓冲无条件
+// 刷出去，缓冲立刻退化为透传，Close 里的缓存写入与压缩就永远没有机会执行。
+// 因此缓冲期内只允许「超过宽限期」才降级透传：静态资源通常在宽限期内读完，
+// 能完整入缓存；真正的慢速/流式响应超过宽限期即恢复边收边发，不拖慢客户端。
+const flushGrace = 300 * time.Millisecond
+
 // accelWriter 是带缓存/压缩/WebP 能力的响应包装器。
 type accelWriter struct {
 	dest     http.ResponseWriter // 下游（通常是 statusRecorder）
@@ -35,6 +43,12 @@ type accelWriter struct {
 	closed      bool
 	passthrough bool
 	limit       int
+	firstWrite  time.Time
+
+	// decodeEnc 记录上游的 Content-Encoding（gzip/br/deflate）。
+	// 源站（Apache/Nginx）通常已经压缩，若直接透传则缓存与二次压缩全部失效，
+	// 所以这里先缓冲、Close 时解码成原始字节，再按客户端能力重新协商编码。
+	decodeEnc string
 
 	buf bytes.Buffer
 
@@ -77,12 +91,19 @@ func (w *accelWriter) WriteHeader(code int) {
 		return
 	}
 	h := w.dest.Header()
-	// 上游已经压缩过的响应不再二次处理；非 200、非 GET/HEAD 一律透传
+	// 上游已经压缩过的响应：不能直接放弃加速（源站默认都会 gzip，那样缓存永远填不满），
+	// 先记下编码，Close 时解码成原始字节再缓存/按客户端能力重新压缩。
 	if code != http.StatusOK ||
-		(w.req.Method != http.MethodGet && w.req.Method != http.MethodHead) ||
-		(h.Get("Content-Encoding") != "" && !strings.EqualFold(h.Get("Content-Encoding"), "identity")) {
+		(w.req.Method != http.MethodGet && w.req.Method != http.MethodHead) {
 		w.flushHeaderOnly()
 		return
+	}
+	if enc := strings.ToLower(strings.TrimSpace(h.Get("Content-Encoding"))); enc != "" && enc != "identity" {
+		if !cache.Decodable(enc) {
+			w.flushHeaderOnly()
+			return
+		}
+		w.decodeEnc = enc
 	}
 	ct := h.Get("Content-Type")
 	// SSE 必须立即透传，否则事件会被缓冲区卡住
@@ -90,6 +111,8 @@ func (w *accelWriter) WriteHeader(code int) {
 		w.flushHeaderOnly()
 		return
 	}
+	// 已压缩响应的 Content-Length 是压缩后长度，不能代表解码后体积，
+	// 这里按压缩后长度先挡一道，解码后仍由缓存上限与写入路径二次校验。
 	if h.Get("Content-Length") != "" {
 		if n, err := strconv.Atoi(h.Get("Content-Length")); err == nil && n > w.limit {
 			w.flushHeaderOnly()
@@ -121,12 +144,22 @@ func (w *accelWriter) Write(p []byte) (int, error) {
 		}
 		return w.dest.Write(p)
 	}
+	if w.firstWrite.IsZero() {
+		w.firstWrite = time.Now()
+	}
 	return w.buf.Write(p)
 }
 
-// Flush 支持 SSE/流式输出：有缓冲时先刷出再调用下游 Flush。
+// Flush 在宽限期内保持缓冲，超时才降级为透传。
+//
+// 不能无条件 flushBuffered：ReverseProxy 的 FlushInterval=-1 会让每个数据块都触发
+// Flush，一旦缓冲被提前刷出并切成透传，Close 中的缓存写入、WebP 与压缩全部失效
+// （线上表现为「规则配好了但响应永远没有 X-Cache」）。
 func (w *accelWriter) Flush() {
 	if !w.passthrough {
+		if w.firstWrite.IsZero() || time.Since(w.firstWrite) < flushGrace {
+			return
+		}
 		if err := w.flushBuffered(); err != nil {
 			return
 		}
@@ -162,6 +195,25 @@ func (w *accelWriter) Close() {
 	body := w.buf.Bytes()
 	if body == nil {
 		body = []byte{}
+	}
+
+	// 0) 上游预压缩的响应先解回原始字节。
+	//    这是「缓存存原始字节、编码按客户端现算」的前提：否则源站默认 gzip 时
+	//    缓存键里存的会是压缩流，换一种 Accept-Encoding 的客户端就直接错乱。
+	if w.decodeEnc != "" && len(body) > 0 {
+		decoded, ok := cache.Decode(body, w.decodeEnc)
+		if !ok {
+			// 解码失败：保持上游编码原样透传，不能发出去半截解压内容
+			h.Set("Content-Length", strconv.Itoa(len(body)))
+			w.dest.WriteHeader(w.status)
+			_, _ = w.dest.Write(body)
+			return
+		}
+		body = decoded
+		h.Del("Content-Encoding")
+		h.Del("Content-Length")
+		// 上游 ETag 一般带 -gzip/-br 后缀，正文已变，保留会让条件请求错配
+		h.Del("ETag")
 	}
 
 	// 1) 缓存写入必须在压缩/WebP 之前：缓存保存原始字节与原始 Content-Type，
