@@ -18,12 +18,15 @@ import (
 	"sync/atomic"
 	"time"
 
+	"gowaf/internal/bot"
+	"gowaf/internal/cache"
 	"gowaf/internal/config"
 	"gowaf/internal/detect"
 	"gowaf/internal/geo"
 	"gowaf/internal/guard"
 	"gowaf/internal/intel"
 	"gowaf/internal/notify"
+	"gowaf/internal/policy"
 	"gowaf/internal/proxy"
 	"gowaf/internal/store"
 	"gowaf/internal/store/model"
@@ -82,6 +85,29 @@ const (
 	KeyNotifyMinScore = "notify.min_score"     // 触发告警的最低分数
 	KeyNotifyWindow   = "notify.window"        // 告警聚合窗口（秒）
 	KeyNotifyCooldown = "notify.cooldown"      // 同类告警冷却时间（秒）
+
+	// Bot 管理：UA/路径/IP/rDNS 策略 + 蜜罐 + 行为评分。
+	KeyBotEnabled        = "bot.enabled"         // Bot 管理总开关
+	KeyBotVerifyRDNS     = "bot.verify_rdns"     // 是否对搜索引擎 Bot 做正向-反向 DNS 验证
+	KeyBotScoreThreshold = "bot.score_threshold" // 行为评分窗口内的请求次数阈值
+	KeyBotAction         = "bot.action"          // 评分超限后的处置动作
+	KeyBotWindow         = "bot.window"          // 行为统计窗口（秒）
+	KeyBotCacheTTL       = "bot.cache_ttl"       // rDNS 验证结果缓存（秒）
+
+	// 页面缓存与压缩。
+	KeyCacheEnabled     = "cache.enabled"            // 页面缓存总开关
+	KeyCacheMaxBytes    = "cache.max_bytes"          // 缓存总容量（字节）
+	KeyCacheMaxObject   = "cache.max_object_bytes"   // 单对象缓存上限（字节）
+	KeyCacheDefaultTTL  = "cache.default_ttl"        // 默认缓存时长（秒）
+	KeyCacheCompress    = "cache.compress"           // 是否启用 gzip 压缩
+	KeyCacheBrotli      = "cache.brotli"             // 是否启用 brotli 压缩
+	KeyCacheWebP        = "cache.webp"               // 是否启用 WebP 转换
+	KeyCacheCompressMin = "cache.compress_min_bytes" // 触发压缩的最小字节数
+
+	// 多上游与节点。
+	KeyUpstreamHealth   = "upstream.health_interval" // 上游健康检查间隔（秒）
+	KeyNodeHeartbeatTTL = "node.heartbeat_ttl"       // 节点心跳超时（秒），超时视为离线
+	KeyNodeAgentToken   = "node.agent_token"         // 节点 Agent 上报令牌
 )
 
 // Runtime 聚合数据面与控制面共享的全部组件，是整个 WAF 的运行时中枢。
@@ -104,6 +130,10 @@ type Runtime struct {
 	Geo    *geo.DB
 	Intel  *intel.Manager
 	Notify *notify.Notifier
+	// Policy 精准访问控制快照，Bot Bot 管理引擎，Cache 页面缓存/压缩引擎。
+	Policy atomic.Pointer[policy.Set]
+	Bot    *bot.Manager
+	Cache  *cache.Manager
 	crs    atomic.Pointer[detect.CRSEngine] // CRS 第二引擎（OWASP CRS/Coraza）；未启用或未构建时为 nil
 
 	// siteLimiters 站点自定义限流器集合（Reload 时重建）。
@@ -138,6 +168,8 @@ func New(cfg *config.Config, st *store.Store, certs *proxy.CertManager, version 
 		Certs:     certs,
 		Geo:       geo.Default(),
 		Intel:     intel.New(),
+		Bot:       bot.NewManager(),
+		Cache:     cache.NewManager(),
 		Version:   version,
 		started:   time.Now(),
 	}
@@ -146,6 +178,7 @@ func New(cfg *config.Config, st *store.Store, certs *proxy.CertManager, version 
 	r.iplist.Store(&guard.IPList{})
 	r.cache.Store(&map[string]string{})
 	r.siteLimiters.Store(&map[uint]*guard.Limiter{})
+	r.Policy.Store(&policy.Set{})
 
 	// 挑战通行证的签名密钥取自 JWT 密钥文件内容（不是文件路径字符串）：
 	// 拿路径当密钥等于用一个公开常量签名，知道默认路径的人就能伪造通行证。
@@ -274,6 +307,7 @@ func (r *Runtime) Reload(ctx context.Context) error {
 	// 自环防护：上游指向 WAF 自身监听端口的站点一律拒绝加载（会引发无限代理自环）
 	sites = dropSelfLoopSites(sites, selfListenPorts(
 		r.Cfg.Server.Listen, r.Cfg.Server.TLSListen, r.Cfg.Server.AdminListen,
+		r.Cfg.Server.ListenV6, r.Cfg.Server.TLSListenV6,
 	))
 
 	var rules []model.Rule
@@ -319,6 +353,91 @@ func (r *Runtime) Reload(ctx context.Context) error {
 		sm[s.Key] = s.Value
 	}
 
+	// 精准访问控制：条件树 JSON 在 Reload 时解析并编译成不可变快照。
+	var apRows []model.AccessPolicy
+	if err := r.Store.Gorm().WithContext(ctx).Where("enabled = 1").Find(&apRows).Error; err != nil {
+		return err
+	}
+	apDefs := make([]policy.Definition, 0, len(apRows))
+	for _, row := range apRows {
+		g, err := policy.DecodeGroup(row.Conditions)
+		if err != nil {
+			return fmt.Errorf("策略 %s 条件解析失败: %w", row.Name, err)
+		}
+		apDefs = append(apDefs, policy.Definition{
+			ID: row.ID, Name: row.Name, Site: row.Site, Priority: row.Priority,
+			Enabled: row.Enabled == 1, Action: policy.Action(row.Action), Conditions: g,
+		})
+	}
+	pol, err := policy.Compile(apDefs)
+	if err != nil {
+		return err
+	}
+
+	// Bot 策略与蜜罐路径。
+	var botRows []model.BotPolicy
+	if err := r.Store.Gorm().WithContext(ctx).Where("enabled = 1").Order("priority ASC, id ASC").Find(&botRows).Error; err != nil {
+		return err
+	}
+	botDefs := make([]bot.PolicyDef, 0, len(botRows))
+	for _, row := range botRows {
+		botDefs = append(botDefs, bot.PolicyDef{
+			ID: row.ID, Name: row.Name, Site: row.Site, Category: row.Category,
+			Action: bot.Action(row.Action), MatchType: row.MatchType, Pattern: row.Pattern,
+			Priority: row.Priority, Enabled: row.Enabled == 1,
+		})
+	}
+	var hpRows []model.BotHoneypot
+	if err := r.Store.Gorm().WithContext(ctx).Where("enabled = 1").Find(&hpRows).Error; err != nil {
+		return err
+	}
+	hpDefs := make([]bot.HoneypotDef, 0, len(hpRows))
+	for _, row := range hpRows {
+		hpDefs = append(hpDefs, bot.HoneypotDef{
+			ID: row.ID, Site: row.Site, Path: row.Path, Enabled: row.Enabled == 1,
+		})
+	}
+	botSettings := bot.Settings{
+		Enabled:        r.settingFromBool(sm, KeyBotEnabled, false),
+		VerifyRDNS:     r.settingFromBool(sm, KeyBotVerifyRDNS, true),
+		ScoreThreshold: r.settingFromInt(sm, KeyBotScoreThreshold, 60),
+		Action:         bot.Action(r.settingFrom(sm, KeyBotAction, string(bot.ActionChallenge))),
+		Window:         time.Duration(r.settingFromInt(sm, KeyBotWindow, 60)) * time.Second,
+		CacheTTL:       time.Duration(r.settingFromInt(sm, KeyBotCacheTTL, 600)) * time.Second,
+	}
+	if err := r.Bot.Reload(botDefs, hpDefs, botSettings); err != nil {
+		return err
+	}
+
+	// 页面缓存规则与压缩设置。
+	var cacheRows []model.CacheRule
+	if err := r.Store.Gorm().WithContext(ctx).Where("enabled = 1").Order("priority ASC, id ASC").Find(&cacheRows).Error; err != nil {
+		return err
+	}
+	cacheDefs := make([]cache.RuleDef, 0, len(cacheRows))
+	for _, row := range cacheRows {
+		cacheDefs = append(cacheDefs, cache.RuleDef{
+			ID: row.ID, Name: row.Name, Site: row.Site, Kind: row.Kind, Pattern: row.Pattern,
+			TTL: time.Duration(row.TTLSeconds) * time.Second, Priority: row.Priority,
+			Enabled: row.Enabled == 1,
+		})
+	}
+	cacheSettings := cache.DecodeSettings(func(k string) string { return sm[k] }, cache.DefaultSettings())
+	if err := r.Cache.Reload(cacheDefs, cacheSettings); err != nil {
+		return err
+	}
+
+	// 站点多上游（双链路）：按站点分组，BuildRouter 把主上游与额外目标合并。
+	var upRows []model.SiteUpstream
+	if err := r.Store.Gorm().WithContext(ctx).Where("enabled = 1").
+		Order("priority ASC, weight DESC, id ASC").Find(&upRows).Error; err != nil {
+		return err
+	}
+	extraUpstreams := make(map[uint][]model.SiteUpstream, len(sites))
+	for _, row := range upRows {
+		extraUpstreams[row.SiteID] = append(extraUpstreams[row.SiteID], row)
+	}
+
 	// 设置页阈值应用到引擎（此前只落库不生效）
 	gBlock := r.settingFromInt(sm, KeyBlockScore, r.Cfg.Engine.BlockScore)
 	gChallenge := r.settingFromInt(sm, KeyChallengeScore, r.Cfg.Engine.ChallengeScore)
@@ -360,7 +479,7 @@ func (r *Runtime) Reload(ctx context.Context) error {
 		slg[sites[i].ID] = guard.NewLimiter(sg.IPRPS, sg.IPBurst, sg.IPPerMinute)
 	}
 
-	router, err := proxy.BuildRouter(sites, guards)
+	router, err := proxy.BuildRouterWithUpstreams(sites, guards, extraUpstreams)
 	if err != nil {
 		return err
 	}
@@ -371,6 +490,7 @@ func (r *Runtime) Reload(ctx context.Context) error {
 	r.Bans.LoadFromDB(bans, now)
 	r.cache.Store(&sm)
 	r.siteLimiters.Store(&slg)
+	r.Policy.Store(pol)
 
 	r.Engine.SetMode(r.settingFrom(sm, KeyMode, r.Cfg.Engine.Mode))
 	r.challLimiter.Store(newChallengeLimiter(
@@ -378,10 +498,36 @@ func (r *Runtime) Reload(ctx context.Context) error {
 		r.settingFromInt(sm, KeyChallengePerMinute, r.Cfg.Guard.ChallengePerMinute)))
 	r.reloadCRS(sm)
 
-	log.Printf("[runtime] 重载完成: 站点 %d, 规则 %d, 例外 %d, IP 名单 %d, 封禁 %d, 模式 %s, CRS %s",
+	log.Printf("[runtime] 重载完成: 站点 %d, 规则 %d, 例外 %d, IP 名单 %d, 封禁 %d, 模式 %s, CRS %s, 策略 %d, Bot %d/%d, 缓存规则 %d, 额外上游 %d",
 		router.Count(), r.Engine.Info().Rules, len(exList), countIPs(ipRules), len(bans),
-		r.Engine.Mode(), r.crsLabel())
+		r.Engine.Mode(), r.crsLabel(), pol.Count(), len(botDefs), len(hpDefs), len(cacheDefs), len(upRows))
 	return nil
+}
+
+// PolicySet 返回当前精准访问控制快照（原子读取）。
+func (r *Runtime) PolicySet() *policy.Set { return r.Policy.Load() }
+
+// UpstreamHealthInterval 返回上游健康检查间隔。
+func (r *Runtime) UpstreamHealthInterval() time.Duration {
+	sec := r.SettingInt(KeyUpstreamHealth, 10)
+	if sec <= 0 {
+		sec = 10
+	}
+	return time.Duration(sec) * time.Second
+}
+
+// NodeHeartbeatTTL 返回节点心跳超时时间。
+func (r *Runtime) NodeHeartbeatTTL() time.Duration {
+	sec := r.SettingInt(KeyNodeHeartbeatTTL, 300)
+	if sec <= 0 {
+		sec = 300
+	}
+	return time.Duration(sec) * time.Second
+}
+
+// NodeAgentToken 返回节点 Agent 令牌；为空表示未启用节点接入。
+func (r *Runtime) NodeAgentToken() string {
+	return strings.TrimSpace(r.Setting(KeyNodeAgentToken, ""))
 }
 
 // CRS 返回当前 CRS 第二引擎快照（原子读取）。
@@ -532,6 +678,20 @@ func (r *Runtime) settingFromInt(m map[string]string, key string, fallback int) 
 	return n
 }
 
+// settingFromBool 从待生效设置表读取布尔项。
+// 参数 m：待生效设置表；key：设置键；fallback：缺省值。
+func (r *Runtime) settingFromBool(m map[string]string, key string, fallback bool) bool {
+	v := strings.TrimSpace(r.settingFrom(m, key, ""))
+	if v == "" {
+		return fallback
+	}
+	b, err := strconv.ParseBool(v)
+	if err != nil {
+		return fallback
+	}
+	return b
+}
+
 // orDefault 合并站点级覆盖值与全局默认值。
 // 参数 site：站点覆盖值（0 表示未设置）；参数 global：全局默认值。
 // 返回 int：site > 0 时返回 site，否则返回 global。
@@ -611,5 +771,26 @@ func DefaultSettings(cfg *config.Config) map[string]string {
 		KeyNotifyMinScore: "60",
 		KeyNotifyWindow:   "60",
 		KeyNotifyCooldown: "3600",
+
+		// Bot 管理默认关闭：先观察再启用，避免误伤正常访客。
+		KeyBotEnabled:        "false",
+		KeyBotVerifyRDNS:     "true",
+		KeyBotScoreThreshold: "60",
+		KeyBotAction:         string(bot.ActionChallenge),
+		KeyBotWindow:         "60",
+		KeyBotCacheTTL:       "600",
+
+		// 页面缓存默认关闭：缓存策略与业务强相关，交给管理员按站点开启。
+		KeyCacheEnabled:     "false",
+		KeyCacheMaxBytes:    strconv.Itoa(cache.DefaultMaxBytes),
+		KeyCacheMaxObject:   strconv.Itoa(cache.DefaultMaxObjectBytes),
+		KeyCacheDefaultTTL:  strconv.Itoa(cache.DefaultTTL),
+		KeyCacheCompress:    "true",
+		KeyCacheBrotli:      "true",
+		KeyCacheWebP:        "false",
+		KeyCacheCompressMin: strconv.Itoa(cache.DefaultCompressMin),
+
+		KeyUpstreamHealth:   "10",
+		KeyNodeHeartbeatTTL: "300",
 	}
 }
