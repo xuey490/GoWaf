@@ -53,6 +53,29 @@ var allowedSettingKeys = map[string]struct{}{
 	runtime.KeyNotifyMinScore: {},
 	runtime.KeyNotifyWindow:   {},
 	runtime.KeyNotifyCooldown: {},
+
+	// Bot 管理
+	runtime.KeyBotEnabled:        {},
+	runtime.KeyBotVerifyRDNS:     {},
+	runtime.KeyBotScoreThreshold: {},
+	runtime.KeyBotAction:         {},
+	runtime.KeyBotWindow:         {},
+	runtime.KeyBotCacheTTL:       {},
+
+	// 页面缓存与压缩
+	runtime.KeyCacheEnabled:     {},
+	runtime.KeyCacheMaxBytes:    {},
+	runtime.KeyCacheMaxObject:   {},
+	runtime.KeyCacheDefaultTTL:  {},
+	runtime.KeyCacheCompress:    {},
+	runtime.KeyCacheBrotli:      {},
+	runtime.KeyCacheWebP:        {},
+	runtime.KeyCacheCompressMin: {},
+
+	// 多上游与节点
+	runtime.KeyUpstreamHealth:   {},
+	runtime.KeyNodeHeartbeatTTL: {},
+	runtime.KeyNodeAgentToken:   {},
 }
 
 // SettingsGet 返回全部设置与引擎概要。
@@ -69,6 +92,10 @@ func (s *Server) SettingsGet(c *gin.Context) {
 	// SMTP 密码不回显明文：面板只显示掩码，保存时留空/保持掩码即不修改。
 	if out[runtime.KeyNotifyPass] != "" {
 		out[runtime.KeyNotifyPass] = "******"
+	}
+	// Agent 令牌同样只显示掩码，避免后台只读账号拿到节点接入凭证。
+	if out[runtime.KeyNodeAgentToken] != "" {
+		out[runtime.KeyNodeAgentToken] = "******"
 	}
 	// 补上只读展示项
 	out[runtime.KeyMode] = s.RT.Engine.Mode()
@@ -102,7 +129,7 @@ func (s *Server) SettingsUpdate(c *gin.Context) {
 			return
 		}
 		// 密码框拿到的是掩码，说明用户没动过这一项
-		if k == runtime.KeyNotifyPass && v == "******" {
+		if (k == runtime.KeyNotifyPass || k == runtime.KeyNodeAgentToken) && v == "******" {
 			continue
 		}
 		if msg := validateSetting(k, v); msg != "" {
@@ -206,6 +233,28 @@ func validateSetting(key, value string) string {
 		n, err := strconv.Atoi(value)
 		if err != nil || n < 0 {
 			return key + " 必须是非负整数"
+		}
+	case runtime.KeyBotEnabled, runtime.KeyBotVerifyRDNS, runtime.KeyCacheEnabled,
+		runtime.KeyCacheCompress, runtime.KeyCacheBrotli, runtime.KeyCacheWebP:
+		if value != "true" && value != "false" {
+			return key + " 只能是 true 或 false"
+		}
+	case runtime.KeyBotAction:
+		switch value {
+		case "allow", "log", "challenge", "block", "ban":
+		default:
+			return "bot.action 只能是 allow/log/challenge/block/ban"
+		}
+	case runtime.KeyBotScoreThreshold, runtime.KeyBotWindow, runtime.KeyBotCacheTTL,
+		runtime.KeyCacheMaxBytes, runtime.KeyCacheMaxObject, runtime.KeyCacheDefaultTTL,
+		runtime.KeyCacheCompressMin, runtime.KeyUpstreamHealth, runtime.KeyNodeHeartbeatTTL:
+		n, err := strconv.ParseInt(value, 10, 64)
+		if err != nil || n < 0 {
+			return key + " 必须是非负整数"
+		}
+	case runtime.KeyNodeAgentToken:
+		if len(value) > 128 {
+			return "node.agent_token 长度不能超过 128 字符"
 		}
 	}
 	return ""
