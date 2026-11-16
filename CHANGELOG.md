@@ -8,6 +8,86 @@
 
 暂无待发布变更。
 
+## [v1.3.0] - 2026-11-16
+
+本版是「扩展能力」批次：在既有 WAF 检测之外补齐四个可组合的运营引擎——精准访问控制、
+Bot 管理、页面缓存加速、站点多上游，外加节点管理与 IPv6 监听。全部默认关闭，
+升级后请求路径行为与 v1.2.3 完全一致，在控制台逐个启用即可。
+
+### 新增
+
+- **精准访问控制**
+  条件树（AND / OR / 嵌套分组，最深 4 层、单策略 ≤ 64 条件）在 Reload 时编译成不可变
+  快照，热路径无锁、无 JSON 解析。字段覆盖 client_ip / country / region / host /
+  method / path / query / ua / referer / content_type / body 及 `header.*` / `cookie.*` /
+  `arg.*`；操作符 eq / ne / contains / prefix / suffix / regex / cidr（单 IP 自动补
+  /32、/128，兼容 IPv4-mapped IPv6）/ in / 数值比较 / exists。动作 allow / block /
+  challenge / log / ban，按优先级第一条命中生效；编译失败整体拒绝并保留旧快照，
+  不会把站点放空。命中计数批量刷库，避免每个请求写一次 SQLite。
+  控制台「访问策略」页 + `policy:write` 权限。
+
+- **Bot 管理**
+  UA / Path / IP / rDNS 四类策略 + 蜜罐路径（正常用户不会访问，命中即 ban）+
+  行为评分（窗口请求频率 + 可疑 UA，超阈值按配置动作处置）。搜索引擎 Bot 走
+  正向-反向 DNS 双重验证：真 Googlebot 放行且不占限流额度，伪造 UA 直接按可疑处置；
+  DNS 结果带 TTL 缓存，不在热路径上阻塞。已验证爬虫在限流与人机校验之前放行。
+  控制台「Bot 管理」页 + `bot:write` 权限。
+
+- **页面缓存与加速**
+  六类缓存规则（后缀 / 精确 / 前缀 / 正则 / 目录 / 匿名访客全站）；LRU + TTL，
+  总容量与单对象上限可配，超过上限立即转流式透传，绝不把大文件读进内存；只缓存
+  匿名 GET/HEAD，带 Set-Cookie / private / no-store 的响应一律不缓存，SSE /
+  WebSocket 绕过。回源响应按客户端 Accept-Encoding 做 gzip / brotli 压缩（q 值感知、
+  优先 brotli），JPEG/PNG 转 WebP——全部纯 Go 实现，CGO_ENABLED=0 可编译。
+  支持按站点 / 路径前缀手动清除与命中统计。控制台「页面缓存」页 + `cache:write` 权限。
+
+- **站点多上游**
+  单站点可配多上游：按健康度与优先级加权随机选择，连接失败自动切换下一条
+  （仅可重放请求重试，大文件 / 流式上传不换目标）；健康探测周期可配（`upstream.health_interval`）；
+  全部目标不健康时 fail-open 退回全部目标，防止误判把站点打成 502。
+  上游组合按站点缓存 ReverseProxy，连接池复用。
+
+- **节点管理与 Agent 上报**
+  新增 nodes 表与节点 CRUD / 令牌签发；Agent 免登录上报接口
+  `GET /api/agent/config`、`POST /api/agent/heartbeat`（handler 内校验
+  `node.agent_token`），心跳超时（`node.heartbeat_ttl`）视为离线。
+  控制台「节点管理」页 + `node:write` 权限。
+
+- **IPv6 额外监听**
+  `server.listen_v6` / `server.tls_listen_v6`：与 v4 共用数据面 Handler 的独立监听。
+  不默认双栈——部分发行版 v6only 语义不同，强行绑定 `::` 可能与已有 v4 监听冲突，
+  导致老部署升级后启动失败。IPv6 监听端口一并纳入自环防护。
+
+- **上传与反序列化检测**
+  multipart 解析：危险扩展名、双扩展名绕过（shell.php.jpg）、文件名攻击特征、
+  声明图片与魔数不符、可执行文件头（ELF / MZ / Java Class）与脚本标记；
+  请求体反序列化特征：Java 原生流、.NET BinaryFormatter、Python pickle、PHP 序列化、
+  Fastjson/Jackson `@type`、YAML 不安全标签、Node 原型链污染——合并进统一
+  detect.Result 按分数处置。
+
+### 变更
+
+- 控制台新增「扩展中心」相关页面：访问策略 / Bot 管理 / 页面缓存 / 节点管理；
+  站点编辑支持多上游配置。
+- 权限按钮全集新增 `policy:write` / `bot:write` / `cache:write` / `node:write`。
+- 内嵌前端构建产物同步（新增 bots / cache / extensions / policies / nodes chunk）。
+- 四个引擎补齐单元测试约 1650 行：条件树操作符与编译校验、Bot 判定与评分、
+  缓存 LRU/TTL 与压缩 / WebP 实际转换、上传与反序列化特征逐类验证。
+
+### 升级说明
+
+1. 停服务 → 替换 `gowaf-linux-<arch>` 与 `rules/builtin.yaml` → 启动。
+   `configs/` 与 `data/` 保留。
+2. **本版新增迁移 008（schema v7 → v8）**：新增 access_policies、bot_policies、
+   bot_honeypots、cache_rules、site_upstreams、nodes 六张表。首次启动自动执行，
+   无需手动操作；回滚到 v1.2.3 不受影响（旧版本不读这些表）。
+3. 所有新引擎默认关闭：`bot.enabled=false`、`cache.enabled=false`、无默认精准策略、
+   站点多上游为空——升级后请求路径行为与 v1.2.3 一致，在控制台逐个启用即可。
+4. 需要 IPv6 时在 `config.yaml` 配置 `server.listen_v6`（HTTPS 还需 `server.tls_listen_v6`），
+   重启生效。
+5. Bot 行为评分默认 `bot.score_threshold=30` 次 / 窗口、超限动作 challenge；
+   搜索引擎验证默认关闭（`bot.verify_rdns=false`），开启前确认服务器能做 DNS 反查。
+
 ## [v1.2.3] - 2026-11-08
 
 本版把人机校验从「有模块但从不生效」补成真正的工作入口，并修正白名单语义：
