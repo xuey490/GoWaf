@@ -249,9 +249,13 @@ func buildEventWhere(q EventQuery) (string, []any) {
 		args = append(args, q.IP)
 	}
 	if q.Keyword != "" {
-		conds = append(conds, "(path LIKE ? OR ua LIKE ? OR query LIKE ?)")
+		// 关键词要能覆盖「事件是怎么被拦的」：精准访问控制命中的是 policy-<id>，
+		// Bot 命中的是 bot-<category>，都只存在于 rule_ids / categories 里，
+		// 原先只搜 path/ua/query，导致按策略名或规则 ID 永远搜不到。
+		conds = append(conds,
+			"(path LIKE ? OR ua LIKE ? OR query LIKE ? OR rule_ids LIKE ? OR categories LIKE ? OR client_ip LIKE ?)")
 		kw := "%" + q.Keyword + "%"
-		args = append(args, kw, kw, kw)
+		args = append(args, kw, kw, kw, kw, kw, kw)
 	}
 	if q.From > 0 {
 		conds = append(conds, "ts >= ?")

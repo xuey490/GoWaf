@@ -144,8 +144,11 @@ type compiledPolicy struct {
 	priority int
 	action   Action
 	root     *compiledGroup
-	hits     atomic.Int64 // 累计命中次数，由数据面写入、后台任务定期刷库
-	lastHit  atomic.Int64 // 最近命中时间（Unix 毫秒）
+	// needsBody 表示条件树引用了 body 字段。这类策略必须在读取请求体之后才能求值，
+	// 因此无法在「缓存查找之前」提前决策。
+	needsBody bool
+	hits      atomic.Int64 // 累计命中次数，由数据面写入、后台任务定期刷库
+	lastHit   atomic.Int64 // 最近命中时间（Unix 毫秒）
 }
 
 // compiledGroup 是编译后的条件树节点。
@@ -198,6 +201,7 @@ func Compile(defs []Definition) (*Set, error) {
 		p := &compiledPolicy{
 			id: d.ID, name: d.Name, site: strings.TrimSpace(d.Site),
 			priority: d.Priority, action: action, root: root,
+			needsBody: root.hasBodyDependency(),
 		}
 		s.policies = append(s.policies, p)
 	}
@@ -277,6 +281,47 @@ func (s *Set) Evaluate(req *Request, site string) (*Match, bool) {
 				Reason: "精准访问控制：" + p.name,
 			}, true
 		}
+	}
+	return nil, false
+}
+
+// EvaluateDenyEarly 在读取请求体之前做一次「可提前决策」的求值。
+//
+// 存在的理由：数据面的顺序是「缓存查找 → 读 body → 完整策略求值」，
+// 而缓存命中会直接返回响应。若不提前判一次，命中缓存的静态资源就会
+// 绕过 block / ban / challenge 这类拒绝动作（实测可复现：已缓存的 js
+// 对境外 IP 仍返回 200）。
+//
+// 语义上严格保持「优先级第一条命中的策略生效」：按优先级遍历，
+// 只有「第一条命中的策略」同时满足（1）不依赖 body、（2）动作是拒绝类，
+// 才返回命中。若第一条命中依赖 body，或动作是 allow / log，一律返回
+// 未命中，把决策原样交回第 8 步的完整求值——宁可晚判，也不改变结论。
+//
+// 参数 req：策略上下文，body 字段应为空；参数 site：当前站点名。
+// 返回 (*Match, bool)：命中的策略与是否命中。
+func (s *Set) EvaluateDenyEarly(req *Request, site string) (*Match, bool) {
+	if s == nil || req == nil {
+		return nil, false
+	}
+	for _, p := range s.policies {
+		if p.site != "" && !strings.EqualFold(p.site, site) {
+			continue
+		}
+		if !p.root.match(req) {
+			continue
+		}
+		// 第一条命中的策略即最终结论：无法提前判定就交回完整求值。
+		if p.needsBody {
+			return nil, false
+		}
+		switch p.action {
+		case ActionBlock, ActionBan, ActionChallenge:
+			return &Match{
+				PolicyID: p.id, Name: p.name, Action: p.action,
+				Reason: "精准访问控制：" + p.name,
+			}, true
+		}
+		return nil, false
 	}
 	return nil, false
 }
@@ -424,6 +469,25 @@ func validField(field string) bool {
 // empty 判断节点是否没有任何有效条件。
 func (g *compiledGroup) empty() bool {
 	return g == nil || (len(g.items) == 0 && len(g.groups) == 0)
+}
+
+// hasBodyDependency 判断条件树是否引用了请求体字段 body。
+// 参数：无；返回 bool：任一叶子条件用到 body 即为 true。
+func (g *compiledGroup) hasBodyDependency() bool {
+	if g == nil {
+		return false
+	}
+	for _, it := range g.items {
+		if it.field == "body" {
+			return true
+		}
+	}
+	for _, sub := range g.groups {
+		if sub.hasBodyDependency() {
+			return true
+		}
+	}
+	return false
 }
 
 // match 对条件树求值：AND 需要全部成立，OR 只需一个成立。

@@ -104,6 +104,7 @@ func NewRouter(o Options) *gin.Engine {
 			authed.GET("/cache/rules", h.CacheRuleList)
 			authed.GET("/cache/settings", h.CacheSettingsGet)
 			authed.GET("/cache/stats", h.CacheStats)
+			authed.GET("/cache/entries", h.CacheEntryList)
 			authed.GET("/nodes", h.NodeList)
 			authed.GET("/upstreams/status", h.UpstreamStatus)
 

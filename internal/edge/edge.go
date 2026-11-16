@@ -217,6 +217,35 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// 6.4) 缓存之前先做一次「可提前决策」的策略判定。
+	// 缓存命中会直接 return，而完整策略求值在第 8 步（必须等 body 读完），
+	// 不先判一次的话，命中缓存的静态资源就会绕过 block / ban / challenge 策略
+	// ——「拦截某地域全站访问」会漏掉所有已被缓存的 js/css。
+	// 只处理不依赖 body 且动作为拒绝类的策略；第一条命中的策略若依赖 body、
+	// 或是 allow/log，则保持原样交给第 8 步，绝不改变「优先级第一条生效」的语义。
+	// 观察模式不在此拦截，避免把「只记录」变成真拦。
+	country := h.countryOf(clientIP)
+	if m, ok := earlyPolicyVerdict(h.rt.PolicySet(), r, clientIP.String(), country, route.SiteName, observe); ok {
+		h.rt.PolicySet().RecordHit(m.PolicyID, store.NowMS())
+		res := policyResult(m)
+		if m.Action == policy.ActionChallenge {
+			if !h.challengePassed(w, r, clientIP) {
+				h.serveChallenge(w, r, clientIP)
+				h.recordEvent(route, clientIP, reqID, start, r, http.StatusForbidden, "challenge", &res, 0, "", true)
+				return
+			}
+			// 已持通行证：不重复校验，继续走缓存与完整求值（第 8 步会记 log）。
+		} else {
+			action := "block"
+			if m.Action == policy.ActionBan {
+				action = "ban"
+				h.recordDirectBan(clientIP.String(), &res, route.SiteName, r.Method, r.URL.Path)
+			}
+			h.reject(w, r, route, clientIP, reqID, start, action, "policy", http.StatusForbidden, &res)
+			return
+		}
+	}
+
 	// 6.5) 页面缓存：命中直接返回，未命中记住规则，回源后由加速 writer 写入缓存。
 	// 只处理匿名 GET/HEAD（带 Range 的断点续传不缓存），登录用户与写请求不参与。
 	var cacheRule *cache.Rule
@@ -229,7 +258,17 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			cacheKey = cache.Key(route.SiteName, r.Host, r.URL.Path, r.URL.RawQuery)
 			if entry, hit := h.rt.Cache.Get(cacheKey, time.Now()); hit {
 				status := serveCacheEntry(w, r, entry, h.rt.Cache.Settings())
-				h.recordEvent(route, clientIP, reqID, start, r, status, "pass", nil,
+				// Bot 的 log 结果在缓存命中路径上也要带进事件：否则「UA 命中
+				// Bot 策略但只记录」的请求，一旦资源在缓存里就直接返回，
+				// 事件会退化成一条毫无线索的 pass（分类与规则 ID 全空），
+				// 在事件页既看不到 bot 分类也搜不到 bot-<category>。
+				// 动作仍记为 pass（缓存命中不拦截），只补充归因信息。
+				// 没有 Bot 命中时传 nil，避免往事件表写一条 categories="null" 的空结果。
+				var cacheRes *detect.Result
+				if len(preResult.RuleIDs) > 0 || preResult.Score > 0 {
+					cacheRes = &preResult
+				}
+				h.recordEvent(route, clientIP, reqID, start, r, status, "pass", cacheRes,
 					time.Since(start).Microseconds(), "cache", shouldSample(h.sampleRate, "pass", h.rand))
 				return
 			}
@@ -252,7 +291,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// 命中的策略按优先级第一条生效；allow 直接放行，log 只记录并继续检测。
 	// 策略独立于 skipDetect：静态资源/白名单路径仍可被显式拒绝或放行。
 	var policyLog detect.Result
-	preq := policy.NewRequest(r, body, clientIP.String(), h.countryOf(clientIP), "")
+	preq := policy.NewRequest(r, body, clientIP.String(), country, "")
 	if m, ok := h.rt.PolicySet().Evaluate(preq, route.SiteName); ok {
 		h.rt.PolicySet().RecordHit(m.PolicyID, store.NowMS())
 		res := policyResult(m)
@@ -344,6 +383,24 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// 10) 转发
 	h.forward(w, r, route, clientIP, reqID, start, &result, cacheRule, cacheKey)
+}
+
+// earlyPolicyVerdict 在页面缓存查找之前给出「可提前执行」的策略结论。
+//
+// 分工：真正的判定语义在 policy.Set.EvaluateDenyEarly，这里只负责把 HTTP 请求
+// 转成策略上下文并处理观察模式。抽成独立函数是为了能被回归测试直接覆盖
+// ——缓存命中会绕过第 8 步的完整策略求值，是曾经导致「拦截某地域全站访问
+// 却仍能拿到已缓存 js/css」的根因。
+//
+// 参数 ps：策略快照；r：客户端请求；ip：客户端 IP；country：归属地；
+// site：站点名；observe：引擎是否观察模式。
+// 返回 (*policy.Match, bool)：可提前拒绝的策略与是否命中；观察模式恒为未命中。
+func earlyPolicyVerdict(ps *policy.Set, r *http.Request, ip, country, site string, observe bool) (*policy.Match, bool) {
+	if observe || ps == nil || ps.Count() == 0 {
+		return nil, false
+	}
+	// body 传 nil：本函数只处理不依赖 body 的策略，EvaluateDenyEarly 会自行排除其余策略。
+	return ps.EvaluateDenyEarly(policy.NewRequest(r, nil, ip, country, ""), site)
 }
 
 // maxFieldLog 事件字段（路径、Query 等）落库前的最大保留字节数，防止超长 URL 撑爆事件表。
@@ -879,7 +936,7 @@ func (h *Handler) recordEvent(route *proxy.Route, ip netip.Addr, reqID string, s
 	metrics.RequestsTotal.WithLabelValues(route.SiteName, action).Inc()
 	metrics.RequestDuration.WithLabelValues(route.SiteName).Observe(time.Since(start).Seconds())
 
-	if !sample {
+	if !shouldRecord(sample, result) {
 		return
 	}
 
@@ -887,10 +944,20 @@ func (h *Handler) recordEvent(route *proxy.Route, ip netip.Addr, reqID string, s
 	ruleIDs := "[]"
 	score := 0
 	if result != nil {
-		if b, err := json.Marshal(result.Categories); err == nil {
+		// nil 切片会被 json.Marshal 编成 "null"，事件页解析后虽是空数组，
+		// 但库里留下一批 categories="null" 的脏值，也让「有归因/无归因」
+		// 无法用 SQL 统一判断。这里统一归一化成 "[]"。
+		cats, ids := result.Categories, result.RuleIDs
+		if cats == nil {
+			cats = []string{}
+		}
+		if ids == nil {
+			ids = []string{}
+		}
+		if b, err := json.Marshal(cats); err == nil {
 			categories = string(b)
 		}
-		if b, err := json.Marshal(result.RuleIDs); err == nil {
+		if b, err := json.Marshal(ids); err == nil {
 			ruleIDs = string(b)
 		}
 		score = result.Score
@@ -938,6 +1005,23 @@ func (h *Handler) recordEvent(route *proxy.Route, ip netip.Addr, reqID string, s
 			LatencyUS:  latencyUS,
 		})
 	}
+}
+
+// shouldRecord 判断一条请求要不要落成事件。
+//
+// 两条通路：1）采样命中，按 storage.sample_rate 抽样；2）带归因必记。
+// 第二条是为了修掉一个观察盲区：Bot 与精准访问控制的「仅记录」动作不会改变
+// 处置动作，请求最终仍是 pass，于是会被 sample_rate（生产环境 0.01）吞掉
+// 99%，导致「我先用仅记录观察一周」这种做法在事件页几乎看不到数据。
+// 只要命中了规则/策略/Bot，就已经是一条有归因的安全事件，必须全量记录。
+//
+// 参数 sample：调用方按采样率得出的结果；参数 result：本次请求的检测结果（可为 nil）。
+// 返回 bool：是否写入事件表。
+func shouldRecord(sample bool, result *detect.Result) bool {
+	if sample {
+		return true
+	}
+	return result != nil && len(result.RuleIDs) > 0
 }
 
 // countryOf 查询 IP 归属地。查询是纯内存二分，失败返回空串不影响事件落库。

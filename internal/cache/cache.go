@@ -9,6 +9,7 @@ package cache
 
 import (
 	"bytes"
+	"compress/flate"
 	"compress/gzip"
 	"container/list"
 	"encoding/json"
@@ -16,6 +17,7 @@ import (
 	"image"
 	_ "image/jpeg" // 注册 JPEG 解码器：用于把 JPEG 转成 WebP
 	_ "image/png"  // 注册 PNG 解码器
+	"io"
 	"mime"
 	"net/http"
 	"regexp"
@@ -93,6 +95,10 @@ type Entry struct {
 	StoredAt time.Time
 	TTL      time.Duration
 	Size     int64
+
+	// hits 是该对象被命中的次数，由数据面读取时累加，控制面列表直接展示。
+	// 用原子量而非普通字段：多个连接会并发读同一个 Entry。
+	hits atomic.Int64
 }
 
 // Stats 是缓存运行统计，供控制面展示。
@@ -105,6 +111,28 @@ type Stats struct {
 	Misses    int64 `json:"misses"`
 	Evictions int64 `json:"evictions"`
 	Purges    int64 `json:"purges"`
+}
+
+// EntryInfo 是缓存对象的只读视图，供控制面「缓存列表」展示。
+//
+// 缓存键形如 site|host|path?query，这里拆成独立字段，避免前端再解析字符串；
+// 时间统一用 Unix 毫秒，与事件表等其他接口保持一致。
+type EntryInfo struct {
+	Key           string `json:"key"`
+	Site          string `json:"site"`
+	Host          string `json:"host"`
+	Path          string `json:"path"`
+	Query         string `json:"query"`
+	Filename      string `json:"filename"`
+	ContentType   string `json:"contentType"`
+	Status        int    `json:"status"`
+	Size          int64  `json:"size"`
+	Hits          int64  `json:"hits"`
+	StoredAt      int64  `json:"storedAt"`
+	ExpiresAt     int64  `json:"expiresAt"`
+	TTLSeconds    int64  `json:"ttlSeconds"`
+	AgeSeconds    int64  `json:"ageSeconds"`
+	RemainSeconds int64  `json:"remainSeconds"`
 }
 
 // Manager 是页面加速的运行入口：规则快照原子替换，对象存储内部加锁。
@@ -371,6 +399,15 @@ func (m *Manager) Purge(site, prefix string) int {
 	return n
 }
 
+// Entries 返回当前全部有效缓存对象的只读快照（已剔除过期但尚未清理的条目）。
+// 参数 now：当前时间，便于测试。返回按写入时间倒序排列。
+func (m *Manager) Entries(now time.Time) []EntryInfo {
+	if m == nil || m.store == nil {
+		return nil
+	}
+	return m.store.snapshot(now)
+}
+
 // Cleanup 删除过期缓存对象，由后台维护循环调用。
 // 参数 now：当前时间。
 func (m *Manager) Cleanup(now time.Time) {
@@ -441,6 +478,53 @@ func AcceptsEncoding(header, enc string) bool {
 		}
 	}
 	return false
+}
+
+// Decodable 判断上游 Content-Encoding 是否支持解码。
+// 参数 encoding：响应头 Content-Encoding 的值。
+// 返回 bool：gzip/br/deflate 返回 true，其余编码由调用方透传。
+func Decodable(encoding string) bool {
+	switch strings.ToLower(strings.TrimSpace(encoding)) {
+	case "gzip", "x-gzip", "br", "deflate":
+		return true
+	}
+	return false
+}
+
+// Decode 按 Content-Encoding 把上游响应体解回原始字节。
+// 参数 body：已压缩的响应体；参数 encoding：Content-Encoding 值。
+// 返回 (data, ok)：ok=false 时调用方必须保持原样透传。
+func Decode(body []byte, encoding string) ([]byte, bool) {
+	switch strings.ToLower(strings.TrimSpace(encoding)) {
+	case "", "identity":
+		return body, true
+	case "gzip", "x-gzip":
+		zr, err := gzip.NewReader(bytes.NewReader(body))
+		if err != nil {
+			return nil, false
+		}
+		defer func() { _ = zr.Close() }()
+		out, err := io.ReadAll(zr)
+		if err != nil {
+			return nil, false
+		}
+		return out, true
+	case "br":
+		out, err := io.ReadAll(brotli.NewReader(bytes.NewReader(body)))
+		if err != nil {
+			return nil, false
+		}
+		return out, true
+	case "deflate":
+		fr := flate.NewReader(bytes.NewReader(body))
+		defer func() { _ = fr.Close() }()
+		out, err := io.ReadAll(fr)
+		if err != nil {
+			return nil, false
+		}
+		return out, true
+	}
+	return nil, false
 }
 
 // Compress 按客户端能力选择 brotli 或 gzip 压缩。
@@ -567,6 +651,7 @@ func (s *store) get(key string, now time.Time) (*Entry, bool) {
 		return nil, false
 	}
 	s.ll.MoveToFront(el)
+	it.ent.hits.Add(1)
 	return it.ent, true
 }
 
@@ -632,6 +717,78 @@ func (s *store) size() (int, int64) {
 	return len(s.items), s.bytes
 }
 
+// snapshot 生成缓存对象列表，过期条目直接跳过（后台 Cleanup 可能还没跑到）。
+func (s *store) snapshot(now time.Time) []EntryInfo {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	out := make([]EntryInfo, 0, len(s.items))
+	for key, el := range s.items {
+		e := el.Value.(*storeItem).ent
+		if e == nil {
+			continue
+		}
+		if e.TTL > 0 && now.Sub(e.StoredAt) > e.TTL {
+			continue
+		}
+		site, host, path, query := splitKey(key)
+		age := int64(now.Sub(e.StoredAt) / time.Second)
+		if age < 0 {
+			age = 0
+		}
+		info := EntryInfo{
+			Key: key, Site: site, Host: host, Path: path, Query: query,
+			Filename:    baseName(path),
+			ContentType: e.Header.Get("Content-Type"),
+			Status:      e.Status, Size: e.Size, Hits: e.hits.Load(),
+			StoredAt: e.StoredAt.UnixMilli(), AgeSeconds: age,
+			TTLSeconds: int64(e.TTL / time.Second), RemainSeconds: -1,
+		}
+		if e.TTL > 0 {
+			expire := e.StoredAt.Add(e.TTL)
+			info.ExpiresAt = expire.UnixMilli()
+			remain := int64(expire.Sub(now) / time.Second)
+			if remain < 0 {
+				remain = 0
+			}
+			info.RemainSeconds = remain
+		}
+		out = append(out, info)
+	}
+	// 最近写入的排前面：控制面排查「刚缓存的为什么没命中」时最常看新对象。
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].StoredAt == out[j].StoredAt {
+			return out[i].Path < out[j].Path
+		}
+		return out[i].StoredAt > out[j].StoredAt
+	})
+	return out
+}
+
+// splitKey 把缓存键 site|host|path?query 拆回独立字段。
+func splitKey(key string) (site, host, path, query string) {
+	parts := strings.SplitN(key, "|", 3)
+	if len(parts) < 3 {
+		return "", "", key, ""
+	}
+	site, host, rest := parts[0], parts[1], parts[2]
+	if i := strings.IndexByte(rest, '?'); i >= 0 {
+		return site, host, rest[:i], rest[i+1:]
+	}
+	return site, host, rest, ""
+}
+
+// baseName 取路径最后一段作为展示用文件名；目录型路径原样返回。
+func baseName(p string) string {
+	if p == "" {
+		return "/"
+	}
+	if i := strings.LastIndexByte(p, '/'); i >= 0 && i < len(p)-1 {
+		return p[i+1:]
+	}
+	return p
+}
+
 // evictLocked 从尾部淘汰对象直到容量回到上限内。
 func (s *store) evictLocked() int {
 	n := 0
@@ -660,7 +817,7 @@ func (e *Entry) MarshalJSON() ([]byte, error) {
 	}
 	return json.Marshal(map[string]any{
 		"status": e.Status, "size": e.Size, "storedAt": e.StoredAt.UnixMilli(),
-		"ttlSeconds": int(e.TTL / time.Second),
+		"ttlSeconds": int(e.TTL / time.Second), "hits": e.hits.Load(),
 	})
 }
 
