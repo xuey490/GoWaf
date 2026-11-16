@@ -24,6 +24,8 @@ flowchart LR
   embedded with `go:embed`; SQLite is pure Go, so `CGO_ENABLED=0` cross-compiles cleanly.
 - **Two detection engines** — 181 hand-written YAML rules (fast, explainable) plus embedded
   OWASP CRS v4 (broad coverage, upstream-maintained). Scores are summed into one decision.
+- **Four operational engines** — access policies, bot management, page cache and multi-upstream
+  sit next to detection and compose freely; all of them are off by default.
 - **Observe mode by default** — the first install only logs. Watch for 3–7 days, then flip to
   live blocking with one command.
 - **Threat intel + email alerts** — subscribe to public IP feeds; hits are banned and folded
@@ -51,6 +53,11 @@ The data plane is engine-agnostic; all panel/engine differences live in the depl
 | **Reverse proxy** | Host passthrough, multi-site routing by domain/SNI, native WebSocket upgrade, streaming responses, transparent support for sites that proxy internally |
 | **TLS termination** | 443 terminated at the WAF, multi-cert SNI + wildcard matching, reads panel certificate directories, smart `default_cert` fallback; `--http-only` leaves 443 alone |
 | **Rule detection** | 181 built-in rules (SQLi / XSS / traversal / RCE / scanners / sensitive files / uploads / protocol abuse) with Aho-Corasick prefilter + RE2 match, score-based decisions, `action: ban` for instant bans — plus embedded OWASP CRS v4 (paranoia 1–4), scores merged |
+| **Upload & deserialization** | multipart dangerous extension, double extension, filename attacks, image magic-byte mismatch, ELF/MZ/Class executable headers; Java native streams, .NET BinaryFormatter, pickle, PHP serialization, `@type` auto-typing, unsafe YAML tags, prototype pollution — merged into the same score |
+| **Access policies** | Condition tree (AND / OR / nested groups, 4 levels deep, ≤64 conditions per policy) compiled to an immutable snapshot on reload — no lock, no JSON parsing on the hot path. Fields: `client_ip` / `country` / `region` / `host` / `method` / `path` / `query` / `ua` / `referer` / `content_type` / `body` plus `header.*` / `cookie.*` / `arg.*`; operators `eq` `ne` `contains` `prefix` `suffix` `regex` `cidr` (single IP auto `/32`·`/128`) `in` numeric compare `exists`; actions `allow` `block` `challenge` `log` `ban`, first match by priority wins, a compile failure keeps the previous snapshot |
+| **Bot management** | UA / Path / IP / rDNS policy types + honeypot paths (hit = ban) + behaviour scoring (window rate + suspicious UA). Search-engine bots go through forward-confirmed reverse DNS: a real Googlebot is allowed without consuming rate-limit budget, a forged UA is treated as suspicious; DNS answers are TTL-cached and never block the hot path |
+| **Page cache & acceleration** | Six rule types (suffix / exact / prefix / regex / directory / anonymous whole-site); LRU + TTL with configurable total and per-object caps, over-cap responses switch to streaming passthrough immediately. Only anonymous GET/HEAD are cached; `Set-Cookie` / `private` / `no-store` are never cached, SSE / WebSocket bypass. Upstream responses are decoded (gzip / br / deflate) and re-encoded per client `Accept-Encoding`, JPEG/PNG converted to WebP — all pure Go, `CGO_ENABLED=0` builds |
+| **Multi-upstream** | Weighted random by health and priority, automatic failover on connect errors (only replayable requests retry; streaming uploads never switch target), configurable health probe interval, fail-open when every target is down to avoid false 502s, connection pool reused per upstream set |
 | **False-positive control** | Exception rules scoped by site / rule ID / category / path prefix / parameter name, applied to both engines; rule ops include group stats, hit samples, bulk enable/disable, import & export |
 | **Threat intel** | 10 preset public feeds plus custom ones (Header/Token auth, JSON lists such as AbuseIPDB, CrowdSec CTI); matching IPs are blocked and added to ban management |
 | **Rate limiting & bans** | Per-IP RPS / burst / per-minute thresholds, **an independent limiter per site**, escalating auto-ban (repeat offences double the TTL, then permanent), IP whitelist, global or per-site scope |
@@ -59,15 +66,67 @@ The data plane is engine-agnostic; all panel/engine differences live in the depl
 | **IP geolocation** | Offline ip2region-derived database (216k IPv4 ranges, 1.3 MB embedded) — country/region/city in event lists, details and alert emails, no network calls |
 | **Cloudflare aware** | Cloudflare's origin IP ranges loaded into `trusted_proxies`, so limiting/banning/logging use the real visitor IP (`cloudflare on` refreshes the official list) |
 | **Scheduled tasks** | Periodic event cleanup by retention days, rule snapshot backups to `data/backups/`, manual trigger |
-| **Console** | Vue 3 SPA with 12 modules, JWT + CSRF + login lockout + permission-bit checks on writes |
+| **Node management** | Node CRUD with token issuing; agent endpoints `GET /api/agent/config` and `POST /api/agent/heartbeat` (validated against `node.agent_token`), a node whose heartbeat exceeds `node.heartbeat_ttl` is shown offline |
+| **IPv6 listeners** | Optional `server.listen_v6` / `server.tls_listen_v6` sharing the same data-plane handler; not dual-stack by default — some distros differ on `v6only`, so binding `::` unasked could break an existing v4 deployment. IPv6 ports are included in the self-loop guard |
+| **Console** | Vue 3 SPA with 16 modules, JWT + CSRF + login lockout + permission-bit checks on writes (`policy:write` / `bot:write` / `cache:write` / `node:write` …) |
 | **Self-healing ops** | Port-drift repair every 60 s after a panel saves a site, read-only `doctor` health check, logrotate |
 | **Safety rails** | Upstream pointing back at the WAF itself is refused, console bound to loopback by default, startup fails on invalid config, intel matching skips loopback/private ranges |
 
+### Request pipeline
+
+Order matters, because each stage can short-circuit the rest:
+
+```
+whitelist → blacklist → ban → threat intel → bot → human check → rate limit
+  → access policy (deny-only, pre-cache) → page cache → read body
+  → detection (rules + CRS) → access policy (full) → proxy
+```
+
+- **Access policy runs twice.** A deny-only early pass sits *before* the cache lookup, so a
+  `block` / `ban` / `challenge` policy still covers static assets that are already cached
+  (cache hits return immediately and would otherwise skip the full evaluation after the body
+  read). The early pass only fires when the first matching policy does not depend on `body`
+  and its action is a denial — `allow` / `log` and body-dependent policies are deferred to the
+  full pass, so "first match by priority wins" holds exactly.
+- **Bot runs before rate limiting and the human check**, so a verified crawler is never counted
+  against a client budget or challenged.
+- **Cache only serves anonymous GET/HEAD**; a cached response is still recorded as an event, and
+  bot attribution is carried into it instead of degrading to a bare `pass`.
+
+### Access policies in practice
+
+Policies are checked per site, then globally (`site` empty). A few things that are easy to get
+wrong:
+
+- `country` is an ISO 3166-1 alpha-2 string (`NL`, `US`); it comes from the embedded geo
+  database, so it is a country, not an ISP or an ASN.
+- `region` is always empty in the current geo database — use `country` + `path` instead.
+- `cidr` accepts a bare address: `96.126.130.106` is normalised to `/32` (and `/128` for IPv6),
+  including IPv4-mapped IPv6 forms.
+- Hit counters are flushed to SQLite in batches; the console numbers are eventually consistent
+  by a few seconds.
+- `log` and `challenge` still produce events with `X-WAF-Reason: policy`, which makes them the
+  right way to trial a rule before switching it to `block`.
+
+### Page cache in practice
+
+- Cache keys are `site|host|path?query`, so the same path on two sites never collides, and
+  `?v=2` is a different object from `?v=1`.
+- The cache is **in memory only**. Restarting the process clears every object — if the object
+  count drops from thousands to one, check `ActiveEnterTimestamp` and the `evictions` /
+  `purges` counters before suspecting the TTL.
+- Upstream responses that arrive already compressed are decoded into the cache and re-encoded
+  per client, which means one object serves both `br` and `gzip` clients; the object shown in
+  the console is the decoded size.
+- The console「Cache list」tab (`GET /api/cache/entries`) shows file name, size, path,
+  remaining TTL, hit count and owning site, filterable by site and keyword.
+
 ### Console modules
 
-`Dashboard` · `Attack events` · `Detection rules` · `Exception rules` · `Threat intel` ·
-`IP allow/deny lists` · `Ban management` · `Protected sites` · `Alert notifications` ·
-`Protection settings` · `Scheduled tasks` · `Audit log`
+`Dashboard` · `Attack events` · `Detection rules` · `Access policies` · `Bot management` ·
+`Page cache` · `Exception rules` · `Threat intel` · `IP allow/deny lists` · `Ban management` ·
+`Protected sites` · `Node management` · `Alert notifications` · `Protection settings` ·
+`Scheduled tasks` · `Audit log`
 
 <details>
 <summary><strong>Screenshots (Chinese UI; console also ships English)</strong></summary>
@@ -266,8 +325,11 @@ Good places to attach Delve (`dlv debug ./cmd/gowaf -- -c configs/config.yaml`):
 
 | File | What happens there |
 |---|---|
-| `internal/edge/edge.go` | Request pipeline: whitelist → blacklist → ban → intel → challenge → rate limit → detect → proxy |
+| `internal/edge/edge.go` | Request pipeline: whitelist → blacklist → ban → intel → bot → challenge → rate limit → early policy → cache → detect → policy → proxy |
 | `internal/detect/rules.go` | Rule matching and scoring |
+| `internal/policy/policy.go` | Condition tree compilation and `EvaluateDenyEarly` (the pre-cache deny pass) |
+| `internal/bot/bot.go` | Bot verdict: honeypot → explicit policy → rDNS verification → behaviour score |
+| `internal/edge/accelerate.go` | Cache write path: buffering, flush grace, decoding, re-compression |
 | `internal/proxy/router.go` | Site routing by Host/SNI |
 
 ### Frontend
@@ -296,7 +358,10 @@ gowaf/
 ├── cmd/geo-gen/          # builds the embedded geo database
 ├── internal/
 │   ├── edge/             # request pipeline and challenge pages
-│   ├── detect/           # Aho-Corasick + rules scoring, Coraza/CRS engine, exceptions
+│   ├── detect/           # Aho-Corasick + rules scoring, Coraza/CRS engine, exceptions, upload/deserialization
+│   ├── policy/           # access policies: condition-tree compiler, snapshot set, early deny verdict
+│   ├── bot/              # bot policies, honeypots, behaviour scoring, forward-confirmed rDNS
+│   ├── cache/            # page cache: LRU + TTL store, rules, gzip/br/deflate + WebP, entry listing
 │   ├── guard/            # limiters, IP lists, auto-ban policy, real client IP
 │   ├── intel/            # threat-feed sync and range sets
 │   ├── proxy/            # reverse proxy, site routing, TLS/SNI
@@ -320,12 +385,29 @@ Console source is gitignored; the committed bundle makes `go build` self-suffici
 - **IIS real IP**: no `mod_remoteip` equivalent, so the backend app sees `127.0.0.1`. Limiting,
   banning and logging still use the real IP observed at the edge.
 - **QUIC / HTTP3**: UDP 443 is not handled; `doctor` reports it.
-- **IPv6 listeners**: not taken over (they are commented out to avoid port fights); IPv6 traffic
-  still reaches the origin directly.
+- **IPv6 is opt-in**: v1.3.0 added `server.listen_v6` / `server.tls_listen_v6`, but the
+  installer still comments v6 listeners out on the engine and never binds `::` by itself —
+  some distros differ on `v6only`, so silently going dual-stack could break a working box.
+  Until you configure the v6 listeners, IPv6 traffic reaches the origin directly.
+- **Page cache is per-process and in memory**: no shared store between nodes and no warm-up
+  after a restart. Size it with `cache.settings`, or leave big media uncached.
+- **Bot rDNS verification needs working reverse DNS**: behind a resolver that answers
+  `NXDOMAIN` for everything, every crawler looks fake — the console shows the last error and
+  the engine treats unverified bots as suspicious only when `bot.verify_rdns` is on.
 - **CRS costs CPU**: embedded CRS is on by default (`block`, paranoia 1). On small boxes switch
   `engine.crs.mode` to `log` or disable it.
 - **Alerts are email-only**: Feishu / SMS / WeChat entries are placeholders.
 - **No port-drift timer on Windows**: re-run `install.ps1 install` after a panel rewrites a port.
+
+## Documentation
+
+| Document | Contents |
+|---|---|
+| [README.zh-CN.md](README.zh-CN.md) | Full Chinese manual (principle, panel adaptation, troubleshooting) |
+| [docs/精准访问控制-设置.md](docs/精准访问控制-设置.md) | Access policies: field/operator reference, worked examples (block a country, block an IP, path + header combinations), trial-then-enforce workflow |
+| [docs/Bot管理-设置.md](docs/Bot管理-设置.md) | Bot policies: UA / path / IP / rDNS regex patterns, honeypots, scoring, verification checklist |
+| [docs/缓存与CDN加速-设置.md](docs/缓存与CDN加速-设置.md) | Page cache: rule recipes for css/js/images, compression, cache list, why the object count drops |
+| [CHANGELOG.md](CHANGELOG.md) | Release notes |
 
 ## License
 
