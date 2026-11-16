@@ -22,10 +22,13 @@ import (
 	"strings"
 	"time"
 
+	"gowaf/internal/bot"
+	"gowaf/internal/cache"
 	"gowaf/internal/detect"
 	"gowaf/internal/guard"
 	"gowaf/internal/metrics"
 	"gowaf/internal/notify"
+	"gowaf/internal/policy"
 	"gowaf/internal/proxy"
 	"gowaf/internal/runtime"
 	"gowaf/internal/store"
@@ -94,7 +97,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// 黑名单、封禁、情报、限流、规则引擎一概不参与，也不会有任何自动封禁。
 	// 观察模式下同样放行（观察模式只是不拦，不改变放行结果）。
 	if h.rt.IPList().IsWhitelisted(clientIP, route.SiteName) {
-		h.forward(w, r, route, clientIP, reqID, start, nil)
+		h.forward(w, r, route, clientIP, reqID, start, nil, nil, "")
 		return
 	}
 
@@ -137,6 +140,43 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 4.5) Bot 管理：蜜罐/策略/rDNS 验证/行为评分。
+	// 放在限流与人机校验之前：已验证的搜索引擎爬虫直接放行，不占用访问频率额度；
+	// 恶意 Bot 在进入规则引擎前就处置，节省检测开销。
+	var preResult detect.Result
+	if v := h.rt.Bot.Check(&bot.Request{
+		IP: clientIP, UA: r.UserAgent(), Path: r.URL.Path,
+		Site: route.SiteName, Query: r.URL.RawQuery, Host: r.Host,
+	}); v.Matched {
+		res := botResult(v)
+		switch v.Action {
+		case bot.ActionAllow:
+			h.forward(w, r, route, clientIP, reqID, start, &res, nil, "")
+			return
+		case bot.ActionBlock, bot.ActionBan:
+			if observe {
+				preResult = res
+				break
+			}
+			action := "block"
+			if v.Action == bot.ActionBan {
+				action = "ban"
+				h.recordDirectBan(clientIP.String(), &res, route.SiteName, r.Method, r.URL.Path)
+			}
+			h.reject(w, r, route, clientIP, reqID, start, action, "bot", http.StatusForbidden, &res)
+			return
+		case bot.ActionChallenge:
+			if !observe && !h.challengePassed(w, r, clientIP) {
+				h.serveChallenge(w, r, clientIP)
+				h.recordEvent(route, clientIP, reqID, start, r, http.StatusForbidden, "challenge", &res, 0, "", true)
+				return
+			}
+			preResult = res
+		default: // log
+			preResult = res
+		}
+	}
+
 	// 5) 静态资源/站点白名单路径：跳过检测（性能关键）
 	// 注意：只按扩展名跳过会漏掉 /env.js、/runtime-config.js、/aws-exports.js 这类
 	// 伪装成静态资源的配置泄露探测，所以敏感文件名必须例外。
@@ -177,6 +217,26 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// 6.5) 页面缓存：命中直接返回，未命中记住规则，回源后由加速 writer 写入缓存。
+	// 只处理匿名 GET/HEAD（带 Range 的断点续传不缓存），登录用户与写请求不参与。
+	var cacheRule *cache.Rule
+	cacheKey := ""
+	if h.rt.Cache.Enabled() && (r.Method == http.MethodGet || r.Method == http.MethodHead) &&
+		r.Header.Get("Range") == "" {
+		guest := r.Header.Get("Cookie") == "" && r.Header.Get("Authorization") == ""
+		if rule, ok := h.rt.Cache.Match(route.SiteName, r.URL.Path, guest); ok {
+			cr := rule
+			cacheKey = cache.Key(route.SiteName, r.Host, r.URL.Path, r.URL.RawQuery)
+			if entry, hit := h.rt.Cache.Get(cacheKey, time.Now()); hit {
+				status := serveCacheEntry(w, r, entry, h.rt.Cache.Settings())
+				h.recordEvent(route, clientIP, reqID, start, r, status, "pass", nil,
+					time.Since(start).Microseconds(), "cache", shouldSample(h.sampleRate, "pass", h.rand))
+				return
+			}
+			cacheRule = &cr
+		}
+	}
+
 	// 7) 读取 body（有上限），供检测与后续转发复用。
 	// 返回 skipBody=true 表示 body 超过检测上限或为 chunked，不做 body 规则检测、
 	// 原样透传——超大上传（如 64MB 视频）拒绝掉会直接打死业务，体积上限交给上游
@@ -188,7 +248,43 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 8) 规则检测
+	// 8) 精准访问控制：需要请求体，放在读取 body 之后、规则检测之前。
+	// 命中的策略按优先级第一条生效；allow 直接放行，log 只记录并继续检测。
+	// 策略独立于 skipDetect：静态资源/白名单路径仍可被显式拒绝或放行。
+	var policyLog detect.Result
+	preq := policy.NewRequest(r, body, clientIP.String(), h.countryOf(clientIP), "")
+	if m, ok := h.rt.PolicySet().Evaluate(preq, route.SiteName); ok {
+		h.rt.PolicySet().RecordHit(m.PolicyID, store.NowMS())
+		res := policyResult(m)
+		switch m.Action {
+		case policy.ActionAllow:
+			h.forward(w, r, route, clientIP, reqID, start, &res, nil, "")
+			return
+		case policy.ActionBlock, policy.ActionBan:
+			if observe {
+				policyLog = res
+				break
+			}
+			action := "block"
+			if m.Action == policy.ActionBan {
+				action = "ban"
+				h.recordDirectBan(clientIP.String(), &res, route.SiteName, r.Method, r.URL.Path)
+			}
+			h.reject(w, r, route, clientIP, reqID, start, action, "policy", http.StatusForbidden, &res)
+			return
+		case policy.ActionChallenge:
+			if !observe && !h.challengePassed(w, r, clientIP) {
+				h.serveChallenge(w, r, clientIP)
+				h.recordEvent(route, clientIP, reqID, start, r, http.StatusForbidden, "challenge", &res, 0, "", true)
+				return
+			}
+			policyLog = res
+		default:
+			policyLog = res
+		}
+	}
+
+	// 9) 规则检测
 	var result detect.Result
 	if !skipDetect && !skipBody && route.DetectBody {
 		in := buildInput(r, body)
@@ -204,19 +300,25 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			mergeResult(&result, &cres)
 		}
 
-		// 站点自定义防护：阈值/模式与全局不同，用站点生效值重判动作。
-		// action=ban 是规则的显式动作（命中即封），不参与分数重判。
-		if result.Action != "ban" {
-			if route.Guard != nil {
-				result.Action = decideByGuard(result.Score, route.Guard, h.rt.Engine.Mode())
-			} else {
-				block, challenge := h.rt.Engine.Scores()
-				result.Action = detect.Decide(result.Score, block, challenge, h.rt.Engine.Mode())
-			}
-		}
+		// 上传文件与反序列化载荷：解析 multipart/二进制协议标记，补规则正则的盲区。
+		payload := detect.InspectPayload(r.Header.Get("Content-Type"), body)
+		mergeResult(&result, &payload)
+
+		// Bot / 策略的 log 结果并入最终事件，保留命中信息。
+		mergeResult(&result, &preResult)
+		mergeResult(&result, &policyLog)
+
+		h.applyGuardAction(&result, route)
 		metrics.DetectDuration.Observe(float64(result.ElapsedUS) / 1e6)
 		for _, hit := range result.Hits {
 			metrics.RuleHits.WithLabelValues(hit.RuleID, hit.Category).Inc()
+		}
+	} else {
+		// 跳过 body 检测时，Bot/策略的 log 结果仍需按分数判定动作（观察模式下会降级为 log）。
+		mergeResult(&result, &preResult)
+		mergeResult(&result, &policyLog)
+		if result.Score > 0 || result.Action != "" {
+			h.applyGuardAction(&result, route)
 		}
 	}
 
@@ -240,8 +342,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// 9) 转发
-	h.forward(w, r, route, clientIP, reqID, start, &result)
+	// 10) 转发
+	h.forward(w, r, route, clientIP, reqID, start, &result, cacheRule, cacheKey)
 }
 
 // maxFieldLog 事件字段（路径、Query 等）落库前的最大保留字节数，防止超长 URL 撑爆事件表。
@@ -272,6 +374,21 @@ func decideByGuard(score int, g *proxy.SiteGuard, globalMode string) string {
 		return "log"
 	}
 	return verdict
+}
+
+// applyGuardAction 按站点/全局阈值与模式重判动作。
+// 参数 result：待修正的检测结果；参数 route：当前站点路由。
+// 显式 action=ban 不参与重判；观察模式一律降级为 log。
+func (h *Handler) applyGuardAction(result *detect.Result, route *proxy.Route) {
+	if result == nil || result.Action == "ban" {
+		return
+	}
+	if route.Guard != nil {
+		result.Action = decideByGuard(result.Score, route.Guard, h.rt.Engine.Mode())
+		return
+	}
+	block, challenge := h.rt.Engine.Scores()
+	result.Action = detect.Decide(result.Score, block, challenge, h.rt.Engine.Mode())
 }
 
 // buildInput 把 HTTP 请求拼装成规则引擎的检测输入。
@@ -484,7 +601,8 @@ func (h *Handler) isTrusted(addr netip.Addr) bool {
 // 参数 result：检测结果，白名单等未检测场景可为 nil。
 // 返回值无：上游响应原样写回 w；状态码、延迟、采样决定随事件异步落库。
 func (h *Handler) forward(w http.ResponseWriter, r *http.Request, route *proxy.Route,
-	ip netip.Addr, reqID string, start time.Time, result *detect.Result) {
+	ip netip.Addr, reqID string, start time.Time, result *detect.Result,
+	cacheRule *cache.Rule, cacheKey string) {
 
 	rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 	if route.Upstream != nil {
@@ -494,7 +612,10 @@ func (h *Handler) forward(w http.ResponseWriter, r *http.Request, route *proxy.R
 			r.Header.Set("X-Real-IP", ip.String())
 		}
 		r.Header.Set("X-Forwarded-Proto", scheme(r))
-		h.rt.Upstreams.Get(route).ServeHTTP(rec, r)
+		// 加速 writer：缓存未命中时负责写入，同时按客户端能力压缩/转 WebP。
+		aw := newAccelWriter(rec, r, h.rt.Cache, h.rt.Cache.Settings(), cacheRule, cacheKey)
+		h.rt.Upstreams.Get(route).ServeHTTP(aw, r)
+		aw.Close()
 	} else {
 		http.Error(rec, "站点未配置上游", http.StatusBadGateway)
 	}
