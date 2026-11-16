@@ -62,6 +62,11 @@ func NewRouter(o Options) *gin.Engine {
 		api.POST("/auth/logout", h.Logout)
 		api.POST("/auth/refresh", h.Refresh)
 
+		// 节点 Agent 上报：不套登录态（Agent 没有后台会话），
+		// 由 handler 内部校验设置表里的 node.agent_token。
+		api.GET("/agent/config", h.AgentConfig)
+		api.POST("/agent/heartbeat", h.AgentHeartbeat)
+
 		// 需登录
 		authed := api.Group("", middleware.Auth(o.Auth))
 		{
@@ -91,6 +96,17 @@ func NewRouter(o Options) *gin.Engine {
 			authed.GET("/rules/export", h.RuleExport)
 			authed.GET("/rules/:id/samples", h.RuleSamples)
 			authed.GET("/exceptions", h.ExceptionList)
+
+			// 第一批~第三批扩展能力：精准访问控制 / Bot / 页面缓存 / 节点 / 多上游
+			authed.GET("/policies", h.PolicyList)
+			authed.GET("/bots", h.BotList)
+			authed.GET("/bot-honeypots", h.HoneypotList)
+			authed.GET("/cache/rules", h.CacheRuleList)
+			authed.GET("/cache/settings", h.CacheSettingsGet)
+			authed.GET("/cache/stats", h.CacheStats)
+			authed.GET("/nodes", h.NodeList)
+			authed.GET("/upstreams/status", h.UpstreamStatus)
+
 			authed.GET("/intel/sources", h.IntelList)
 			authed.GET("/intel/status", h.IntelStatus)
 			authed.GET("/intel/presets", h.IntelPresets)
@@ -98,6 +114,7 @@ func NewRouter(o Options) *gin.Engine {
 			authed.GET("/crs/check-update", h.CRSCheckUpdate)
 			authed.GET("/notify/logs", h.NotifyLogs)
 			authed.GET("/sites", h.SiteList)
+			authed.GET("/sites/:id/upstreams", h.SiteUpstreamList)
 			authed.GET("/settings", h.SettingsGet)
 			authed.GET("/settings/versions", h.SettingsVersions)
 			authed.GET("/audit", h.AuditList)
@@ -151,6 +168,37 @@ func NewRouter(o Options) *gin.Engine {
 				w.PUT("/sites/:id", middleware.RequirePerm(o.Store, "site:write"), h.SiteUpdate)
 				w.DELETE("/sites/:id", middleware.RequirePerm(o.Store, "site:write"), h.SiteDelete)
 				w.POST("/sites/:id/test", middleware.RequirePerm(o.Store, "site:write"), h.SiteTest)
+
+				// 精准访问控制
+				w.POST("/policies", middleware.RequirePerm(o.Store, "policy:write"), h.PolicyCreate)
+				w.PUT("/policies/:id", middleware.RequirePerm(o.Store, "policy:write"), h.PolicyUpdate)
+				w.PATCH("/policies/:id/toggle", middleware.RequirePerm(o.Store, "policy:write"), h.PolicyToggle)
+				w.DELETE("/policies/:id", middleware.RequirePerm(o.Store, "policy:write"), h.PolicyDelete)
+
+				// Bot 管理
+				w.POST("/bots", middleware.RequirePerm(o.Store, "bot:write"), h.BotCreate)
+				w.PUT("/bots/:id", middleware.RequirePerm(o.Store, "bot:write"), h.BotUpdate)
+				w.PATCH("/bots/:id/toggle", middleware.RequirePerm(o.Store, "bot:write"), h.BotToggle)
+				w.DELETE("/bots/:id", middleware.RequirePerm(o.Store, "bot:write"), h.BotDelete)
+				w.POST("/bot-honeypots", middleware.RequirePerm(o.Store, "bot:write"), h.HoneypotCreate)
+				w.PUT("/bot-honeypots/:id", middleware.RequirePerm(o.Store, "bot:write"), h.HoneypotUpdate)
+				w.PATCH("/bot-honeypots/:id/toggle", middleware.RequirePerm(o.Store, "bot:write"), h.HoneypotToggle)
+				w.DELETE("/bot-honeypots/:id", middleware.RequirePerm(o.Store, "bot:write"), h.HoneypotDelete)
+
+				// 页面缓存
+				w.POST("/cache/rules", middleware.RequirePerm(o.Store, "cache:write"), h.CacheRuleCreate)
+				w.PUT("/cache/rules/:id", middleware.RequirePerm(o.Store, "cache:write"), h.CacheRuleUpdate)
+				w.PATCH("/cache/rules/:id/toggle", middleware.RequirePerm(o.Store, "cache:write"), h.CacheRuleToggle)
+				w.DELETE("/cache/rules/:id", middleware.RequirePerm(o.Store, "cache:write"), h.CacheRuleDelete)
+				w.PUT("/cache/settings", middleware.RequirePerm(o.Store, "cache:write"), h.CacheSettingsUpdate)
+				w.POST("/cache/purge", middleware.RequirePerm(o.Store, "cache:write"), h.CachePurge)
+
+				// 节点与站点多上游
+				w.POST("/nodes", middleware.RequirePerm(o.Store, "node:write"), h.NodeCreate)
+				w.PUT("/nodes/:id", middleware.RequirePerm(o.Store, "node:write"), h.NodeUpdate)
+				w.DELETE("/nodes/:id", middleware.RequirePerm(o.Store, "node:write"), h.NodeDelete)
+				w.POST("/nodes/token", middleware.RequirePerm(o.Store, "node:write"), h.NodeToken)
+				w.PUT("/sites/:id/upstreams", middleware.RequirePerm(o.Store, "site:write"), h.SiteUpstreamSave)
 
 				w.PUT("/settings", middleware.RequirePerm(o.Store, "settings:write"), h.SettingsUpdate)
 				w.POST("/settings/reload", middleware.RequirePerm(o.Store, "settings:write"), h.SettingsReload)

@@ -75,8 +75,13 @@ type Config struct {
 
 // Server 数据面与控制面的监听地址、超时参数。
 type Server struct {
-	Listen            string   `yaml:"listen"`              // 数据面 HTTP 监听地址，如 "0.0.0.0:80"
-	TLSListen         string   `yaml:"tls_listen"`          // 数据面 HTTPS 监听地址；tls.enabled=true 时必填
+	Listen    string `yaml:"listen"`     // 数据面 HTTP 监听地址，如 "0.0.0.0:80"
+	TLSListen string `yaml:"tls_listen"` // 数据面 HTTPS 监听地址；tls.enabled=true 时必填
+	// ListenV6/TLSListenV6 是可选的 IPv6 额外监听（如 "[::]:80"）。
+	// 不默认与 v4 共用双栈地址：部分系统/Linux 发行版的 v6only 默认值不同，
+	// 强行绑定 "::" 可能与已有 v4 监听冲突，导致老部署升级后启动失败。
+	ListenV6          string   `yaml:"listen_v6"`           // 数据面 IPv6 HTTP 额外监听地址，空=不启用
+	TLSListenV6       string   `yaml:"tls_listen_v6"`       // 数据面 IPv6 HTTPS 额外监听地址，空=不启用
 	AdminListen       string   `yaml:"admin_listen"`        // 控制面监听地址，默认只绑回环 127.0.0.1:8899
 	ReadHeaderTimeout Duration `yaml:"read_header_timeout"` // 读取请求头的超时，防慢速连接占用资源
 	ReadTimeout       Duration `yaml:"read_timeout"`        // 读取整个请求（含 body）的超时
@@ -402,6 +407,19 @@ func (c *Config) Validate() error {
 	}
 	if c.TLS.Enabled && c.Server.TLSListen == "" {
 		errs = append(errs, "tls.enabled=true 但 server.tls_listen 为空")
+	}
+	if c.Server.ListenV6 != "" {
+		if _, port, err := net.SplitHostPort(c.Server.ListenV6); err != nil || port == "" {
+			errs = append(errs, fmt.Sprintf("server.listen_v6 非法: %q", c.Server.ListenV6))
+		}
+	}
+	if c.Server.TLSListenV6 != "" {
+		if _, port, err := net.SplitHostPort(c.Server.TLSListenV6); err != nil || port == "" {
+			errs = append(errs, fmt.Sprintf("server.tls_listen_v6 非法: %q", c.Server.TLSListenV6))
+		}
+		if !c.TLS.Enabled {
+			errs = append(errs, "server.tls_listen_v6 已配置但 tls.enabled=false")
+		}
 	}
 	if c.TLS.Enabled && len(c.TLS.Certs) == 0 && c.TLS.CertDir == "" {
 		errs = append(errs, "tls.enabled=true 但既没有 tls.certs 也没有 tls.cert_dir")

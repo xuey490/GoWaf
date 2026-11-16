@@ -7,6 +7,7 @@ package app
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"log"
@@ -43,9 +44,11 @@ type App struct {
 	handler *handler.Server          // 管理后台业务处理器：含 SSE 实时推送
 	tasks   *tasks.Runner            // 计划任务中心：备份、事件清理等定时任务
 
-	httpSrv  *http.Server // 数据面 HTTP 服务（明文）
-	httpsSrv *http.Server // 数据面 HTTPS 服务：未启用 TLS 时为 nil
-	adminSrv *http.Server // 控制面（管理后台）服务
+	httpSrv    *http.Server // 数据面 HTTP 服务（明文）
+	httpsSrv   *http.Server // 数据面 HTTPS 服务：未启用 TLS 时为 nil
+	adminSrv   *http.Server // 控制面（管理后台）服务
+	httpV6Srv  *http.Server // 数据面 IPv6 HTTP 额外监听：未配置时为 nil
+	httpsV6Srv *http.Server // 数据面 IPv6 HTTPS 额外监听：未配置时为 nil
 
 	mu       sync.Mutex    // 保护 closed 标志的互斥锁
 	closed   bool          // 应用是否已（开始）关闭
@@ -159,17 +162,27 @@ func New(cfg *config.Config, version string) (*App, error) {
 		IdleTimeout:       cfg.Server.IdleTimeout.Duration(),
 		MaxHeaderBytes:    cfg.Server.MaxHeaderBytes,
 	}
-	if cfg.TLS.Enabled {
-		a.httpsSrv = &http.Server{
-			Addr:              cfg.Server.TLSListen,
+	newDataServer := func(addr string, tlsCfg *tls.Config) *http.Server {
+		return &http.Server{
+			Addr:              addr,
 			Handler:           edgeHandler,
-			TLSConfig:         certs.TLSConfig(),
+			TLSConfig:         tlsCfg,
 			ReadHeaderTimeout: cfg.Server.ReadHeaderTimeout.Duration(),
 			ReadTimeout:       cfg.Server.ReadTimeout.Duration(),
 			WriteTimeout:      cfg.Server.WriteTimeout.Duration(),
 			IdleTimeout:       cfg.Server.IdleTimeout.Duration(),
 			MaxHeaderBytes:    cfg.Server.MaxHeaderBytes,
 		}
+	}
+	if cfg.TLS.Enabled {
+		a.httpsSrv = newDataServer(cfg.Server.TLSListen, certs.TLSConfig())
+	}
+	// IPv6 额外监听：与 v4 共用同一个数据面 Handler，独立 http.Server 实例。
+	if cfg.Server.ListenV6 != "" {
+		a.httpV6Srv = newDataServer(cfg.Server.ListenV6, nil)
+	}
+	if cfg.TLS.Enabled && cfg.Server.TLSListenV6 != "" {
+		a.httpsV6Srv = newDataServer(cfg.Server.TLSListenV6, certs.TLSConfig())
 	}
 
 	// 控制面
@@ -241,26 +254,61 @@ func (a *App) Start() error {
 		return fmt.Errorf("数据面 HTTP: %w（端口被占用？可用 netstat -ano 查占用进程）", err)
 	}
 
+	closeAll := func() {
+		_ = httpLn.Close()
+	}
+
 	var httpsLn net.Listener
 	if a.httpsSrv != nil && a.certs != nil {
 		httpsLn, err = net.Listen("tcp", a.cfg.Server.TLSListen)
 		if err != nil {
-			_ = httpLn.Close()
+			closeAll()
 			return fmt.Errorf("数据面 HTTPS: %w", err)
+		}
+	}
+
+	var httpV6Ln, httpsV6Ln net.Listener
+	if a.httpV6Srv != nil {
+		httpV6Ln, err = net.Listen("tcp", a.cfg.Server.ListenV6)
+		if err != nil {
+			closeAll()
+			if httpsLn != nil {
+				_ = httpsLn.Close()
+			}
+			return fmt.Errorf("数据面 IPv6 HTTP: %w", err)
+		}
+	}
+	if a.httpsV6Srv != nil && a.certs != nil {
+		httpsV6Ln, err = net.Listen("tcp", a.cfg.Server.TLSListenV6)
+		if err != nil {
+			closeAll()
+			if httpsLn != nil {
+				_ = httpsLn.Close()
+			}
+			if httpV6Ln != nil {
+				_ = httpV6Ln.Close()
+			}
+			return fmt.Errorf("数据面 IPv6 HTTPS: %w", err)
 		}
 	}
 
 	adminLn, err := net.Listen("tcp", a.cfg.Server.AdminListen)
 	if err != nil {
-		_ = httpLn.Close()
+		closeAll()
 		if httpsLn != nil {
 			_ = httpsLn.Close()
+		}
+		if httpV6Ln != nil {
+			_ = httpV6Ln.Close()
+		}
+		if httpsV6Ln != nil {
+			_ = httpsV6Ln.Close()
 		}
 		return fmt.Errorf("控制面: %w", err)
 	}
 
-	// 缓冲 3：与 HTTP/HTTPS/控制面三个服务一一对应，保证出错 goroutine 发送不阻塞
-	errCh := make(chan error, 3)
+	// 缓冲 5：与 HTTP/HTTPS/IPv6 HTTP/IPv6 HTTPS/控制面五个服务对应，保证出错 goroutine 发送不阻塞
+	errCh := make(chan error, 5)
 
 	go func() {
 		log.Printf("[app] 数据面 HTTP 监听 %s", httpLn.Addr())
@@ -280,6 +328,25 @@ func (a *App) Start() error {
 		}()
 	}
 
+	if httpV6Ln != nil {
+		go func() {
+			log.Printf("[app] 数据面 IPv6 HTTP 监听 %s", httpV6Ln.Addr())
+			if err := a.httpV6Srv.Serve(httpV6Ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				errCh <- fmt.Errorf("数据面 IPv6 HTTP: %w", err)
+			}
+		}()
+	}
+	if httpsV6Ln != nil {
+		go func() {
+			log.Printf("[app] 数据面 IPv6 HTTPS 监听 %s（已加载 %d 张证书）",
+				httpsV6Ln.Addr(), a.certs.Count())
+			a.httpsV6Srv.TLSConfig = a.certs.TLSConfig()
+			if err := a.httpsV6Srv.ServeTLS(httpsV6Ln, "", ""); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				errCh <- fmt.Errorf("数据面 IPv6 HTTPS: %w", err)
+			}
+		}()
+	}
+
 	go func() {
 		log.Printf("[app] 控制面监听 %s", adminLn.Addr())
 		if err := a.adminSrv.Serve(adminLn); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -292,6 +359,8 @@ func (a *App) Start() error {
 	go a.tasks.Loop()
 	go a.intelLoop()
 	go a.ruleHitsLoop()
+	go a.upstreamHealthLoop()
+	go a.nodeStatusLoop()
 	if a.rt.Notify != nil {
 		a.rt.Notify.Start()
 	}
@@ -342,14 +411,58 @@ func (a *App) ruleHitsLoop() {
 			return
 		case <-ticker.C:
 			stats := a.rt.Engine.DrainHits()
-			if len(stats) == 0 {
-				continue
-			}
 			for _, st := range stats {
 				a.rt.Store.Gorm().Exec(
 					`UPDATE rules SET hits = hits + ?, last_hit_at = ? WHERE id = ?`,
 					st.Count, st.LastMS, st.RuleID)
 			}
+			// 精准访问控制命中计数同样批量刷库，避免每个请求写一次 SQLite。
+			pol := a.rt.PolicySet()
+			for _, st := range pol.HitStats() {
+				if st.Hits <= 0 {
+					continue
+				}
+				a.rt.Store.Gorm().Exec(
+					`UPDATE access_policies SET hit_count = hit_count + ?, last_hit_at = ? WHERE id = ?`,
+					st.Hits, st.LastHit, st.ID)
+				pol.ResetHits(st.ID, st.Hits)
+			}
+		}
+	}
+}
+
+// upstreamHealthLoop 周期探测多上游健康状态，失败目标自动降权，恢复后自动回归。
+// 无参数；stopCh 关闭时退出，无返回值。
+func (a *App) upstreamHealthLoop() {
+	interval := a.rt.UpstreamHealthInterval()
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-a.stopCh:
+			return
+		case <-ticker.C:
+			ctx, cancel := context.WithTimeout(context.Background(), interval)
+			a.rt.Upstreams.CheckHealth(ctx)
+			cancel()
+		}
+	}
+}
+
+// nodeStatusLoop 每分钟刷新节点在线状态：心跳超时即标记离线。
+// 无参数；stopCh 关闭时退出，无返回值。
+func (a *App) nodeStatusLoop() {
+	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-a.stopCh:
+			return
+		case <-ticker.C:
+			deadline := store.NowMS() - a.rt.NodeHeartbeatTTL().Milliseconds()
+			a.rt.Store.Gorm().Model(&model.Node{}).
+				Where("status = ? AND last_heartbeat > 0 AND last_heartbeat < ?", "online", deadline).
+				Update("status", "offline")
 		}
 	}
 }
@@ -400,6 +513,8 @@ func (a *App) maintenance() {
 			}
 			a.rt.Hits.Cleanup(now, hitIdle)
 			a.rt.Bans.Cleanup(now)
+			a.rt.Bot.Cleanup(time.Now())
+			a.rt.Cache.Cleanup(time.Now())
 			a.login.Cleanup()
 			metrics.BannedGauge.Set(float64(a.rt.Bans.Size()))
 
@@ -462,8 +577,18 @@ func (a *App) Shutdown(ctx context.Context) error {
 			errs = append(errs, err)
 		}
 	}
+	if a.httpsV6Srv != nil {
+		if err := a.httpsV6Srv.Shutdown(ctx); err != nil {
+			errs = append(errs, err)
+		}
+	}
 	if err := a.httpSrv.Shutdown(ctx); err != nil {
 		errs = append(errs, err)
+	}
+	if a.httpV6Srv != nil {
+		if err := a.httpV6Srv.Shutdown(ctx); err != nil {
+			errs = append(errs, err)
+		}
 	}
 	if err := a.adminSrv.Shutdown(ctx); err != nil {
 		errs = append(errs, err)
