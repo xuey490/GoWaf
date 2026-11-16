@@ -243,10 +243,13 @@ Windows 服务模式用 `gowaf svc install|start|stop|uninstall` 实现（单二
   策略里填的是**子串或正则**，`Googlebot` 会同时匹配 `Mozilla/5.0 (compatible; Googlebot/2.1)`。
 - **rDNS 验证**（`bot.verify_rdns`）对声称是搜索引擎的 UA 做正向-反向 DNS 双重确认：
   真爬虫放行且不占限流额度，伪造 UA 按可疑处置。开启前确认服务器能做反向解析。
-- **行为评分**默认 30 次 / 窗口，超阈值动作 `challenge`。阈值太低会把正常用户
-  （尤其是图片站、后台刷新频繁的运维）算成 Bot，建议先看事件再调。
+- **行为评分**默认 60 次 / 窗口（`bot.window`，单位秒），超阈值动作 `challenge`。
+  阈值太低会把正常用户（尤其是图片站、后台刷新频繁的运维）算成 Bot，建议先看事件再调。
 - `bot.enabled` 默认 `false`——**建了策略不等于生效**，需要先打开总开关；
   打开前建议把 `bot.score_threshold` 提到 120~300 做灰度。
+- 六个全局参数在「Bot 管理 → **设置**」页签里直接改（`bot.enabled` / `bot.verify_rdns` /
+  `bot.score_threshold` / `bot.action` / `bot.window` / `bot.cache_ttl`），保存即热生效，
+  无需重启；对应 `GET/PUT /api/settings`，需要 `settings:write` 权限。
 
 命中后响应头 `X-WAF-Action: block` + `X-WAF-Reason: bot`，事件页分类为 `bot`、
 规则 ID 为 `bot-<category>`。正则写法与线上策略清单见 [docs/Bot管理-设置.md](docs/Bot管理-设置.md)。
