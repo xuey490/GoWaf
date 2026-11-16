@@ -447,3 +447,133 @@ type SeclangPackage struct {
 // TableName 指定 SeclangPackage 模型对应的数据库表名。
 // 参数：无；返回：表名 "seclang_packages"。
 func (SeclangPackage) TableName() string { return "seclang_packages" }
+
+// TableName 指定 AccessPolicy 模型对应的数据库表名。
+// 参数：无；返回：表名 "access_policies"。
+func (AccessPolicy) TableName() string { return "access_policies" }
+
+// AccessPolicy 精准访问控制策略。
+//
+// Conditions 是 JSON 条件树，结构见 internal/policy.Group：
+// {"logic":"and","items":[{"field":"path","op":"prefix","value":"/api"}],"groups":[]}。
+// 数据面在 Reload 时编译成不可变快照，请求路径不解析 JSON、不查库。
+type AccessPolicy struct {
+	ID         uint   `gorm:"primaryKey;autoIncrement" json:"id"`                                                      // 主键，自增
+	Name       string `gorm:"column:name;size:128;not null" json:"name"`                                               // 策略名称
+	Site       string `gorm:"column:site;size:64;not null;default:''" json:"site"`                                     // 生效站点名，空串=所有站点
+	Priority   int    `gorm:"column:priority;not null;default:100" json:"priority"`                                    // 优先级，数字小的先匹配
+	Enabled    int    `gorm:"column:enabled;not null;default:1" json:"enabled"`                                        // 是否启用：1 启用 / 0 停用
+	Action     string `gorm:"column:action;size:16;not null;default:'block'" json:"action"`                            // allow/block/challenge/log/ban
+	Conditions string `gorm:"column:conditions;not null;default:'{\"logic\":\"and\",\"items\":[]}'" json:"conditions"` // 条件树 JSON
+	Note       string `gorm:"column:note;size:255;not null;default:''" json:"note"`                                    // 备注
+	HitCount   int64  `gorm:"column:hit_count;not null;default:0" json:"hitCount"`                                     // 累计命中次数
+	LastHitAt  int64  `gorm:"column:last_hit_at;not null;default:0" json:"lastHitAt"`                                  // 最近命中时间（Unix 毫秒）
+	CreatedBy  string `gorm:"column:created_by;size:64;not null;default:''" json:"createdBy"`                          // 创建人
+	CreatedAt  int64  `gorm:"column:created_at;not null;default:0" json:"createdAt"`                                   // 创建时间（Unix 毫秒）
+	UpdatedAt  int64  `gorm:"column:updated_at;not null;default:0" json:"updatedAt"`                                   // 更新时间（Unix 毫秒）
+}
+
+// TableName 指定 BotPolicy 模型对应的数据库表名。
+// 参数：无；返回：表名 "bot_policies"。
+func (BotPolicy) TableName() string { return "bot_policies" }
+
+// BotPolicy Bot 识别与处置策略。
+//
+// MatchType 支持 ua / path / ip / rdns；Pattern 是正则表达式（rdns 时匹配域名后缀）。
+// Category 用于面板分类：search/ai/monitor/scraper/malicious/unknown。
+type BotPolicy struct {
+	ID        uint   `gorm:"primaryKey;autoIncrement" json:"id"`                                 // 主键，自增
+	Name      string `gorm:"column:name;size:128;not null" json:"name"`                          // 策略名称
+	Site      string `gorm:"column:site;size:64;not null;default:''" json:"site"`                // 生效站点名，空串=所有站点
+	Category  string `gorm:"column:category;size:32;not null;default:'unknown'" json:"category"` // Bot 分类
+	Action    string `gorm:"column:action;size:16;not null;default:'challenge'" json:"action"`   // allow/log/challenge/block/ban
+	MatchType string `gorm:"column:match_type;size:16;not null;default:'ua'" json:"matchType"`   // ua/path/ip/rdns
+	Pattern   string `gorm:"column:pattern;size:512;not null" json:"pattern"`                    // 正则或域名后缀
+	Priority  int    `gorm:"column:priority;not null;default:100" json:"priority"`               // 优先级，数字小的先匹配
+	Enabled   int    `gorm:"column:enabled;not null;default:1" json:"enabled"`                   // 是否启用
+	Note      string `gorm:"column:note;size:255;not null;default:''" json:"note"`               // 备注
+	CreatedBy string `gorm:"column:created_by;size:64;not null;default:''" json:"createdBy"`     // 创建人
+	CreatedAt int64  `gorm:"column:created_at;not null;default:0" json:"createdAt"`              // 创建时间（Unix 毫秒）
+	UpdatedAt int64  `gorm:"column:updated_at;not null;default:0" json:"updatedAt"`              // 更新时间（Unix 毫秒）
+}
+
+// TableName 指定 BotHoneypot 模型对应的数据库表名。
+// 参数：无；返回：表名 "bot_honeypots"。
+func (BotHoneypot) TableName() string { return "bot_honeypots" }
+
+// BotHoneypot 蜜罐路径：正常用户不会访问，命中即视为恶意 Bot。
+type BotHoneypot struct {
+	ID        uint   `gorm:"primaryKey;autoIncrement" json:"id"`                             // 主键，自增
+	Site      string `gorm:"column:site;size:64;not null;default:''" json:"site"`            // 生效站点名，空串=所有站点
+	Path      string `gorm:"column:path;size:255;not null" json:"path"`                      // 蜜罐路径，支持 * 结尾前缀匹配
+	Note      string `gorm:"column:note;size:255;not null;default:''" json:"note"`           // 备注
+	Enabled   int    `gorm:"column:enabled;not null;default:1" json:"enabled"`               // 是否启用
+	CreatedBy string `gorm:"column:created_by;size:64;not null;default:''" json:"createdBy"` // 创建人
+	CreatedAt int64  `gorm:"column:created_at;not null;default:0" json:"createdAt"`          // 创建时间（Unix 毫秒）
+}
+
+// TableName 指定 CacheRule 模型对应的数据库表名。
+// 参数：无；返回：表名 "cache_rules"。
+func (CacheRule) TableName() string { return "cache_rules" }
+
+// CacheRule 页面缓存规则。
+//
+// Kind 支持 suffix/exact/prefix/regex/directory/guest：
+// suffix 按后缀、exact 完全相等、prefix 前缀、regex 正则、directory 目录、
+// guest 仅匿名请求（无 Cookie）可缓存。
+type CacheRule struct {
+	ID         uint   `gorm:"primaryKey;autoIncrement" json:"id"`                             // 主键，自增
+	Name       string `gorm:"column:name;size:128;not null" json:"name"`                      // 规则名称
+	Site       string `gorm:"column:site;size:64;not null;default:''" json:"site"`            // 生效站点名，空串=所有站点
+	Kind       string `gorm:"column:kind;size:16;not null;default:'suffix'" json:"kind"`      // 匹配类型
+	Pattern    string `gorm:"column:pattern;size:512;not null" json:"pattern"`                // 匹配表达式
+	TTLSeconds int    `gorm:"column:ttl_seconds;not null;default:300" json:"ttlSeconds"`      // 缓存有效期（秒）
+	Priority   int    `gorm:"column:priority;not null;default:100" json:"priority"`           // 优先级，数字小的先匹配
+	Enabled    int    `gorm:"column:enabled;not null;default:1" json:"enabled"`               // 是否启用
+	Note       string `gorm:"column:note;size:255;not null;default:''" json:"note"`           // 备注
+	CreatedBy  string `gorm:"column:created_by;size:64;not null;default:''" json:"createdBy"` // 创建人
+	CreatedAt  int64  `gorm:"column:created_at;not null;default:0" json:"createdAt"`          // 创建时间（Unix 毫秒）
+	UpdatedAt  int64  `gorm:"column:updated_at;not null;default:0" json:"updatedAt"`          // 更新时间（Unix 毫秒）
+}
+
+// TableName 指定 SiteUpstream 模型对应的数据库表名。
+// 参数：无；返回：表名 "site_upstreams"。
+func (SiteUpstream) TableName() string { return "site_upstreams" }
+
+// SiteUpstream 站点回源上游（双链路/多线路）。
+//
+// 同一站点可配置多条：Line 标识电信/联通/移动/BGP，Weight 做加权，
+// Priority 数字小的优先；全部不可用时按顺序兜底，避免单线路故障中断业务。
+type SiteUpstream struct {
+	ID        uint   `gorm:"primaryKey;autoIncrement" json:"id"`                     // 主键，自增
+	SiteID    uint   `gorm:"column:site_id;not null;index" json:"siteId"`            // 所属站点 ID
+	Addr      string `gorm:"column:addr;size:255;not null" json:"addr"`              // 上游地址 http(s)://host:port
+	Line      string `gorm:"column:line;size:16;not null;default:'bgp'" json:"line"` // 线路：telecom/unicom/mobile/bgp
+	Weight    int    `gorm:"column:weight;not null;default:1" json:"weight"`         // 权重，越大越优先
+	Priority  int    `gorm:"column:priority;not null;default:100" json:"priority"`   // 优先级，数字小的先使用
+	Enabled   int    `gorm:"column:enabled;not null;default:1" json:"enabled"`       // 是否启用
+	CreatedAt int64  `gorm:"column:created_at;not null;default:0" json:"createdAt"`  // 创建时间（Unix 毫秒）
+	UpdatedAt int64  `gorm:"column:updated_at;not null;default:0" json:"updatedAt"`  // 更新时间（Unix 毫秒）
+}
+
+// TableName 指定 Node 模型对应的数据库表名。
+// 参数：无；返回：表名 "nodes"。
+func (Node) TableName() string { return "nodes" }
+
+// Node 接入节点：控制面登记数据面节点，Agent 通过心跳上报存活状态。
+//
+// Status 由心跳时间推导：online（5 分钟内）/ offline（超时）/ disabled（手动停用）。
+type Node struct {
+	ID            uint   `gorm:"primaryKey;autoIncrement" json:"id"`                             // 主键，自增
+	Name          string `gorm:"column:name;size:64;not null;uniqueIndex" json:"name"`           // 节点名称，唯一
+	Address       string `gorm:"column:address;size:255;not null;default:''" json:"address"`     // 数据面地址/IP
+	Line          string `gorm:"column:line;size:16;not null;default:'bgp'" json:"line"`         // 线路：telecom/unicom/mobile/bgp
+	Region        string `gorm:"column:region;size:64;not null;default:''" json:"region"`        // 地域
+	Weight        int    `gorm:"column:weight;not null;default:1" json:"weight"`                 // 调度权重
+	Status        string `gorm:"column:status;size:16;not null:default:'offline'" json:"status"` // online/offline/disabled
+	LastHeartbeat int64  `gorm:"column:last_heartbeat;not null:default:0" json:"lastHeartbeat"`  // 最近心跳（Unix 毫秒）
+	Version       string `gorm:"column:version;size:32;not null:default:''" json:"version"`      // 节点程序版本
+	Note          string `gorm:"column:note;size:255;not null:default:''" json:"note"`           // 备注
+	CreatedAt     int64  `gorm:"column:created_at;not null:default:0" json:"createdAt"`          // 创建时间（Unix 毫秒）
+	UpdatedAt     int64  `gorm:"column:updated_at;not null:default:0" json:"updatedAt"`          // 更新时间（Unix 毫秒）
+}
