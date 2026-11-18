@@ -340,8 +340,18 @@ func (r *Runner) runBackupRules(paramsJSON string) (string, error) {
 	if err := os.MkdirAll(r.backupDir, 0o750); err != nil {
 		return "", err
 	}
-	// 文件名带毫秒：手动连续触发时避免同秒覆盖
-	file := filepath.Join(r.backupDir, "rules-"+time.Now().Format("20060102-150405.000")+".json")
+	// 文件名带纳秒：手动连续触发或高速执行（如 CI 的 tmpfs）时避免同毫秒同名覆盖。
+	// 定宽 9 位小数，字典序仍等于时间序（pruneBackups 依赖此性质）；
+	// 若时钟分辨率不足仍取到同名，则沿时间轴前移 1ns 直至不冲突。
+	ts := time.Now()
+	var file string
+	for {
+		file = filepath.Join(r.backupDir, "rules-"+ts.Format("20060102-150405.000000000")+".json")
+		if _, statErr := os.Stat(file); statErr != nil {
+			break
+		}
+		ts = ts.Add(time.Nanosecond)
+	}
 	if err := os.WriteFile(file, payload, 0o600); err != nil {
 		return "", err
 	}

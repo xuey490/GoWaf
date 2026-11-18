@@ -1,0 +1,158 @@
+# GoWAF OpenAPI 契约（/api/v1）
+#
+# 说明：
+#   - /api/v1 是 /api 同名路由的稳定别名组，处理器一一对应；
+#   - 认证：API Token（Bearer，控制台 GET/POST /api/tokens 管理）或管理员登录会话；
+#   - read 作用域令牌只能访问 GET；POST/DELETE 需要 read,write 作用域（否则 403）；
+#   - 响应统一为 {code, msg, data}，code=200 表示成功；HTTP 状态码与 code 一致。
+#   - MCP 客户端（gowaf mcp 子命令）按同一契约访问既有 /api/* 路由。
+openapi: 3.0.3
+info:
+  title: GoWAF OpenAPI
+  version: "1.4.0"
+  description: |
+    GoWAF 控制面对外契约。响应包装 {code, msg, data}；下文各接口的 schema 描述
+    均指 data 字段内容。
+servers:
+  - url: http://127.0.0.1:8899
+security:
+  - bearerToken: []
+paths:
+  /api/v1/overview:
+    get:
+      summary: 仪表盘总览（请求数、拦截数、站点数等）
+      tags: [dashboard]
+      responses: { "200": { description: OK } }
+  /api/v1/timeseries:
+    get:
+      summary: 时序统计（range=1h|6h|24h|7d|30d）
+      tags: [dashboard]
+      parameters:
+        - { name: range, in: query, schema: { type: string, default: 24h } }
+      responses: { "200": { description: OK } }
+  /api/v1/top:
+    get:
+      summary: Top IP / 路径 / UA 统计
+      tags: [dashboard]
+      responses: { "200": { description: OK } }
+  /api/v1/categories:
+    get:
+      summary: 攻击类型分布
+      tags: [dashboard]
+      responses: { "200": { description: OK } }
+  /api/v1/events:
+    get:
+      summary: 攻击/访问事件列表（分页 + 过滤）
+      tags: [events]
+      parameters:
+        - { name: current, in: query, schema: { type: integer, default: 1 } }
+        - { name: size, in: query, schema: { type: integer, default: 20 } }
+        - { name: action, in: query, schema: { type: string }, description: pass/log/block/challenge/ban }
+        - { name: site, in: query, schema: { type: string } }
+        - { name: keyword, in: query, schema: { type: string }, description: 覆盖 path/ua/query/rule_ids/categories/client_ip }
+      responses: { "200": { description: OK } }
+  /api/v1/events/{id}:
+    get:
+      summary: 事件详情
+      tags: [events]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      responses: { "200": { description: OK }, "404": { description: 不存在 } }
+  /api/v1/sites:
+    get:
+      summary: 防护站点列表
+      tags: [sites]
+      responses: { "200": { description: OK } }
+  /api/v1/bans:
+    get:
+      summary: 封禁列表
+      tags: [bans]
+      parameters:
+        - { name: current, in: query, schema: { type: integer } }
+        - { name: size, in: query, schema: { type: integer } }
+      responses: { "200": { description: OK } }
+    post:
+      summary: 手动封禁 IP（需要 write 作用域）
+      tags: [bans]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ip: { type: string, example: 1.2.3.4 }
+                duration: { type: integer, description: 封禁秒数；0 或缺省 = 永久 }
+                reason: { type: string }
+                scope: { type: string, enum: [global, site], default: global }
+                site: { type: string, description: scope=site 时的站点名 }
+      responses: { "200": { description: OK }, "403": { description: 缺少 write 作用域 } }
+  /api/v1/bans/{id}:
+    delete:
+      summary: 解除封禁（需要 write 作用域）
+      tags: [bans]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      responses: { "200": { description: OK } }
+  /api/v1/ips:
+    get:
+      summary: IP 黑白名单列表
+      tags: [ips]
+      responses: { "200": { description: OK } }
+  /api/v1/rules:
+    get:
+      summary: 检测规则列表（含 libi / CRS 归因说明）
+      tags: [rules]
+      parameters:
+        - { name: current, in: query, schema: { type: integer } }
+        - { name: size, in: query, schema: { type: integer } }
+      responses: { "200": { description: OK } }
+  /api/v1/rules/test:
+    post:
+      summary: 规则测试（不转发、不落库）
+      tags: [rules]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [method, path]
+              properties:
+                method: { type: string }
+                path: { type: string }
+                query: { type: string }
+                body: { type: string }
+                headers: { type: object, additionalProperties: { type: string } }
+      responses: { "200": { description: OK } }
+  /api/v1/settings:
+    get:
+      summary: 全部设置项（密码/密钥以 ****** 掩码回显）
+      tags: [settings]
+      responses: { "200": { description: OK } }
+  /api/v1/tokens:
+    get:
+      summary: API Token 列表（不含摘要与明文）
+      tags: [tokens]
+      responses: { "200": { description: OK } }
+    post:
+      summary: 创建 API Token（明文仅本次响应返回一次；需要 write 作用域）
+      tags: [tokens]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                scopes: { type: string, enum: [read, "read,write"], default: read }
+      responses: { "200": { description: OK } }
+  /api/v1/tokens/{id}:
+    delete:
+      summary: 吊销 API Token（需要 write 作用域）
+      tags: [tokens]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      responses: { "200": { description: OK } }
+components:
+  securitySchemes:
+    bearerToken:
+      type: http
+      scheme: bearer
+      description: API Token（前缀 gwt_）或管理员 access token

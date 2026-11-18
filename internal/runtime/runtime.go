@@ -9,6 +9,7 @@ package runtime
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"log"
 	"os"
@@ -18,16 +19,19 @@ import (
 	"sync/atomic"
 	"time"
 
+	"gowaf/internal/acme"
 	"gowaf/internal/bot"
 	"gowaf/internal/cache"
 	"gowaf/internal/config"
 	"gowaf/internal/detect"
+	"gowaf/internal/dprotect"
 	"gowaf/internal/geo"
 	"gowaf/internal/guard"
 	"gowaf/internal/intel"
 	"gowaf/internal/notify"
 	"gowaf/internal/policy"
 	"gowaf/internal/proxy"
+	"gowaf/internal/respfilter"
 	"gowaf/internal/store"
 	"gowaf/internal/store/model"
 )
@@ -64,6 +68,39 @@ const (
 	// KeyCRSMethods CRS 911100 方法白名单（空格分隔）。默认 REST 常规集，
 	// 纯表单业务可收紧为 "GET HEAD POST OPTIONS"。
 	KeyCRSMethods = "engine.crs.methods" // CRS 允许的 HTTP 方法白名单
+
+	// 引擎加固与第三检测通道。
+	KeyEngineTimeoutMS = "engine.timeout_ms"      // 单引擎检测超时（毫秒），超时按 fail_mode 处理
+	KeyEngineFailMode  = "engine.fail_mode"       // 引擎失效策略：open 放行 / closed 拦截
+	KeyLibiEnabled     = "engine.libi.enabled"    // 是否启用 libinjection 语义检测通道
+	KeyLibiSQLiScore   = "engine.libi.sqli_score" // libinjection SQLi 命中加分
+	KeyLibiXSSScore    = "engine.libi.xss_score"  // libinjection XSS 命中加分
+
+	// 响应体敏感信息过滤。
+	KeyRespFilterEnabled  = "respfilter.enabled"       // 总开关
+	KeyRespFilterMode     = "respfilter.mode"          // observe 只记录 / mask 脱敏
+	KeyRespFilterMaxBytes = "respfilter.max_bytes"     // 扫描的响应体上限（字节）
+	KeyRespFilterExclude  = "respfilter.exclude_paths" // 不扫描的路径前缀（逗号分隔）
+	KeyRespFilterCats     = "respfilter.categories"    // 启用的敏感信息类别（逗号分隔）
+
+	// 动态防护（HTML/JS 每次访问动态加密）。
+	KeyDProtEnabled   = "dprotect.enabled"       // 总开关
+	KeyDProtMaxBytes  = "dprotect.max_bytes"     // 参与加密的页面体积上限（字节）
+	KeyDProtExclude   = "dprotect.exclude_paths" // 不加密的路径前缀（逗号分隔）
+	KeyDProtChallenge = "dprotect.challenge"     // 未通过人机校验的访客先完成 PoW 再放行
+
+	// ACME 证书自动签发（Let's Encrypt）。
+	KeyACMEEmail     = "acme.email"         // ACME 账户联系邮箱（可为空）
+	KeyACMEDirectory = "acme.directory_url" // ACME 目录地址；置空或指向 staging 即为测试环境
+
+	// webhook 告警渠道（与邮件渠道共用聚合窗口/冷却/最低分过滤）。
+	KeyNotifyWebhookEnabled = "notify.webhook.enabled"         // webhook 渠道总开关
+	KeyNotifyFeishuURL      = "notify.webhook.feishu_url"      // 飞书群机器人 webhook 地址
+	KeyNotifyFeishuSecret   = "notify.webhook.feishu_secret"   // 飞书签名密钥（可选）
+	KeyNotifyDingURL        = "notify.webhook.dingtalk_url"    // 钉钉群机器人 webhook 地址
+	KeyNotifyDingSecret     = "notify.webhook.dingtalk_secret" // 钉钉签名密钥（可选）
+	KeyNotifyWecomURL       = "notify.webhook.wecom_url"       // 企业微信群机器人 webhook 地址
+	KeyNotifyGenericURL     = "notify.webhook.generic_url"     // 通用 JSON POST 地址
 
 	// 威胁情报命中后的处置。
 	// ban_on_hit=true 时把命中 IP 写进封禁表（source=intel），
@@ -136,6 +173,16 @@ type Runtime struct {
 	Cache  *cache.Manager
 	crs    atomic.Pointer[detect.CRSEngine] // CRS 第二引擎（OWASP CRS/Coraza）；未启用或未构建时为 nil
 
+	// libi 第三检测通道（libinjection 语义识别 SQLi/XSS）；
+	// respFilter/dprot 响应侧能力设置（敏感信息过滤 / 动态防护），Reload 时整体替换。
+	libi       atomic.Pointer[detect.LibiEngine]
+	respFilter atomic.Pointer[respfilter.Settings]
+	dprot      atomic.Pointer[dprotect.Settings]
+	dprotMgr   *dprotect.Manager // 动态防护页面加密器（密钥在进程启动时从 JWT 密钥文件派生）
+
+	// ACME 证书自动签发管理器（Let's Encrypt HTTP-01/DNS-01），进程启动时装配。
+	ACME *acme.Manager
+
 	// siteLimiters 站点自定义限流器集合（Reload 时重建）。
 	// key=SiteID。启用自定义防护的站点用独立实例，计数互不挤占。
 	siteLimiters atomic.Pointer[map[uint]*guard.Limiter]
@@ -179,12 +226,39 @@ func New(cfg *config.Config, st *store.Store, certs *proxy.CertManager, version 
 	r.cache.Store(&map[string]string{})
 	r.siteLimiters.Store(&map[uint]*guard.Limiter{})
 	r.Policy.Store(&policy.Set{})
+	r.libi.Store(detect.NewLibiEngine(false, 0, 0))
+	r.respFilter.Store(&respfilter.Settings{})
+	r.dprot.Store(&dprotect.Settings{})
 
 	// 挑战通行证的签名密钥取自 JWT 密钥文件内容（不是文件路径字符串）：
 	// 拿路径当密钥等于用一个公开常量签名，知道默认路径的人就能伪造通行证。
 	secret := challengeSecret(cfg.Admin.JWTSecretFile)
 	r.Chall = guard.NewChallenger(secret, 30*time.Minute)
 	r.challLimiter.Store(newChallengeLimiter(cfg.Guard.ChallengeRPS, cfg.Guard.ChallengePerMinute))
+
+	// 动态防护的根密钥：与挑战密钥同源（JWT 密钥文件内容）但派生一次哈希，
+	// 两个子系统不复用同一数值——即使一路泄漏也不影响另一路。
+	dprotSecret := sha256.Sum256(append([]byte("gowaf-dprotect|"), secret...))
+	dprotMgr, err := dprotect.New(dprotSecret[:])
+	if err != nil {
+		return nil, err
+	}
+	r.dprotMgr = dprotMgr
+
+	// ACME 管理器：状态（账户密钥、订单）落盘 data/acme/，签出的证书写入
+	// tls.cert_dir 后回调 CertManager.Reload 热生效；未启用 TLS 时回调为空操作。
+	reloadCerts := func() error {
+		if certs == nil {
+			return nil
+		}
+		return certs.Reload()
+	}
+	r.ACME = acme.New(acme.Options{
+		StateDir:    filepath.Join(cfg.BaseDir(), "acme"),
+		CertDir:     cfg.TLS.CertDir,
+		LoadConf:    r.ACMEConfig,
+		ReloadCerts: reloadCerts,
+	})
 
 	// 告警通知器：配置每次发送前现读，改完设置立即生效，不需要重启。
 	r.Notify = notify.New(r.NotifyConfig, func(lg model.NotifyLog) {
@@ -195,7 +269,7 @@ func New(cfg *config.Config, st *store.Store, certs *proxy.CertManager, version 
 	return r, nil
 }
 
-// NotifyConfig 从当前设置快照组装邮件通知配置。
+// NotifyConfig 从当前设置快照组装告警通知配置（邮件 + webhook 渠道）。
 // 返回 notify.Config：每次调用现读现算，后台改完设置下一次发送即生效；
 // 端口非法（<=0）时回落 465，TLS 方式缺省 ssl。
 func (r *Runtime) NotifyConfig() notify.Config {
@@ -216,8 +290,58 @@ func (r *Runtime) NotifyConfig() notify.Config {
 		MinScore: r.SettingInt(KeyNotifyMinScore, 0),
 		Window:   time.Duration(r.SettingInt(KeyNotifyWindow, 60)) * time.Second,
 		Cooldown: time.Duration(r.SettingInt(KeyNotifyCooldown, 3600)) * time.Second,
+		Webhook: notify.WebhookConfig{
+			Enabled:      r.SettingBool(KeyNotifyWebhookEnabled, false),
+			FeishuURL:    strings.TrimSpace(r.Setting(KeyNotifyFeishuURL, "")),
+			FeishuSecret: r.Setting(KeyNotifyFeishuSecret, ""),
+			DingURL:      strings.TrimSpace(r.Setting(KeyNotifyDingURL, "")),
+			DingSecret:   r.Setting(KeyNotifyDingSecret, ""),
+			WecomURL:     strings.TrimSpace(r.Setting(KeyNotifyWecomURL, "")),
+			GenericURL:   strings.TrimSpace(r.Setting(KeyNotifyGenericURL, "")),
+		},
 	}
 }
+
+// ACMEConfig 从当前设置快照组装 ACME 客户端配置。
+// 返回 acme.Conf：目录地址缺省 Let's Encrypt 生产环境；acme.directory_url 指向
+// staging 地址即切换测试环境（测试环境无速率限制，调通流程后切回生产）。
+func (r *Runtime) ACMEConfig() acme.Conf {
+	return acme.Conf{
+		Email:     strings.TrimSpace(r.Setting(KeyACMEEmail, "")),
+		Directory: strings.TrimSpace(r.Setting(KeyACMEDirectory, acme.LetsEncryptDirectory)),
+	}
+}
+
+// Libi 返回当前 libinjection 第三检测通道快照（原子读取）。
+// 返回 *detect.LibiEngine：未初始化时返回禁用状态的引擎，调用方无需判空。
+func (r *Runtime) Libi() *detect.LibiEngine {
+	if e := r.libi.Load(); e != nil {
+		return e
+	}
+	return detect.NewLibiEngine(false, 0, 0)
+}
+
+// RespFilter 返回当前响应敏感信息过滤设置（原子读取）。
+// 返回 *respfilter.Settings：未初始化时返回零值（即关闭），调用方无需判空。
+func (r *Runtime) RespFilter() *respfilter.Settings {
+	if s := r.respFilter.Load(); s != nil {
+		return s
+	}
+	return &respfilter.Settings{}
+}
+
+// DProtect 返回当前动态防护设置（原子读取）。
+// 返回 *dprotect.Settings：未初始化时返回零值（即关闭），调用方无需判空。
+func (r *Runtime) DProtect() *dprotect.Settings {
+	if s := r.dprot.Load(); s != nil {
+		return s
+	}
+	return &dprotect.Settings{}
+}
+
+// DProtectMgr 返回动态防护页面加密器。
+// 返回 *dprotect.Manager：进程启动时装配，恒非 nil。
+func (r *Runtime) DProtectMgr() *dprotect.Manager { return r.dprotMgr }
 
 // splitList 拆分逗号/分号/空白（含全角逗号）分隔的列表字符串，用于收件人等多值输入。
 // 参数 s：原始字符串。
@@ -426,6 +550,41 @@ func (r *Runtime) Reload(ctx context.Context) error {
 	if err := r.Cache.Reload(cacheDefs, cacheSettings); err != nil {
 		return err
 	}
+
+	// 响应侧能力：敏感信息过滤与动态防护的设置编译。
+	// 两者都是纯读快照，编译只做默认值兜底与列表拆分，不会失败。
+	rf := &respfilter.Settings{
+		Enabled:      r.settingFromBool(sm, KeyRespFilterEnabled, false),
+		Mode:         r.settingFrom(sm, KeyRespFilterMode, "observe"),
+		MaxBytes:     r.settingFromInt(sm, KeyRespFilterMaxBytes, respfilter.DefaultMaxBytes),
+		ExcludePaths: splitList(r.settingFrom(sm, KeyRespFilterExclude, "")),
+		Categories:   splitList(r.settingFrom(sm, KeyRespFilterCats, strings.Join(respfilter.DefaultCategories(), ","))),
+	}
+	if rf.Mode != "mask" {
+		rf.Mode = "observe"
+	}
+	if rf.MaxBytes <= 0 {
+		rf.MaxBytes = respfilter.DefaultMaxBytes
+	}
+	r.respFilter.Store(rf)
+
+	dp := &dprotect.Settings{
+		Enabled:      r.settingFromBool(sm, KeyDProtEnabled, false),
+		MaxBytes:     r.settingFromInt(sm, KeyDProtMaxBytes, dprotect.DefaultMaxBytes),
+		ExcludePaths: splitList(r.settingFrom(sm, KeyDProtExclude, "")),
+		Challenge:    r.settingFromBool(sm, KeyDProtChallenge, false),
+	}
+	if dp.MaxBytes <= 0 {
+		dp.MaxBytes = dprotect.DefaultMaxBytes
+	}
+	r.dprot.Store(dp)
+
+	// libinjection 第三检测通道：开关与分值热生效。
+	r.libi.Store(detect.NewLibiEngine(
+		r.settingFromBool(sm, KeyLibiEnabled, true),
+		r.settingFromInt(sm, KeyLibiSQLiScore, detect.DefaultLibiSQLiScore),
+		r.settingFromInt(sm, KeyLibiXSSScore, detect.DefaultLibiXSSScore),
+	))
 
 	// 站点多上游（双链路）：按站点分组，BuildRouter 把主上游与额外目标合并。
 	var upRows []model.SiteUpstream
@@ -792,5 +951,29 @@ func DefaultSettings(cfg *config.Config) map[string]string {
 
 		KeyUpstreamHealth:   "10",
 		KeyNodeHeartbeatTTL: "300",
+
+		// 引擎加固与语义检测通道：默认开 libi（分数压在挑战阈值以下），
+		// 超时 2 秒 + fail-open——引擎出问题时保业务优先。
+		KeyEngineTimeoutMS: "2000",
+		KeyEngineFailMode:  "open",
+		KeyLibiEnabled:     "true",
+		KeyLibiSQLiScore:   strconv.Itoa(detect.DefaultLibiSQLiScore),
+		KeyLibiXSSScore:    strconv.Itoa(detect.DefaultLibiXSSScore),
+
+		// 响应敏感信息过滤与动态防护默认关闭：两者都会改动响应内容，
+		// 先观察（respfilter.observe / 手动开启）确认无误伤再放量。
+		KeyRespFilterEnabled:  "false",
+		KeyRespFilterMode:     "observe",
+		KeyRespFilterMaxBytes: strconv.Itoa(respfilter.DefaultMaxBytes),
+		KeyRespFilterCats:     strings.Join(respfilter.DefaultCategories(), ","),
+		KeyDProtEnabled:       "false",
+		KeyDProtMaxBytes:      strconv.Itoa(dprotect.DefaultMaxBytes),
+		KeyDProtChallenge:     "false",
+
+		// webhook 渠道默认关闭：没填地址发不出去，开着只会一直刷失败日志。
+		KeyNotifyWebhookEnabled: "false",
+
+		// ACME 默认 Let's Encrypt 生产环境目录；测试签发请临时指向 staging 地址。
+		KeyACMEDirectory: acme.LetsEncryptDirectory,
 	}
 }
