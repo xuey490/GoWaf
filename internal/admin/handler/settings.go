@@ -9,6 +9,7 @@ import (
 
 	"gowaf/internal/admin/middleware"
 	"gowaf/internal/admin/response"
+	"gowaf/internal/respfilter"
 	"gowaf/internal/runtime"
 	"gowaf/internal/store"
 	"gowaf/internal/store/model"
@@ -38,6 +39,26 @@ var allowedSettingKeys = map[string]struct{}{
 	runtime.KeyCRSMode:               {},
 	runtime.KeyCRSParanoia:           {},
 
+	// 引擎加固与 libinjection 语义检测通道
+	runtime.KeyEngineTimeoutMS: {},
+	runtime.KeyEngineFailMode:  {},
+	runtime.KeyLibiEnabled:     {},
+	runtime.KeyLibiSQLiScore:   {},
+	runtime.KeyLibiXSSScore:    {},
+
+	// 响应体敏感信息过滤
+	runtime.KeyRespFilterEnabled:  {},
+	runtime.KeyRespFilterMode:     {},
+	runtime.KeyRespFilterMaxBytes: {},
+	runtime.KeyRespFilterExclude:  {},
+	runtime.KeyRespFilterCats:     {},
+
+	// 动态防护（HTML/JS 动态加密）
+	runtime.KeyDProtEnabled:   {},
+	runtime.KeyDProtMaxBytes:  {},
+	runtime.KeyDProtExclude:   {},
+	runtime.KeyDProtChallenge: {},
+
 	runtime.KeyIntelBanOnHit: {},
 	runtime.KeyIntelBanTTL:   {},
 
@@ -53,6 +74,19 @@ var allowedSettingKeys = map[string]struct{}{
 	runtime.KeyNotifyMinScore: {},
 	runtime.KeyNotifyWindow:   {},
 	runtime.KeyNotifyCooldown: {},
+
+	// webhook 告警渠道（飞书/钉钉/企业微信/通用）
+	runtime.KeyNotifyWebhookEnabled: {},
+	runtime.KeyNotifyFeishuURL:      {},
+	runtime.KeyNotifyFeishuSecret:   {},
+	runtime.KeyNotifyDingURL:        {},
+	runtime.KeyNotifyDingSecret:     {},
+	runtime.KeyNotifyWecomURL:       {},
+	runtime.KeyNotifyGenericURL:     {},
+
+	// ACME 证书自动签发
+	runtime.KeyACMEEmail:     {},
+	runtime.KeyACMEDirectory: {},
 
 	// Bot 管理
 	runtime.KeyBotEnabled:        {},
@@ -93,6 +127,13 @@ func (s *Server) SettingsGet(c *gin.Context) {
 	if out[runtime.KeyNotifyPass] != "" {
 		out[runtime.KeyNotifyPass] = "******"
 	}
+	// webhook 签名密钥同样只回显掩码（飞书/钉钉加签密钥）。
+	if out[runtime.KeyNotifyFeishuSecret] != "" {
+		out[runtime.KeyNotifyFeishuSecret] = "******"
+	}
+	if out[runtime.KeyNotifyDingSecret] != "" {
+		out[runtime.KeyNotifyDingSecret] = "******"
+	}
 	// Agent 令牌同样只显示掩码，避免后台只读账号拿到节点接入凭证。
 	if out[runtime.KeyNodeAgentToken] != "" {
 		out[runtime.KeyNodeAgentToken] = "******"
@@ -129,7 +170,8 @@ func (s *Server) SettingsUpdate(c *gin.Context) {
 			return
 		}
 		// 密码框拿到的是掩码，说明用户没动过这一项
-		if (k == runtime.KeyNotifyPass || k == runtime.KeyNodeAgentToken) && v == "******" {
+		if (k == runtime.KeyNotifyPass || k == runtime.KeyNodeAgentToken ||
+			k == runtime.KeyNotifyFeishuSecret || k == runtime.KeyNotifyDingSecret) && v == "******" {
 			continue
 		}
 		if msg := validateSetting(k, v); msg != "" {
@@ -211,7 +253,8 @@ func validateSetting(key, value string) string {
 		if len(value) > 2000 {
 			return "guard.challenge_referer_allow 过长（上限 2000 字符）"
 		}
-	case runtime.KeyIntelBanOnHit, runtime.KeyNotifyEnabled:
+	case runtime.KeyIntelBanOnHit, runtime.KeyNotifyEnabled, runtime.KeyNotifyWebhookEnabled,
+		runtime.KeyLibiEnabled, runtime.KeyRespFilterEnabled, runtime.KeyDProtEnabled, runtime.KeyDProtChallenge:
 		if value != "true" && value != "false" {
 			return key + " 只能是 true 或 false"
 		}
@@ -247,7 +290,8 @@ func validateSetting(key, value string) string {
 		}
 	case runtime.KeyBotScoreThreshold, runtime.KeyBotWindow, runtime.KeyBotCacheTTL,
 		runtime.KeyCacheMaxBytes, runtime.KeyCacheMaxObject, runtime.KeyCacheDefaultTTL,
-		runtime.KeyCacheCompressMin, runtime.KeyUpstreamHealth, runtime.KeyNodeHeartbeatTTL:
+		runtime.KeyCacheCompressMin, runtime.KeyUpstreamHealth, runtime.KeyNodeHeartbeatTTL,
+		runtime.KeyRespFilterMaxBytes, runtime.KeyDProtMaxBytes:
 		n, err := strconv.ParseInt(value, 10, 64)
 		if err != nil || n < 0 {
 			return key + " 必须是非负整数"
@@ -255,6 +299,72 @@ func validateSetting(key, value string) string {
 	case runtime.KeyNodeAgentToken:
 		if len(value) > 128 {
 			return "node.agent_token 长度不能超过 128 字符"
+		}
+
+	// ---- 引擎加固与 libinjection 语义检测通道 ----
+	case runtime.KeyEngineTimeoutMS:
+		n, err := strconv.Atoi(value)
+		if err != nil || n < 100 || n > 10000 {
+			return "engine.timeout_ms 必须是 100~10000 毫秒"
+		}
+	case runtime.KeyEngineFailMode:
+		if value != "open" && value != "closed" {
+			return "engine.fail_mode 只能是 open 或 closed"
+		}
+	case runtime.KeyLibiSQLiScore, runtime.KeyLibiXSSScore:
+		n, err := strconv.Atoi(value)
+		if err != nil || n <= 0 || n > 1000 {
+			return key + " 必须是 1~1000 的整数"
+		}
+
+	// ---- 响应敏感信息过滤 ----
+	case runtime.KeyRespFilterMode:
+		if value != "observe" && value != "mask" {
+			return "respfilter.mode 只能是 observe 或 mask"
+		}
+	case runtime.KeyRespFilterExclude, runtime.KeyDProtExclude:
+		if len(value) > 2000 {
+			return key + " 过长（上限 2000 字符）"
+		}
+	case runtime.KeyRespFilterCats:
+		for _, c := range strings.Split(value, ",") {
+			c = strings.TrimSpace(c)
+			if c == "" {
+				continue
+			}
+			valid := false
+			for _, known := range respfilter.KnownCategories() {
+				if c == known {
+					valid = true
+					break
+				}
+			}
+			if !valid {
+				return "respfilter.categories 含未知类别: " + c
+			}
+		}
+
+	// ---- ACME 证书自动签发 ----
+	case runtime.KeyACMEDirectory:
+		if value != "" && !strings.HasPrefix(value, "https://") {
+			return "acme.directory_url 必须是 https:// 开头的 ACME 目录地址"
+		}
+	case runtime.KeyACMEEmail:
+		if len(value) > 128 {
+			return "acme.email 长度不能超过 128 字符"
+		}
+
+	// ---- webhook 告警渠道 ----
+	case runtime.KeyNotifyFeishuURL, runtime.KeyNotifyDingURL, runtime.KeyNotifyWecomURL, runtime.KeyNotifyGenericURL:
+		if value != "" && !strings.HasPrefix(value, "http://") && !strings.HasPrefix(value, "https://") {
+			return key + " 必须是 http(s):// 开头的机器人地址"
+		}
+		if len(value) > 512 {
+			return key + " 过长（上限 512 字符）"
+		}
+	case runtime.KeyNotifyFeishuSecret, runtime.KeyNotifyDingSecret:
+		if len(value) > 128 {
+			return key + " 长度不能超过 128 字符"
 		}
 	}
 	return ""

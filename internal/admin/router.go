@@ -67,8 +67,9 @@ func NewRouter(o Options) *gin.Engine {
 		api.GET("/agent/config", h.AgentConfig)
 		api.POST("/agent/heartbeat", h.AgentHeartbeat)
 
-		// 需登录
-		authed := api.Group("", middleware.Auth(o.Auth))
+		// 需登录。API Token（Bearer）先行尝试：命中则跳过 JWT（见 APITokenAuth），
+		// 未命中再走 JWT/Cookie 流程——OpenAPI 与 MCP 客户端由此免会话访问。
+		authed := api.Group("", middleware.APITokenAuth(o.Store), middleware.Auth(o.Auth))
 		{
 			authed.GET("/auth/csrf", h.CSRFToken)
 			authed.GET("/user/info", h.Info)
@@ -119,17 +120,38 @@ func NewRouter(o Options) *gin.Engine {
 			authed.GET("/settings", h.SettingsGet)
 			authed.GET("/settings/versions", h.SettingsVersions)
 			authed.GET("/audit", h.AuditList)
+			authed.GET("/tokens", h.TokenList)
+
+			// 证书管理（本地证书 + ACME 签发订单）
+			authed.GET("/certs", h.CertList)
+			authed.GET("/certs/acme/orders", h.AcmeOrders)
 
 			// 规则测试是纯计算，不进写组（演示模式下也要能用）
 			authed.POST("/rules/test", h.RuleTest)
 
-			// 写操作：CSRF → DemoGuard → 审计 → 权限
-			// 顺序含义：先做 CSRF 双提交校验，再拦演示只读，随后记录审计，
-			// 最后按路由逐个做按钮级权限校验
-			w := authed.Group("", middleware.CSRF(o.Cfg.Admin.CSRF),
+			// 写操作：API Token 作用域 → CSRF → DemoGuard → 审计 → 权限
+			// 顺序含义：read-only 令牌先被 RequireAPIScope 挡掉（JWT 会话不受影响），
+			// 再做 CSRF 双提交校验（令牌走 Authorization 头天然免 CSRF），
+			// 随后拦演示只读、记录审计，最后按路由逐个做按钮级权限校验
+			w := authed.Group("", middleware.RequireAPIScope(middleware.ScopeWrite),
+				middleware.CSRF(o.Cfg.Admin.CSRF),
 				middleware.DemoGuard(o.Cfg.Demo.Enabled && o.Cfg.Demo.ReadOnly),
 				middleware.Audit(o.Store))
 			{
+				// API 令牌管理（令牌本身即凭据，管理动作仍要求 settings:write 会话权限）
+				w.POST("/tokens", middleware.RequirePerm(o.Store, "settings:write"), h.TokenCreate)
+				w.DELETE("/tokens/:id", middleware.RequirePerm(o.Store, "settings:write"), h.TokenRevoke)
+
+				// 证书管理与 ACME 签发
+				// 删除路由用 /certs/domain/:domain 前缀：gin 路由树不允许同级
+				// 既有 :domain 参数段又有 acme 静态段，加一段前缀让两者共存。
+				w.POST("/certs/upload", middleware.RequirePerm(o.Store, "settings:write"), h.CertUpload)
+				w.POST("/certs/reload", middleware.RequirePerm(o.Store, "settings:write"), h.CertReload)
+				w.DELETE("/certs/domain/:domain", middleware.RequirePerm(o.Store, "settings:write"), h.CertDelete)
+				w.POST("/certs/acme/order", middleware.RequirePerm(o.Store, "settings:write"), h.AcmeCreateOrder)
+				w.POST("/certs/acme/order/:id/validate", middleware.RequirePerm(o.Store, "settings:write"), h.AcmeValidateOrder)
+				w.DELETE("/certs/acme/order/:id", middleware.RequirePerm(o.Store, "settings:write"), h.AcmeCancelOrder)
+
 				w.POST("/ips", middleware.RequirePerm(o.Store, "ip:ban"), h.IPCreate)
 				w.PUT("/ips/:id", middleware.RequirePerm(o.Store, "ip:ban"), h.IPUpdate)
 				w.DELETE("/ips/:id", middleware.RequirePerm(o.Store, "ip:ban"), h.IPDelete)
@@ -210,6 +232,30 @@ func NewRouter(o Options) *gin.Engine {
 				w.POST("/tasks/:name/run", middleware.RequirePerm(o.Store, "settings:write"), h.TaskRun)
 			}
 		}
+	}
+
+	// OpenAPI 别名组 /api/v1：供外部集成与文档引用的稳定契约面。
+	// 处理器与 /api 同名路由一一对应，凭 API Token（Bearer）或登录会话访问；
+	// 写接口同样经 RequireAPIScope 挡 read-only 令牌。
+	v1 := r.Group("/api/v1", middleware.APITokenAuth(o.Store), middleware.Auth(o.Auth))
+	{
+		v1.GET("/overview", h.Overview)
+		v1.GET("/timeseries", h.Timeseries)
+		v1.GET("/top", h.Top)
+		v1.GET("/categories", h.Categories)
+		v1.GET("/events", h.EventList)
+		v1.GET("/events/:id", h.EventDetail)
+		v1.GET("/sites", h.SiteList)
+		v1.GET("/bans", h.BanList)
+		v1.GET("/ips", h.IPList)
+		v1.GET("/rules", h.RuleList)
+		v1.GET("/settings", h.SettingsGet)
+		v1.GET("/tokens", h.TokenList)
+		v1.POST("/rules/test", h.RuleTest)
+		v1.POST("/bans", middleware.RequireAPIScope(middleware.ScopeWrite), h.BanCreate)
+		v1.DELETE("/bans/:id", middleware.RequireAPIScope(middleware.ScopeWrite), h.BanDelete)
+		v1.POST("/tokens", middleware.RequireAPIScope(middleware.ScopeWrite), h.TokenCreate)
+		v1.DELETE("/tokens/:id", middleware.RequireAPIScope(middleware.ScopeWrite), h.TokenRevoke)
 	}
 
 	// SSE 单独一组：不套 Audit（长连接会让审计中间件一直挂着），也不套 CSRF
