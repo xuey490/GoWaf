@@ -163,6 +163,15 @@ var allowedSettingKeys = map[string]struct{}{
 	runtime.KeyJA4Enabled:      {},
 	runtime.KeyJA4Blocklist:    {},
 	runtime.KeyJA4BlockBuiltin: {},
+	// 控制台统一认证（OIDC）
+	runtime.KeyOIDCEnabled:      {},
+	runtime.KeyOIDCIssuer:       {},
+	runtime.KeyOIDCClientID:     {},
+	runtime.KeyOIDCClientSecret: {},
+	runtime.KeyOIDCRedirectURL:  {},
+	runtime.KeyOIDCScopes:       {},
+	runtime.KeyOIDCAutoCreate:   {},
+	runtime.KeyOIDCRole:         {},
 
 	// 请求防重放
 	runtime.KeyReplayEnabled: {},
@@ -212,6 +221,7 @@ func (s *Server) SettingsGet(c *gin.Context) {
 	// webhook 签名密钥同样只回显掩码（飞书/钉钉加签密钥）。
 	if out[runtime.KeyNotifyFeishuSecret] != "" {
 		out[runtime.KeyNotifyFeishuSecret] = "******"
+		out[runtime.KeyOIDCClientSecret] = "******"
 	}
 	if out[runtime.KeyNotifyDingSecret] != "" {
 		out[runtime.KeyNotifyDingSecret] = "******"
@@ -253,7 +263,8 @@ func (s *Server) SettingsUpdate(c *gin.Context) {
 		}
 		// 密码框拿到的是掩码，说明用户没动过这一项
 		if (k == runtime.KeyNotifyPass || k == runtime.KeyNodeAgentToken ||
-			k == runtime.KeyNotifyFeishuSecret || k == runtime.KeyNotifyDingSecret) && v == "******" {
+			k == runtime.KeyNotifyFeishuSecret || k == runtime.KeyNotifyDingSecret ||
+			k == runtime.KeyOIDCClientSecret) && v == "******" {
 			continue
 		}
 		if msg := validateSetting(k, v); msg != "" {
@@ -326,6 +337,22 @@ func validateSetting(key, value string) string {
 	case runtime.KeyCRSPrescreen, runtime.KeyCRSSkipStatic, runtime.KeyCRSBodyTextOnly, runtime.KeyCRSSafeDataURI:
 		if value != "true" && value != "false" {
 			return key + " 只能是 true 或 false"
+		}
+	case runtime.KeyOIDCEnabled, runtime.KeyOIDCAutoCreate:
+		if value != "true" && value != "false" {
+			return key + " 只能是 true 或 false"
+		}
+	case runtime.KeyOIDCRole:
+		if value != "admin" && value != "viewer" && value != "demo" {
+			return key + " 只能是 admin/viewer/demo（建议 viewer，admin 不会自动授予）"
+		}
+	case runtime.KeyOIDCIssuer:
+		if value != "" && !strings.HasPrefix(value, "https://") {
+			return key + " 必须是 https:// 开头的 issuer 地址"
+		}
+	case runtime.KeyOIDCRedirectURL:
+		if value != "" && !strings.HasPrefix(value, "https://") && !strings.HasPrefix(value, "http://") {
+			return key + " 必须以 https:// 或 http:// 开头"
 		}
 	case runtime.KeyCRSExcludePaths:
 		if len(value) > 2000 {

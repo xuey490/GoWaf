@@ -205,6 +205,16 @@ const (
 	KeyJA4Blocklist    = "guard.ja4.blocklist"     // 恶意指纹黑名单（逗号分隔，命中即拦）
 	KeyJA4BlockBuiltin = "guard.ja4.block_builtin" // 内置脚本栈指纹命中是否拦截（默认关：脚本栈亦被正常工具使用）
 
+	// 控制台统一认证（OIDC SSO，对标雷池 CE 自 8.6.0 起的支持面）。
+	KeyOIDCEnabled      = "oidc.enabled"       // 总开关（默认关）
+	KeyOIDCIssuer       = "oidc.issuer"        // IdP issuer 地址（https://idp.example.com/realms/x）
+	KeyOIDCClientID     = "oidc.client_id"     // 客户端 ID
+	KeyOIDCClientSecret = "oidc.client_secret" // 客户端密钥（设置读取时脱敏为 ******）
+	KeyOIDCRedirectURL  = "oidc.redirect_url"  // 回调地址（空则按请求的 scheme/host 推导）
+	KeyOIDCScopes       = "oidc.scopes"        // 授权 scope（默认 "openid profile email"）
+	KeyOIDCAutoCreate   = "oidc.auto_create"   // 未知用户自动建号（默认开，最低权限角色）
+	KeyOIDCRole         = "oidc.role"          // 自动建号的角色（默认 viewer；admin 永不自动授予）
+
 	// 请求防重放。
 	KeyReplayEnabled = "guard.replay.enabled" // 总开关（默认关：仅保护显式携带 nonce 的接口）
 	KeyReplayWindow  = "guard.replay.window"  // 重放判定窗口（秒）
@@ -828,13 +838,13 @@ func (r *Runtime) Reload(ctx context.Context) error {
 	r.sem.Store(detect.NewSemanticEngine(
 		r.settingFromBool(sm, KeySemEnabled, true),
 		map[string]int{
-			detect.CategoryCmdi:  r.settingFromInt(sm, KeySemCmdiScore, detect.DefaultSemCmdiScore),
-			detect.CategoryRCE:   r.settingFromInt(sm, KeySemRCEScore, detect.DefaultSemRCEScore),
-			detect.CategorySSRF:  r.settingFromInt(sm, KeySemSSRFScore, detect.DefaultSemSSRFScore),
-			detect.CategoryXXE:   r.settingFromInt(sm, KeySemXXEScore, detect.DefaultSemXXEScore),
-			detect.CategorySSTI:  r.settingFromInt(sm, KeySemSSTIScore, detect.DefaultSemSSTIScore),
-			detect.CategoryExpr:  r.settingFromInt(sm, KeySemExprScore, detect.DefaultSemExprScore),
-			detect.CategoryDeser: r.settingFromInt(sm, KeySemDeserScore, detect.DefaultSemDeserScore),
+			detect.CategoryCmdi:         r.settingFromInt(sm, KeySemCmdiScore, detect.DefaultSemCmdiScore),
+			detect.CategoryRCE:          r.settingFromInt(sm, KeySemRCEScore, detect.DefaultSemRCEScore),
+			detect.CategorySSRF:         r.settingFromInt(sm, KeySemSSRFScore, detect.DefaultSemSSRFScore),
+			detect.CategoryXXE:          r.settingFromInt(sm, KeySemXXEScore, detect.DefaultSemXXEScore),
+			detect.CategorySSTI:         r.settingFromInt(sm, KeySemSSTIScore, detect.DefaultSemSSTIScore),
+			detect.CategoryExpr:         r.settingFromInt(sm, KeySemExprScore, detect.DefaultSemExprScore),
+			detect.CategoryDeser:        r.settingFromInt(sm, KeySemDeserScore, detect.DefaultSemDeserScore),
 			detect.CategoryTraver:       r.settingFromInt(sm, KeySemTraverScore, detect.DefaultSemTraverScore),
 			detect.CategoryLFI:          r.settingFromInt(sm, KeySemLFIScore, detect.DefaultSemLFIScore),
 			detect.CategoryNoSQLi:       r.settingFromInt(sm, KeySemNoSQLiScore, detect.DefaultSemNoSQLiScore),
@@ -1362,14 +1372,14 @@ func DefaultSettings(cfg *config.Config) map[string]string {
 		KeyLibiXSSScore:    strconv.Itoa(detect.DefaultLibiXSSScore),
 
 		// 语义检测通道默认开启：单类命中分数压在拦截阈值之下，叠加才拦截。
-		KeySemEnabled:    "true",
-		KeySemCmdiScore:  strconv.Itoa(detect.DefaultSemCmdiScore),
-		KeySemRCEScore:   strconv.Itoa(detect.DefaultSemRCEScore),
-		KeySemSSRFScore:  strconv.Itoa(detect.DefaultSemSSRFScore),
-		KeySemXXEScore:   strconv.Itoa(detect.DefaultSemXXEScore),
-		KeySemSSTIScore:  strconv.Itoa(detect.DefaultSemSSTIScore),
-		KeySemExprScore:  strconv.Itoa(detect.DefaultSemExprScore),
-		KeySemDeserScore: strconv.Itoa(detect.DefaultSemDeserScore),
+		KeySemEnabled:           "true",
+		KeySemCmdiScore:         strconv.Itoa(detect.DefaultSemCmdiScore),
+		KeySemRCEScore:          strconv.Itoa(detect.DefaultSemRCEScore),
+		KeySemSSRFScore:         strconv.Itoa(detect.DefaultSemSSRFScore),
+		KeySemXXEScore:          strconv.Itoa(detect.DefaultSemXXEScore),
+		KeySemSSTIScore:         strconv.Itoa(detect.DefaultSemSSTIScore),
+		KeySemExprScore:         strconv.Itoa(detect.DefaultSemExprScore),
+		KeySemDeserScore:        strconv.Itoa(detect.DefaultSemDeserScore),
 		KeySemTraverScore:       strconv.Itoa(detect.DefaultSemTraverScore),
 		KeySemLFIScore:          strconv.Itoa(detect.DefaultSemLFIScore),
 		KeySemNoSQLiScore:       strconv.Itoa(detect.DefaultSemNoSQLiScore),
@@ -1412,9 +1422,17 @@ func DefaultSettings(cfg *config.Config) map[string]string {
 
 		// JA4 指纹：采集默认开（事件库记录，成本低价值高）；
 		// 内置脚本栈指纹默认只记录不拦截（脚本栈亦被正常工具使用，避免误伤）。
-		KeyJA4Enabled:      "true",
-		KeyJA4Blocklist:    "",
-		KeyJA4BlockBuiltin: "false",
+		KeyJA4Enabled:       "true",
+		KeyJA4Blocklist:     "",
+		KeyOIDCEnabled:      "false",
+		KeyOIDCIssuer:       "",
+		KeyOIDCClientID:     "",
+		KeyOIDCClientSecret: "",
+		KeyOIDCRedirectURL:  "",
+		KeyOIDCScopes:       "openid profile email",
+		KeyOIDCAutoCreate:   "true",
+		KeyOIDCRole:         "viewer",
+		KeyJA4BlockBuiltin:  "false",
 
 		// 请求防重放：默认关。只对显式携带 nonce 头的请求生效，
 		// 由客户端（如 API 网关）决定哪些接口参与防重放。

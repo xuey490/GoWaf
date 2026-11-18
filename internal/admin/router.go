@@ -62,6 +62,12 @@ func NewRouter(o Options) *gin.Engine {
 		api.POST("/auth/logout", h.Logout)
 		api.POST("/auth/refresh", h.Refresh)
 
+		// 控制台统一认证（OIDC SSO）：登录页拿跳转地址、IdP 回调、状态查询。
+		// 回调由 IdP 302 进入，无会话；安全控制见 handler（state 一次性 + 建号权限收敛）。
+		api.GET("/auth/oidc/status", h.OIDCStatus)
+		api.GET("/auth/oidc/start", h.OIDCStart)
+		api.GET("/auth/oidc/callback", h.OIDCCallback)
+
 		// 节点 Agent 上报：不套登录态（Agent 没有后台会话），
 		// 由 handler 内部校验设置表里的 node.agent_token。
 		api.GET("/agent/config", h.AgentConfig)
@@ -159,6 +165,12 @@ func NewRouter(o Options) *gin.Engine {
 				w.POST("/tamper/refresh", middleware.RequirePerm(o.Store, "settings:write"), h.TamperRefresh)
 
 				// 控制台 TOTP 两步验证：本人操作，登录态即可
+				// 用户管理（多用户 + 角色）：读列表对全员可见，写操作需 user:write
+				w.POST("/users", middleware.RequirePerm(o.Store, "user:write"), h.UserCreate)
+				w.PUT("/users/:id", middleware.RequirePerm(o.Store, "user:write"), h.UserUpdate)
+				w.DELETE("/users/:id", middleware.RequirePerm(o.Store, "user:write"), h.UserDelete)
+				w.POST("/users/:id/reset-password", middleware.RequirePerm(o.Store, "user:write"), h.UserResetPassword)
+
 				w.POST("/user/totp/setup", h.TotpSetup)
 				w.POST("/user/totp/enable", h.TotpEnable)
 				w.POST("/user/totp/disable", h.TotpDisable)

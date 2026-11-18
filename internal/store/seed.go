@@ -35,7 +35,7 @@ type builtinRule struct {
 // AllButtons 是权限按钮全集，管理员默认全给，viewer/demo 只读。
 var AllButtons = []string{
 	"ip:ban", "rule:write", "rule:delete", "site:write", "settings:write", "audit:read",
-	"policy:write", "bot:write", "cache:write", "node:write",
+	"policy:write", "bot:write", "cache:write", "node:write", "user:write",
 }
 
 // HashPassword 用 bcrypt 生成口令哈希，cost 固定为 12。
