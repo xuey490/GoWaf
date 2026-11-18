@@ -1,0 +1,8 @@
+POST /notes HTTP/1.1
+Host: demo.example.com
+User-Agent: note-app/2.1
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 68
+Connection: close
+
+text=This+module+provides+helpers+for+%2A%2Adates%2A%2A+and+strings.

@@ -1,0 +1,4 @@
+GET /a?redirect=jar:http://evil.tld/x.jar!/cmd.txt HTTP/1.1
+Host: demo.example.com
+Connection: close
+

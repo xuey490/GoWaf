@@ -1,0 +1,4 @@
+GET /a?url=data%253A%252F%252Ftext%252Fplain%253Bbase64%252CSGVsbG8%253D HTTP/1.1
+Host: demo.example.com
+Connection: close
+

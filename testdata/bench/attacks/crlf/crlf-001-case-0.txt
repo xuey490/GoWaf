@@ -1,0 +1,4 @@
+GET /a?s=a%3D1%0D%0aSeT-cOoKiE:iNjEcTeD%3D1 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

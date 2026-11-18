@@ -1,0 +1,4 @@
+GET /a?rurl=%68%74%74%70%73%3A%2F%2F%61%74%74%61%63%6B%65%72%2E%74%6C%64%2F%3F%6E%65%78%74%3D%78 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

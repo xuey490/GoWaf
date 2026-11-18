@@ -1,0 +1,4 @@
+GET /a?page=c%253A%255Cboot.ini HTTP/1.1
+Host: demo.example.com
+Connection: close
+

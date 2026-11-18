@@ -1,0 +1,4 @@
+GET /a?path=</*%00*/object%20data%3D"javascript:alert(1)"> HTTP/1.1
+Host: demo.example.com
+Connection: close
+

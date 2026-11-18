@@ -1,0 +1,4 @@
+GET /a?cmd=Y249YWRtaW4pLGRjPWV2aWwsZGM9dGxk HTTP/1.1
+Host: demo.example.com
+Connection: close
+

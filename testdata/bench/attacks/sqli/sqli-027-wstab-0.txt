@@ -1,0 +1,4 @@
+GET /a?token=1%09union%09select%09char(65,66,67) HTTP/1.1
+Host: demo.example.com
+Connection: close
+

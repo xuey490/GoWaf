@@ -1,0 +1,4 @@
+GET /a?token=v%3D%0D%0aTrAnSfEr-EnCoDiNg:ChUnKeD HTTP/1.1
+Host: demo.example.com
+Connection: close
+

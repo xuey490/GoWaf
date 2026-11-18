@@ -1,0 +1,4 @@
+GET /a?name=%252F%252F%252A%255Bcontains%2528name%252C%2527admin%2527%2529%255D HTTP/1.1
+Host: demo.example.com
+Connection: close
+

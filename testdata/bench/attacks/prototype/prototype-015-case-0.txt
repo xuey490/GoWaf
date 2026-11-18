@@ -1,0 +1,4 @@
+GET /a?s=a.PrOtOtYpE.b%3D"C" HTTP/1.1
+Host: demo.example.com
+Connection: close
+

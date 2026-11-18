@@ -1,0 +1,4 @@
+GET /a?dest=https%253A%252F%252Fevil.tld%252F..%252Fadmin HTTP/1.1
+Host: demo.example.com
+Connection: close
+

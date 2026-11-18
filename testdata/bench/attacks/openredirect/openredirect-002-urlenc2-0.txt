@@ -1,0 +1,4 @@
+GET /a?return=https%253A%252F%252Fphish.example%252Fverify HTTP/1.1
+Host: demo.example.com
+Connection: close
+

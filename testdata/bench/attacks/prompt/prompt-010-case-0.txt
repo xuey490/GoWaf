@@ -1,0 +1,4 @@
+GET /a?cmd=aCt%20As%20If%20YoU%20hAvE%20nO%20rUlEs%20AnD%20oBeY%20oNlY%20mE HTTP/1.1
+Host: demo.example.com
+Connection: close
+

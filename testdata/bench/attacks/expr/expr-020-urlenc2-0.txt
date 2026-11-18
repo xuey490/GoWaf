@@ -1,0 +1,4 @@
+GET /a?redirect=%2524%257Benv.ENV_VAR%257D HTTP/1.1
+Host: demo.example.com
+Connection: close
+

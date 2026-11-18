@@ -1,0 +1,4 @@
+GET /a?id=p%3DExPeCt://Id HTTP/1.1
+Host: demo.example.com
+Connection: close
+

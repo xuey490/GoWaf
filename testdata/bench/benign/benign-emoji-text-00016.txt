@@ -1,0 +1,8 @@
+POST /chat HTTP/1.1
+Host: demo.example.com
+User-Agent: chat-client/1.4
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 72
+Connection: close
+
+text=%E4%BD%A0%E5%A5%BD%E4%B8%96%E7%95%8C+%F0%9F%8C%8F%E9%97%AE%E5%80%99

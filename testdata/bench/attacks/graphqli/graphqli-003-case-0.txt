@@ -1,0 +1,4 @@
+GET /a?url=qUeRy%20InTrOsPeCtIoNqUeRy%20{%20__ScHeMa%20{%20TyPeS%20{%20nAmE%20}%20}%20} HTTP/1.1
+Host: demo.example.com
+Connection: close
+

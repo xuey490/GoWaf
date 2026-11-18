@@ -1,0 +1,5 @@
+GET /a?name=a%3D1
+SeT-cOoKiE:p%3D1 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

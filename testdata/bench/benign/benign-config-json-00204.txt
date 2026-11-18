@@ -1,0 +1,8 @@
+POST /config HTTP/1.1
+Host: demo.example.com
+User-Agent: ops-console/1.1
+Content-Type: application/json
+Content-Length: 139
+Connection: close
+
+{"app":"svc10","features":{"cache":true,"retries":4,"timeoutMs":2659},"limits":{"rpm":338,"burst":11},"metadata":{"env":"prod","zone":"a"}}

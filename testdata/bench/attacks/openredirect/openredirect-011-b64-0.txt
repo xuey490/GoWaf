@@ -1,0 +1,4 @@
+GET /a?link=aHR0cHM6Ly9ldmlsLnRsZFwuLlxhZG1pbg%3D%3D HTTP/1.1
+Host: demo.example.com
+Connection: close
+

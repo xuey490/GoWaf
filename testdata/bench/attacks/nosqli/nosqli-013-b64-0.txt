@@ -1,0 +1,4 @@
+GET /a?token=eyIkb3IiOlt7ImEiOjF9LHsiYiI6Mn1dLCIkYW5kIjpbeyJjIjozfV19 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

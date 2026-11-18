@@ -1,0 +1,4 @@
+GET /a?cmd=/*%00*/C:\Windows\system32\config\SAM HTTP/1.1
+Host: demo.example.com
+Connection: close
+

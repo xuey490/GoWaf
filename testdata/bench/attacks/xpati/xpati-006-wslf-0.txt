@@ -1,0 +1,4 @@
+GET /a?redirect=]%0aor%0aposition()%3D1%0aor%0a' HTTP/1.1
+Host: demo.example.com
+Connection: close
+

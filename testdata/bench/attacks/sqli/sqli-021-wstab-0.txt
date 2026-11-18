@@ -1,0 +1,4 @@
+GET /a?data=1%09or%092%09like%092 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

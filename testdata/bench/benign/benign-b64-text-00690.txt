@@ -1,0 +1,5 @@
+GET /export?data=dXBkYXRlIDYgbm90ZXMgMzkgaW52b2ljZSA2NSBhZ2VuZGEgNDcgbWVldGluZyAyOCBzY2hlZHVsZSA2NSBub3RlcyA2OCBhZ2VuZGEgOTggdXBkYXRlIDU2IHVwZGF0ZSAyNSByZXZpZXcgNzIgbWVldGluZyA1Mw%3D%3D&format=txt HTTP/1.1
+Host: demo.example.com
+User-Agent: Mozilla/5.0 export-client
+Connection: close
+

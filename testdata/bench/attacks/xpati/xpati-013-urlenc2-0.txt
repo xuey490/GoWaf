@@ -1,0 +1,4 @@
+GET /a?token=%2527%2Bor%2Blast%2528%2529%253E0%2Bor%2B%2527 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

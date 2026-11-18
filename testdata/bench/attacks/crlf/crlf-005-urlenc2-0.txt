@@ -1,0 +1,4 @@
+GET /a?name=a%253D1%250D%250ASet-Cookie%253Ap%253D1 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,4 @@
+GET /a?q=']%20oR%20'a'%3D'A HTTP/1.1
+Host: demo.example.com
+Connection: close
+

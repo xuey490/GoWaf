@@ -1,0 +1,4 @@
+GET /a?path=u%253Dhttp%253A%252F%252Fgood.tld%25250d%25250aX-Custom%253Aevil HTTP/1.1
+Host: demo.example.com
+Connection: close
+

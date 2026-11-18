@@ -1,0 +1,4 @@
+GET /a?search="<details%20open%20ontoggle%3Dalert(1)>" HTTP/1.1
+Host: demo.example.com
+Connection: close
+

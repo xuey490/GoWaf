@@ -1,0 +1,5 @@
+GET /reports?uuid=26357ed7-26c4 HTTP/1.1
+Host: demo.example.com
+User-Agent: dashboard/0.8
+Connection: close
+

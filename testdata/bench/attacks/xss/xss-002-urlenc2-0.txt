@@ -1,0 +1,4 @@
+GET /a?file=%253Csvg%2Bonload%253Dalert%25281%2529%253E HTTP/1.1
+Host: demo.example.com
+Connection: close
+

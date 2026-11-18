@@ -1,0 +1,4 @@
+GET /a?page=1%2Bwaitfor%2Bdelay%2B%270%3A0%3A5%27-- HTTP/1.1
+Host: demo.example.com
+Connection: close
+

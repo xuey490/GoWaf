@@ -1,0 +1,4 @@
+GET /a?cmd=/*%00*/glob:///etc/* HTTP/1.1
+Host: demo.example.com
+Connection: close
+

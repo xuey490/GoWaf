@@ -1,0 +1,4 @@
+GET /a?url=_.merge({},%20JSON.parse(\u0027{\u0022__proto__\u0022:{\u0022x\u0022:1}}\u0027)) HTTP/1.1
+Host: demo.example.com
+Connection: close
+

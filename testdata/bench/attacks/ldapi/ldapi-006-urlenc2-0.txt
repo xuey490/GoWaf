@@ -1,0 +1,4 @@
+GET /a?redirect=x%2529%2528mail%253D%252A HTTP/1.1
+Host: demo.example.com
+Connection: close
+

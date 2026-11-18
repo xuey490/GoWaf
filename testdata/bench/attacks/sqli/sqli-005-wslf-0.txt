@@ -1,0 +1,4 @@
+GET /a?name=1%0aand%0a(select%0a1)%3D(select%0a0%2B1) HTTP/1.1
+Host: demo.example.com
+Connection: close
+

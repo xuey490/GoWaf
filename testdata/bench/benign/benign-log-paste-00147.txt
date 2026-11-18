@@ -1,0 +1,8 @@
+POST /ops/logpaste HTTP/1.1
+Host: demo.example.com
+User-Agent: ops-console/0.9
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 293
+Connection: close
+
+paste=billing\n2024-10-09 07:32:11 INFO billing request done in 378ms\n2024-05-11 22:36:58 INFO billing request done in 225ms\n2024-04-05 06:20:03 INFO billing request done in 308ms\n2024-10-11 00:49:03 INFO billing request done in 175ms\n2024-04-16 18:36:55 INFO billing request done in 145ms

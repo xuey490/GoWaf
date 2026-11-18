@@ -1,0 +1,5 @@
+GET /a?cmd=p%3D1
+LoCaTiOn:HtTp://EvIl.TlD HTTP/1.1
+Host: demo.example.com
+Connection: close
+

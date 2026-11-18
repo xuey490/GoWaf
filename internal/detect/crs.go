@@ -309,8 +309,13 @@ func (c *CRSEngine) Inspect(in *Input) (res Result) {
 		tx.AddRequestHeader("Cookie", in.Cookies)
 	}
 	if in.Body != "" {
-		// 有请求体时补表单类型 Content-Type，让 phase 2 能解析出 body 参数
-		tx.AddRequestHeader("Content-Type", "application/x-www-form-urlencoded")
+		// 有请求体且头串里没有 Content-Type 时才补表单类型，让 phase 2 能
+		// 解析出 body 参数。头串已带客户端原始 Content-Type（edge.buildInput
+		// 会收集全部头）时不能重复加——Coraza 事务里出现两个 Content-Type
+		// 会触发 CRS 920620（Multiple Content-Type），每个 POST 白吃一条告警。
+		if !strings.Contains(strings.ToLower(in.Headers), "content-type:") {
+			tx.AddRequestHeader("Content-Type", "application/x-www-form-urlencoded")
+		}
 	}
 
 	// 头阶段即被中断说明命中了拦截型规则；此处先记高分，最终得分以文末统计为准

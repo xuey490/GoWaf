@@ -1,0 +1,4 @@
+GET /a?q=hTtP://x%0D%0aLoCaTiOn:HtTp://EvIl.TlD HTTP/1.1
+Host: demo.example.com
+Connection: close
+

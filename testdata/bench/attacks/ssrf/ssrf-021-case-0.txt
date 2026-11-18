@@ -1,0 +1,4 @@
+GET /a?data=lDaP://127.0.0.1:389/dC%3D%00 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

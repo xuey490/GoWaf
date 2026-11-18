@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 57
+Connection: close
+
+url=%257B%2522%2524comment%2522%253A%2522bypass%2522%257D

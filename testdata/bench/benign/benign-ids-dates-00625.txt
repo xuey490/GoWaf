@@ -1,0 +1,5 @@
+GET /reports?id=81632&page=18 HTTP/1.1
+Host: demo.example.com
+User-Agent: dashboard/0.8
+Connection: close
+

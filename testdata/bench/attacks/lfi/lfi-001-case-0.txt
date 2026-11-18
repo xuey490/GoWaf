@@ -1,0 +1,4 @@
+GET /a?s=pHaR://tMp/UpLoAd.JpG/sHeLl.TxT HTTP/1.1
+Host: demo.example.com
+Connection: close
+

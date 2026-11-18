@@ -1,0 +1,4 @@
+GET /a?returnurl=hTtPs%3A%2f%2FeViL.tLd%2Fx HTTP/1.1
+Host: demo.example.com
+Connection: close
+

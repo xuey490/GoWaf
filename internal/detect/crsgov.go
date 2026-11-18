@@ -3,6 +3,7 @@ package detect
 import (
 	"fmt"
 	"io/fs"
+	"net/url"
 	"regexp"
 	"sort"
 	"strings"
@@ -33,6 +34,7 @@ type CRSGov struct {
 	prescreen    bool                // 可疑度预筛开关（默认关）
 	skipStatic   bool                // 静态资源旁路（默认开）
 	bodyTextOnly bool                // 非 text 请求体跳过 CRS body 解析（默认开）
+	safeDataURI  bool                // 图片 data URI 白名单旁路（默认开）
 	excludePaths []string            // 路径前缀豁免清单
 	ac           *AC                 // 预筛关键词自动机（nil 表示预筛不可用，按开启处理）
 	staticExts   map[string]struct{} // 静态扩展名集合（小写，含点前缀去除）
@@ -43,6 +45,7 @@ type CRSGovOptions struct {
 	Prescreen    bool
 	SkipStatic   bool
 	BodyTextOnly bool
+	SafeDataURI  bool
 	ExcludePaths []string
 }
 
@@ -101,6 +104,10 @@ var noiseList = []string{
 	// application/*、UA 的 like Gecko、域名 www 等）
 	"local", "application", "like", "www", "xhtml", "json", "image",
 	"fonts", "static", "assets", "index", "main", "style", "script",
+	// 压缩/传输编码词汇：CRS 920280 等规则的字面量里有 gzip/deflate，
+	// 而几乎所有客户端默认发送 Accept-Encoding: gzip——不进噪声表的话
+	// 预筛会命中每一条正常请求，形同虚设（v1.6.3 跑分实测发现）。
+	"gzip", "deflate", "identity", "compress", "zstd", "encoding",
 }
 
 // isNoisy 判断提取段是否为噪声：等于噪声词、是噪声词的子串、或包含噪声词
@@ -176,6 +183,16 @@ func extractCRSLiterals() []string {
 // 变量名/动作名误当模式。
 var crsOpRe = regexp.MustCompile(`(?i)@(rx|contains|detectsqli|detectxss|pm|pmf|streq|rsub|within)\s+((?:[^"\\]|\\.)*)`)
 
+// safeDataURIRe 严格匹配 image 类 data URI：载荷只允许 base64 字符集到串尾。
+// 这是 CRS 的一个已知误报形态（932235/932260/934170/941130/941170 都会把
+// ";base64," 判成命令注入/XSS），图片 data URI 是海量良性业务参数。
+// 严格白名单（b64 字符集 + 到串尾）保证攻击者塞不进 < > ' 等元字符。
+var safeDataURIRe = regexp.MustCompile(`(?i)^data:image/(png|jpe?g|gif|webp|bmp|avif|svg\+xml);base64,[a-z0-9+/=]+$`)
+
+// plainParamRe 简单参数值：纯字母数字与 ._:-（不含 % 与元字符），编码过的
+// 值一律落回 CRS 检查（宁误跑不误放）。
+var plainParamRe = regexp.MustCompile(`^[a-z0-9._:\-]{0,128}$`)
+
 // NewCRSGov 构建闸门快照。
 // 参数 opt：三个旁路开关与豁免清单。
 // 返回 *CRSGov：预筛关键词构建失败时 ac 为 nil（预筛自动按「不可用→不旁路」处理）。
@@ -184,6 +201,7 @@ func NewCRSGov(opt CRSGovOptions) *CRSGov {
 		prescreen:    opt.Prescreen,
 		skipStatic:   opt.SkipStatic,
 		bodyTextOnly: opt.BodyTextOnly,
+		safeDataURI:  opt.SafeDataURI,
 		excludePaths: append([]string(nil), opt.ExcludePaths...),
 		staticExts:   map[string]struct{}{},
 	}
@@ -209,6 +227,42 @@ func NewCRSGov(opt CRSGovOptions) *CRSGov {
 		}
 	}
 	return g
+}
+
+// isSafeDataURIQuery 判断 query 是否满足「data URI 白名单旁路」：至少一个
+// 参数值是严格 image data URI，其余参数（含参数名）全是简单无元字符形态。
+// 参数值先做 URL 解码（query 里的 data URI 天然是编码形态），任一参数不
+// 满足即返回 false，落回完整 CRS 检查。
+func isSafeDataURIQuery(query string) bool {
+	hasURI := false
+	for _, kv := range strings.Split(query, "&") {
+		if kv == "" {
+			return false
+		}
+		eq := strings.IndexByte(kv, '=')
+		var name, val string
+		if eq < 0 {
+			name, val = kv, ""
+		} else {
+			name, val = kv[:eq], kv[eq+1:]
+		}
+		decoded := val
+		for i := 0; i < 3; i++ { // 与 Normalize 同款的多层解码（防 %25 叠码）
+			if d, err := url.QueryUnescape(decoded); err == nil && d != decoded {
+				decoded = d
+			} else {
+				break
+			}
+		}
+		if decoded != "" && safeDataURIRe.MatchString(decoded) {
+			hasURI = true
+			continue
+		}
+		if !plainParamRe.MatchString(val) || !plainParamRe.MatchString(name) {
+			return false
+		}
+	}
+	return hasURI
 }
 
 // BodyTextOnly 报告是否只对文本类请求体跑 CRS body 解析。
@@ -252,6 +306,12 @@ func (g *CRSGov) ShouldInspect(site, method, path, query, body, headersText stri
 		(method == "GET" || method == "HEAD" || method == "OPTIONS") &&
 		g.isStaticPath(path) {
 		return false, "static_asset"
+	}
+	// 图片 data URI 白名单：query 里存在 data URI 参数、且其余参数全部是
+	// 无元字符的简单值时跳过 CRS——严格白名单形态（b64 字符集 + 到串尾）
+	// 下攻击者塞不进任何元字符，规则/语义通道照常检测解码变体。
+	if g.safeDataURI && query != "" && body == "" && isSafeDataURIQuery(query) {
+		return false, "safe_datauri"
 	}
 	// 可疑度预筛：AC 一遍扫过 path/query/body/headers，零命中才旁路
 	if g.prescreen && g.ac != nil {

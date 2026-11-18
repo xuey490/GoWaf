@@ -1,0 +1,4 @@
+GET /a?continue=%68%74%74%70%73%3A%2F%2F%67%6F%6F%67%6C%65%2E%65%76%69%6C%2E%74%6C%64%2F HTTP/1.1
+Host: demo.example.com
+Connection: close
+

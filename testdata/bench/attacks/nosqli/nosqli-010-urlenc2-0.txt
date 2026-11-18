@@ -1,0 +1,4 @@
+GET /a?cmd=db.sessions.count%2528%257B%257D%2529 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,4 @@
+GET /a?token={%26quot;$or%26quot;:[{%26quot;a%26quot;:1},{%26quot;b%26quot;:2}],%26quot;$and%26quot;:[{%26quot;c%26quot;:3}]} HTTP/1.1
+Host: demo.example.com
+Connection: close
+

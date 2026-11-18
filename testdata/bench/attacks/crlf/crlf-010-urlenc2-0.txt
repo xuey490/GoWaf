@@ -1,0 +1,4 @@
+GET /a?cmd=p%253D1%250ALocation%253Ahttp%253A%252F%252Fevil.tld HTTP/1.1
+Host: demo.example.com
+Connection: close
+

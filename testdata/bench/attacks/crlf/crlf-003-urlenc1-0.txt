@@ -1,0 +1,4 @@
+GET /a?url=http%3A%2F%2Fx%2F%250d%250aX-Forwarded-For%3A127.0.0.1 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

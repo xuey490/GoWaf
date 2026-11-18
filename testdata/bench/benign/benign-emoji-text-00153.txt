@@ -1,0 +1,8 @@
+POST /chat HTTP/1.1
+Host: demo.example.com
+User-Agent: chat-client/1.4
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 50
+Connection: close
+
+text=coffee+first+%E2%98%95+then+code+%F0%9F%92%BB

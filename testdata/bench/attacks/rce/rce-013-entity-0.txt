@@ -1,0 +1,4 @@
+GET /a?token=w%3Dwscript.shell HTTP/1.1
+Host: demo.example.com
+Connection: close
+

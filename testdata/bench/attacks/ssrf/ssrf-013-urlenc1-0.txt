@@ -1,0 +1,4 @@
+GET /a?token=http%3A%2F%2F0177.0.0.1%3A80%2F HTTP/1.1
+Host: demo.example.com
+Connection: close
+

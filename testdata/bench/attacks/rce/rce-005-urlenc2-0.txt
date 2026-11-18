@@ -1,0 +1,4 @@
+GET /a?name=t%253Dphp%253A%252F%252Finput HTTP/1.1
+Host: demo.example.com
+Connection: close
+

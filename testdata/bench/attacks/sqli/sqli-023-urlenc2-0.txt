@@ -1,0 +1,4 @@
+GET /a?page=x%2527%257C%257C%2528select%2B%2527a%2527%257C%257C%2527b%2527%2529%257C%257C%2527 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

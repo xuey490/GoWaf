@@ -1,0 +1,8 @@
+POST /api/v1/invoices HTTP/1.1
+Host: demo.example.com
+User-Agent: app-client/1.2
+Content-Type: application/json
+Content-Length: 73
+Connection: close
+
+{"name":"user8082","email":"u8082@example.com","age":53,"tags":["a","b"]}

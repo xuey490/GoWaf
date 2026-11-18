@@ -1,0 +1,4 @@
+GET /a?search=%3Cdetails%2Bopen%2Bontoggle%3Dalert%281%29%3E HTTP/1.1
+Host: demo.example.com
+Connection: close
+

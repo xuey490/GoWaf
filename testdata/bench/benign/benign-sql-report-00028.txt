@@ -1,0 +1,5 @@
+GET /dashboards/main?id=42&view=chart HTTP/1.1
+Host: demo.example.com
+User-Agent: bi-dashboard/1.1
+Connection: close
+

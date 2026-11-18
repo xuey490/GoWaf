@@ -1,0 +1,4 @@
+GET /a?s=%2A%29%28objectClass%3D%2A HTTP/1.1
+Host: demo.example.com
+Connection: close
+

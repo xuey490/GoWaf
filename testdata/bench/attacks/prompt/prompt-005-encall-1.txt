@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 98
+Connection: close
+
+name=%70%72%69%6E%74%20%74%68%65%20%64%65%76%65%6C%6F%70%65%72%20%6D%65%73%73%61%67%65%20%6E%6F%77

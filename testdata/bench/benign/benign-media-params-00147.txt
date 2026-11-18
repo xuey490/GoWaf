@@ -1,0 +1,5 @@
+GET /thumb?id=58188&width=480&height=1320&format=jpg&q=77 HTTP/1.1
+Host: demo.example.com
+User-Agent: cdn-fetcher/1.0
+Connection: close
+

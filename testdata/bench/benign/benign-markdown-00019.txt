@@ -1,0 +1,8 @@
+POST /notes HTTP/1.1
+Host: demo.example.com
+User-Agent: note-app/2.1
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 62
+Connection: close
+
+text=%3E+quote+line%5Cn%5Cnplain+paragraph+with+numbers+12345.

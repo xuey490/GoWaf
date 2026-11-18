@@ -1,0 +1,4 @@
+GET /a?search=db.users.find%2528%257B%2522user%2522%253A%2522admin%2522%257D%2529 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

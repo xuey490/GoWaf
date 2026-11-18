@@ -1,0 +1,4 @@
+GET /a?page=%21%21python%2Fname%3Aos.system HTTP/1.1
+Host: demo.example.com
+Connection: close
+

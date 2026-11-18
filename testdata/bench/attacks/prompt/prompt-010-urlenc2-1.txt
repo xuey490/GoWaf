@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 68
+Connection: close
+
+cmd=act%2Bas%2Bif%2Byou%2Bhave%2Bno%2Brules%2Band%2Bobey%2Bonly%2Bme

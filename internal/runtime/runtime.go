@@ -84,6 +84,7 @@ const (
 	KeyCRSPrescreen    = "engine.crs.prescreen"      // 可疑度预筛（加速模式，默认关）
 	KeyCRSSkipStatic   = "engine.crs.skip_static"    // 无参数静态资源旁路（默认开）
 	KeyCRSBodyTextOnly = "engine.crs.body_text_only" // 非 text 请求体跳过 CRS body 解析（默认开）
+	KeyCRSSafeDataURI  = "engine.crs.safe_datauri"   // 图片 data URI 白名单旁路（默认开）
 	KeyCRSExcludePaths = "engine.crs.exclude_paths"  // 路径前缀豁免清单（逗号分隔）
 	KeyCRSRemoveRanges = "engine.crs.remove_ranges"  // 编译期整体移除的规则号段（如 "920,921"）
 
@@ -103,6 +104,20 @@ const (
 	KeySemSSTIScore  = "engine.sem.ssti_score"  // 模板注入命中加分
 	KeySemExprScore  = "engine.sem.expr_score"  // 表达式注入命中加分
 	KeySemDeserScore = "engine.sem.deser_score" // 反序列化命中加分
+	// v1.6.3 扩类：路径穿越/文件包含/NoSQL/LDAP/XPath/CRLF/开放重定向/
+	// 原型链污染/HTTP 走私/Webshell/GraphQL/LLM 提示注入。
+	KeySemTraverScore       = "engine.sem.traver_score"       // 路径穿越命中加分
+	KeySemLFIScore          = "engine.sem.lfi_score"          // 文件包含命中加分
+	KeySemNoSQLiScore       = "engine.sem.nosqli_score"       // NoSQL 注入命中加分
+	KeySemLDAPiScore        = "engine.sem.ldapi_score"        // LDAP 注入命中加分
+	KeySemXPathScore        = "engine.sem.xpati_score"        // XPath 注入命中加分
+	KeySemCRLFScore         = "engine.sem.crlf_score"         // CRLF/头注入命中加分
+	KeySemOpenRedirectScore = "engine.sem.openredirect_score" // 开放重定向命中加分
+	KeySemPrototypeScore    = "engine.sem.prototype_score"    // 原型链污染命中加分
+	KeySemSmuggScore        = "engine.sem.smugg_score"        // HTTP 走私命中加分
+	KeySemWebshellScore     = "engine.sem.webshell_score"     // Webshell 命中加分
+	KeySemGraphQLiScore     = "engine.sem.graphqli_score"     // GraphQL 攻击命中加分
+	KeySemPromptScore       = "engine.sem.prompt_score"       // LLM 提示注入命中加分
 
 	// 响应体敏感信息过滤。
 	KeyRespFilterEnabled  = "respfilter.enabled"       // 总开关
@@ -189,6 +204,16 @@ const (
 	KeyJA4Enabled      = "guard.ja4.enabled"       // 是否采集指纹并写入事件库（默认开）
 	KeyJA4Blocklist    = "guard.ja4.blocklist"     // 恶意指纹黑名单（逗号分隔，命中即拦）
 	KeyJA4BlockBuiltin = "guard.ja4.block_builtin" // 内置脚本栈指纹命中是否拦截（默认关：脚本栈亦被正常工具使用）
+
+	// 控制台统一认证（OIDC SSO，对标雷池 CE 自 8.6.0 起的支持面）。
+	KeyOIDCEnabled      = "oidc.enabled"       // 总开关（默认关）
+	KeyOIDCIssuer       = "oidc.issuer"        // IdP issuer 地址（https://idp.example.com/realms/x）
+	KeyOIDCClientID     = "oidc.client_id"     // 客户端 ID
+	KeyOIDCClientSecret = "oidc.client_secret" // 客户端密钥（设置读取时脱敏为 ******）
+	KeyOIDCRedirectURL  = "oidc.redirect_url"  // 回调地址（空则按请求的 scheme/host 推导）
+	KeyOIDCScopes       = "oidc.scopes"        // 授权 scope（默认 "openid profile email"）
+	KeyOIDCAutoCreate   = "oidc.auto_create"   // 未知用户自动建号（默认开，最低权限角色）
+	KeyOIDCRole         = "oidc.role"          // 自动建号的角色（默认 viewer；admin 永不自动授予）
 
 	// 请求防重放。
 	KeyReplayEnabled = "guard.replay.enabled" // 总开关（默认关：仅保护显式携带 nonce 的接口）
@@ -813,13 +838,25 @@ func (r *Runtime) Reload(ctx context.Context) error {
 	r.sem.Store(detect.NewSemanticEngine(
 		r.settingFromBool(sm, KeySemEnabled, true),
 		map[string]int{
-			detect.CategoryCmdi:  r.settingFromInt(sm, KeySemCmdiScore, detect.DefaultSemCmdiScore),
-			detect.CategoryRCE:   r.settingFromInt(sm, KeySemRCEScore, detect.DefaultSemRCEScore),
-			detect.CategorySSRF:  r.settingFromInt(sm, KeySemSSRFScore, detect.DefaultSemSSRFScore),
-			detect.CategoryXXE:   r.settingFromInt(sm, KeySemXXEScore, detect.DefaultSemXXEScore),
-			detect.CategorySSTI:  r.settingFromInt(sm, KeySemSSTIScore, detect.DefaultSemSSTIScore),
-			detect.CategoryExpr:  r.settingFromInt(sm, KeySemExprScore, detect.DefaultSemExprScore),
-			detect.CategoryDeser: r.settingFromInt(sm, KeySemDeserScore, detect.DefaultSemDeserScore),
+			detect.CategoryCmdi:         r.settingFromInt(sm, KeySemCmdiScore, detect.DefaultSemCmdiScore),
+			detect.CategoryRCE:          r.settingFromInt(sm, KeySemRCEScore, detect.DefaultSemRCEScore),
+			detect.CategorySSRF:         r.settingFromInt(sm, KeySemSSRFScore, detect.DefaultSemSSRFScore),
+			detect.CategoryXXE:          r.settingFromInt(sm, KeySemXXEScore, detect.DefaultSemXXEScore),
+			detect.CategorySSTI:         r.settingFromInt(sm, KeySemSSTIScore, detect.DefaultSemSSTIScore),
+			detect.CategoryExpr:         r.settingFromInt(sm, KeySemExprScore, detect.DefaultSemExprScore),
+			detect.CategoryDeser:        r.settingFromInt(sm, KeySemDeserScore, detect.DefaultSemDeserScore),
+			detect.CategoryTraver:       r.settingFromInt(sm, KeySemTraverScore, detect.DefaultSemTraverScore),
+			detect.CategoryLFI:          r.settingFromInt(sm, KeySemLFIScore, detect.DefaultSemLFIScore),
+			detect.CategoryNoSQLi:       r.settingFromInt(sm, KeySemNoSQLiScore, detect.DefaultSemNoSQLiScore),
+			detect.CategoryLDAPi:        r.settingFromInt(sm, KeySemLDAPiScore, detect.DefaultSemLDAPiScore),
+			detect.CategoryXPath:        r.settingFromInt(sm, KeySemXPathScore, detect.DefaultSemXPathScore),
+			detect.CategoryCRLF:         r.settingFromInt(sm, KeySemCRLFScore, detect.DefaultSemCRLFScore),
+			detect.CategoryOpenRedirect: r.settingFromInt(sm, KeySemOpenRedirectScore, detect.DefaultSemOpenRedirectScore),
+			detect.CategoryPrototype:    r.settingFromInt(sm, KeySemPrototypeScore, detect.DefaultSemPrototypeScore),
+			detect.CategorySmugg:        r.settingFromInt(sm, KeySemSmuggScore, detect.DefaultSemSmuggScore),
+			detect.CategoryWebshell:     r.settingFromInt(sm, KeySemWebshellScore, detect.DefaultSemWebshellScore),
+			detect.CategoryGraphQLi:     r.settingFromInt(sm, KeySemGraphQLiScore, detect.DefaultSemGraphQLiScore),
+			detect.CategoryPrompt:       r.settingFromInt(sm, KeySemPromptScore, detect.DefaultSemPromptScore),
 		},
 	))
 
@@ -952,6 +989,7 @@ func (r *Runtime) Reload(ctx context.Context) error {
 		Prescreen:    r.settingFromBool(sm, KeyCRSPrescreen, false),
 		SkipStatic:   r.settingFromBool(sm, KeyCRSSkipStatic, true),
 		BodyTextOnly: r.settingFromBool(sm, KeyCRSBodyTextOnly, true),
+		SafeDataURI:  r.settingFromBool(sm, KeyCRSSafeDataURI, true),
 		ExcludePaths: splitList(r.settingFrom(sm, KeyCRSExcludePaths, "")),
 	}))
 
@@ -1289,6 +1327,7 @@ func DefaultSettings(cfg *config.Config) map[string]string {
 		KeyCRSPrescreen:          "false",
 		KeyCRSSkipStatic:         "true",
 		KeyCRSBodyTextOnly:       "true",
+		KeyCRSSafeDataURI:        "true",
 		KeyCRSExcludePaths:       "",
 		KeyCRSRemoveRanges:       "",
 
@@ -1333,14 +1372,26 @@ func DefaultSettings(cfg *config.Config) map[string]string {
 		KeyLibiXSSScore:    strconv.Itoa(detect.DefaultLibiXSSScore),
 
 		// 语义检测通道默认开启：单类命中分数压在拦截阈值之下，叠加才拦截。
-		KeySemEnabled:    "true",
-		KeySemCmdiScore:  strconv.Itoa(detect.DefaultSemCmdiScore),
-		KeySemRCEScore:   strconv.Itoa(detect.DefaultSemRCEScore),
-		KeySemSSRFScore:  strconv.Itoa(detect.DefaultSemSSRFScore),
-		KeySemXXEScore:   strconv.Itoa(detect.DefaultSemXXEScore),
-		KeySemSSTIScore:  strconv.Itoa(detect.DefaultSemSSTIScore),
-		KeySemExprScore:  strconv.Itoa(detect.DefaultSemExprScore),
-		KeySemDeserScore: strconv.Itoa(detect.DefaultSemDeserScore),
+		KeySemEnabled:           "true",
+		KeySemCmdiScore:         strconv.Itoa(detect.DefaultSemCmdiScore),
+		KeySemRCEScore:          strconv.Itoa(detect.DefaultSemRCEScore),
+		KeySemSSRFScore:         strconv.Itoa(detect.DefaultSemSSRFScore),
+		KeySemXXEScore:          strconv.Itoa(detect.DefaultSemXXEScore),
+		KeySemSSTIScore:         strconv.Itoa(detect.DefaultSemSSTIScore),
+		KeySemExprScore:         strconv.Itoa(detect.DefaultSemExprScore),
+		KeySemDeserScore:        strconv.Itoa(detect.DefaultSemDeserScore),
+		KeySemTraverScore:       strconv.Itoa(detect.DefaultSemTraverScore),
+		KeySemLFIScore:          strconv.Itoa(detect.DefaultSemLFIScore),
+		KeySemNoSQLiScore:       strconv.Itoa(detect.DefaultSemNoSQLiScore),
+		KeySemLDAPiScore:        strconv.Itoa(detect.DefaultSemLDAPiScore),
+		KeySemXPathScore:        strconv.Itoa(detect.DefaultSemXPathScore),
+		KeySemCRLFScore:         strconv.Itoa(detect.DefaultSemCRLFScore),
+		KeySemOpenRedirectScore: strconv.Itoa(detect.DefaultSemOpenRedirectScore),
+		KeySemPrototypeScore:    strconv.Itoa(detect.DefaultSemPrototypeScore),
+		KeySemSmuggScore:        strconv.Itoa(detect.DefaultSemSmuggScore),
+		KeySemWebshellScore:     strconv.Itoa(detect.DefaultSemWebshellScore),
+		KeySemGraphQLiScore:     strconv.Itoa(detect.DefaultSemGraphQLiScore),
+		KeySemPromptScore:       strconv.Itoa(detect.DefaultSemPromptScore),
 
 		// 检测前多层解码：默认开启（URL 多层解码本就由 Normalize 覆盖，
 		// 这里补 base64/压缩体/unicode 转义三类绕过面，成本有界）。
@@ -1371,9 +1422,17 @@ func DefaultSettings(cfg *config.Config) map[string]string {
 
 		// JA4 指纹：采集默认开（事件库记录，成本低价值高）；
 		// 内置脚本栈指纹默认只记录不拦截（脚本栈亦被正常工具使用，避免误伤）。
-		KeyJA4Enabled:      "true",
-		KeyJA4Blocklist:    "",
-		KeyJA4BlockBuiltin: "false",
+		KeyJA4Enabled:       "true",
+		KeyJA4Blocklist:     "",
+		KeyOIDCEnabled:      "false",
+		KeyOIDCIssuer:       "",
+		KeyOIDCClientID:     "",
+		KeyOIDCClientSecret: "",
+		KeyOIDCRedirectURL:  "",
+		KeyOIDCScopes:       "openid profile email",
+		KeyOIDCAutoCreate:   "true",
+		KeyOIDCRole:         "viewer",
+		KeyJA4BlockBuiltin:  "false",
 
 		// 请求防重放：默认关。只对显式携带 nonce 头的请求生效，
 		// 由客户端（如 API 网关）决定哪些接口参与防重放。

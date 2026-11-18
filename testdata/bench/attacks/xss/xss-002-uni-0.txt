@@ -1,0 +1,4 @@
+GET /a?file=\u003Csvg%20onload%3Dalert(1)\u003E HTTP/1.1
+Host: demo.example.com
+Connection: close
+

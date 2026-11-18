@@ -1,0 +1,4 @@
+GET /a?forward=aHR0cHM6Ly8weDdmMDAwMDAxLm5pcC5pby94 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

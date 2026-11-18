@@ -1,0 +1,4 @@
+GET /a?input={/*x*/user(where:{password:{_ne:null}}){id}} HTTP/1.1
+Host: demo.example.com
+Connection: close
+

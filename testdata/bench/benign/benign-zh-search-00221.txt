@@ -1,0 +1,5 @@
+GET /search?q=%E5%A4%8F%E5%AD%A3%E8%BF%9E%E8%A1%A3%E8%A3%99+waf%E9%98%B2%E7%81%AB%E5%A2%99&page=4 HTTP/1.1
+Host: demo.example.com
+User-Agent: Mozilla/5.0 (Windows NT 10.0) Chrome/120
+Connection: close
+

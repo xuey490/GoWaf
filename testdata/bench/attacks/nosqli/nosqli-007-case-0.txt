@@ -1,0 +1,4 @@
+GET /a?data=$wHeRe%20ThIs.UsErNaMe%3D%3D'AdMiN' HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,4 @@
+GET /a?cmd=C%253A%255CWindows%255Csystem32%255Cconfig%255CSAM HTTP/1.1
+Host: demo.example.com
+Connection: close
+

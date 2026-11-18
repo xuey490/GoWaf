@@ -1,0 +1,4 @@
+GET /a?destination=/*%00*/https://evil.tld%3Fa%3D1 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

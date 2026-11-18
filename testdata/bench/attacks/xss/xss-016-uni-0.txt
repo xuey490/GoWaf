@@ -1,0 +1,4 @@
+GET /a?file=\u003Cdiv%20style%3D\u0022width:expression(alert(1))\u0022\u003E HTTP/1.1
+Host: demo.example.com
+Connection: close
+

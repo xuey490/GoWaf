@@ -1,0 +1,4 @@
+GET /a?url="https://evil.tld:8080/path" HTTP/1.1
+Host: demo.example.com
+Connection: close
+

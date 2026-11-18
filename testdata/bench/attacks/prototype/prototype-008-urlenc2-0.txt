@@ -1,0 +1,4 @@
+GET /a?search=Object.assign%2528%257B%257D%252C%257B%2522__proto__%2522%253A%257B%257D%257D%2529 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

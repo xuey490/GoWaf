@@ -1,0 +1,5 @@
+GET /wp-json/wp/v2/media?media_type=image HTTP/1.1
+Host: demo.example.com
+User-Agent: Mozilla/5.0 (Windows NT 10.0) Chrome/120
+Connection: close
+

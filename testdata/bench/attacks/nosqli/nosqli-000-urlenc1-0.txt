@@ -1,0 +1,4 @@
+GET /a?q=user%5B%24ne%5D%3Dadmin HTTP/1.1
+Host: demo.example.com
+Connection: close
+

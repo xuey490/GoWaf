@@ -1,0 +1,4 @@
+GET /a?input=%2A%29%28memberOf%3DCN%3DAdmins%2CDC%3Dcorp HTTP/1.1
+Host: demo.example.com
+Connection: close
+

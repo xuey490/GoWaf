@@ -1,0 +1,4 @@
+GET /a?data=%24where%2Bthis.username%3D%3D%27admin%27 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

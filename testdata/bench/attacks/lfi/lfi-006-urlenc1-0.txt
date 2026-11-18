@@ -1,0 +1,4 @@
+GET /a?redirect=jar%3Ahttp%3A%2F%2Fevil.tld%2Fx.jar%21%2Fcmd.txt HTTP/1.1
+Host: demo.example.com
+Connection: close
+

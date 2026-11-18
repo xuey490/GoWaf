@@ -1,0 +1,4 @@
+GET /a?redirect=hTtP://lOcAlHoSt:9090/DeBuG HTTP/1.1
+Host: demo.example.com
+Connection: close
+

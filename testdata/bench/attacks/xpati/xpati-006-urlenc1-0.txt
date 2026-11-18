@@ -1,0 +1,4 @@
+GET /a?redirect=%5D%2Bor%2Bposition%28%29%3D1%2Bor%2B%27 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,5 @@
+GET /items?uuid=4401b7cf-64c5 HTTP/1.1
+Host: demo.example.com
+User-Agent: dashboard/0.8
+Connection: close
+

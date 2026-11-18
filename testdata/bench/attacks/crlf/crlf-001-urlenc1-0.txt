@@ -1,0 +1,4 @@
+GET /a?s=a%3D1%250d%250aSet-Cookie%3Ainjected%3D1 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

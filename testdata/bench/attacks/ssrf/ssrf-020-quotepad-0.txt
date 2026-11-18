@@ -1,0 +1,4 @@
+GET /a?redirect="http://127.0.0.1.nip.io/" HTTP/1.1
+Host: demo.example.com
+Connection: close
+

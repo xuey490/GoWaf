@@ -1,0 +1,4 @@
+GET /a?path=a:2:{s:3:%26%23x22;cmd%26%23x22;;s:2:%26%23x22;id%26%23x22;;} HTTP/1.1
+Host: demo.example.com
+Connection: close
+

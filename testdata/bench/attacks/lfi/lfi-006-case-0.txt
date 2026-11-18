@@ -1,0 +1,4 @@
+GET /a?redirect=jAr:HtTp://EvIl.TlD/x.JaR!/cMd.TxT HTTP/1.1
+Host: demo.example.com
+Connection: close
+

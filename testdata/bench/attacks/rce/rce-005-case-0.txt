@@ -1,0 +1,4 @@
+GET /a?name=t%3DPhP://iNpUt HTTP/1.1
+Host: demo.example.com
+Connection: close
+
