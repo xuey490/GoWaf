@@ -560,6 +560,26 @@ type SiteUpstream struct {
 // 参数：无；返回：表名 "nodes"。
 func (Node) TableName() string { return "nodes" }
 
+// APIToken API 访问令牌表：供 OpenAPI（/api/v1 与既有 /api 路由）与 MCP 客户端
+// 以 Bearer 方式访问控制面，无需交互式登录会话。
+//
+// 明文令牌只在创建时返回一次，库里只存 SHA-256 摘要（token_hash 唯一索引）；
+// Scopes 支持 "read"（默认）与 "read,write"；吊销以 revoked_at 时间戳表示。
+type APIToken struct {
+	ID         uint   `gorm:"primaryKey;autoIncrement" json:"id"`                             // 主键，自增
+	Name       string `gorm:"column:name;size:64;not null" json:"name"`                       // 令牌名称（用途备注）
+	TokenHash  string `gorm:"column:token_hash;size:64;not null;uniqueIndex" json:"-"`        // SHA-256 摘要（hex），不出现在 JSON 中
+	Scopes     string `gorm:"column:scopes;size:32;not null;default:read" json:"scopes"`      // 权限域：read / read,write
+	CreatedBy  string `gorm:"column:created_by;size:64;not null;default:''" json:"createdBy"` // 创建人
+	CreatedAt  int64  `gorm:"column:created_at;not null;default:0" json:"createdAt"`          // 创建时间（Unix 毫秒）
+	LastUsedAt int64  `gorm:"column:last_used_at;not null;default:0" json:"lastUsedAt"`       // 最近使用时间（0=从未使用）
+	RevokedAt  int64  `gorm:"column:revoked_at;not null;default:0" json:"revokedAt"`          // 吊销时间（0=未吊销）
+}
+
+// TableName 指定 APIToken 模型对应的数据库表名。
+// 参数：无；返回：表名 "api_tokens"。
+func (APIToken) TableName() string { return "api_tokens" }
+
 // Node 接入节点：控制面登记数据面节点，Agent 通过心跳上报存活状态。
 //
 // Status 由心跳时间推导：online（5 分钟内）/ offline（超时）/ disabled（手动停用）。
