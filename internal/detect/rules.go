@@ -242,6 +242,11 @@ type Input struct {
 	Site string
 	// Params 是 query/body 里出现过的参数名，供例外按参数名匹配。
 	Params []string
+	// DecodedQuery / DecodedBody 是多层解码生成的附加检测变体（base64 解出、
+	// unicode 转义还原、压缩体解压），由数据面按 engine.decode.* 设置填充。
+	// 原文照常检测，变体作为额外文本并入扫描；同一规则跨变体只记一次命中。
+	DecodedQuery []string
+	DecodedBody  []string
 }
 
 // Engine 持有不可变规则快照，读路径无锁。
@@ -329,63 +334,68 @@ func (e *Engine) Inspect(in *Input) Result {
 	rs := e.rules.Load()
 	res := Result{Hits: []Hit{}, Categories: []string{}, RuleIDs: []string{}}
 
-	// 各部位文本归一化后作为检测输入；body 截断到 256KB，防止超大包拖垮正则
-	texts := map[Target]string{
-		TargetPath:   Normalize(in.Path),
-		TargetQuery:  Normalize(in.Query),
-		TargetBody:   Normalize(Truncate(in.Body, 256*1024)),
-		TargetHeader: Normalize(in.Headers + " " + in.Referer),
-		TargetCookie: Normalize(in.Cookies),
-		TargetUA:     Normalize(in.UA),
+	// 各部位文本归一化后作为检测输入；body 截断到 256KB，防止超大包拖垮正则。
+	// query/body 支持多个解码变体（见 Input.DecodedQuery/DecodedBody）：
+	// 变体与原文走同一套「AC 预筛 → 正则确认 → 评分」流程，同一规则跨
+	// 原文与变体只记一次命中（matched 去重按规则 ID），分数不会翻倍。
+	texts := map[Target][]string{
+		TargetPath:   {Normalize(in.Path)},
+		TargetQuery:  normalizeVariants(in.Query, in.DecodedQuery, 256*1024),
+		TargetBody:   normalizeVariants(in.Body, in.DecodedBody, 256*1024),
+		TargetHeader: {Normalize(in.Headers + " " + in.Referer)},
+		TargetCookie: {Normalize(in.Cookies)},
+		TargetUA:     {Normalize(in.UA)},
 	}
 
 	ex := e.exceptions.Load()
 	matched := make(map[string]struct{}, 4) // 已命中的规则 ID：同一规则跨部位只记一次
-	for t, text := range texts {
-		if text == "" {
-			continue
-		}
-		candidateIdx := rs.candidates(t, text)
-		for _, idx := range candidateIdx {
-			rule := rs.rules[idx]
-			if _, ok := matched[rule.ID]; ok {
+	for t, textsForTarget := range texts {
+		for _, text := range textsForTarget {
+			if text == "" {
 				continue
 			}
-			evidence, ok := rule.match(text)
-			if !ok {
-				continue
-			}
-			matched[rule.ID] = struct{}{}
-			if ex.Match(in.Site, in.Path, rule.ID, rule.Category, in.Params) {
-				continue
-			}
-			e.recordHit(rule.ID, time.Now().UnixMilli())
-			if rule.LogOnly {
-				// 观察中的规则：记录命中但不计分，避免影响处置动作。
+			candidateIdx := rs.candidates(t, text)
+			for _, idx := range candidateIdx {
+				rule := rs.rules[idx]
+				if _, ok := matched[rule.ID]; ok {
+					continue
+				}
+				evidence, ok := rule.match(text)
+				if !ok {
+					continue
+				}
+				matched[rule.ID] = struct{}{}
+				if ex.Match(in.Site, in.Path, rule.ID, rule.Category, in.Params) {
+					continue
+				}
+				e.recordHit(rule.ID, time.Now().UnixMilli())
+				if rule.LogOnly {
+					// 观察中的规则：记录命中但不计分，避免影响处置动作。
+					res.Hits = append(res.Hits, Hit{
+						RuleID: rule.ID, Name: rule.Name, Category: rule.Category,
+						Score: 0, Target: targetLabel(t), Evidence: evidence,
+					})
+					res.RuleIDs = append(res.RuleIDs, rule.ID)
+					res.Categories = appendUnique(res.Categories, rule.Category)
+					continue
+				}
+				res.Score += rule.Score
+				if rule.Action == "ban" {
+					// 高危规则：命中即封。只打标记，最终动作在下面统一决定
+					//（observe 模式下会降级为评分结果，保持"观察模式不拦截"语义）。
+					res.Ban = true
+				}
 				res.Hits = append(res.Hits, Hit{
-					RuleID: rule.ID, Name: rule.Name, Category: rule.Category,
-					Score: 0, Target: targetLabel(t), Evidence: evidence,
+					RuleID:   rule.ID,
+					Name:     rule.Name,
+					Category: rule.Category,
+					Score:    rule.Score,
+					Target:   targetLabel(t),
+					Evidence: evidence,
 				})
 				res.RuleIDs = append(res.RuleIDs, rule.ID)
 				res.Categories = appendUnique(res.Categories, rule.Category)
-				continue
 			}
-			res.Score += rule.Score
-			if rule.Action == "ban" {
-				// 高危规则：命中即封。只打标记，最终动作在下面统一决定
-				//（observe 模式下会降级为评分结果，保持"观察模式不拦截"语义）。
-				res.Ban = true
-			}
-			res.Hits = append(res.Hits, Hit{
-				RuleID:   rule.ID,
-				Name:     rule.Name,
-				Category: rule.Category,
-				Score:    rule.Score,
-				Target:   targetLabel(t),
-				Evidence: evidence,
-			})
-			res.RuleIDs = append(res.RuleIDs, rule.ID)
-			res.Categories = appendUnique(res.Categories, rule.Category)
 		}
 	}
 
@@ -397,6 +407,34 @@ func (e *Engine) Inspect(in *Input) Result {
 	}
 	res.ElapsedUS = time.Since(start).Microseconds()
 	return res
+}
+
+// normalizeVariants 把原文与解码变体归一化成检测文本列表。
+// 原文恒在首位；变体逐个归一化，重复与空文本剔除（变体常与原文解出相同内容）。
+// 参数 primary：原文；variants：解码变体；limit：单条文本截断上限（字节）。
+// 返回 []string：归一化后的去重文本列表（可能只有一条）。
+func normalizeVariants(primary string, variants []string, limit int) []string {
+	out := make([]string, 0, 1+len(variants))
+	seen := map[string]struct{}{}
+	add := func(raw string) {
+		if raw == "" {
+			return
+		}
+		n := Normalize(Truncate(raw, limit))
+		if n == "" {
+			return
+		}
+		if _, ok := seen[n]; ok {
+			return
+		}
+		seen[n] = struct{}{}
+		out = append(out, n)
+	}
+	add(primary)
+	for _, v := range variants {
+		add(v)
+	}
+	return out
 }
 
 // candidates 返回该目标可能命中的规则下标：AC 命中的 + 无关键词需逐条跑的。
