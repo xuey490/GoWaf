@@ -104,6 +104,10 @@ var noiseList = []string{
 	// application/*、UA 的 like Gecko、域名 www 等）
 	"local", "application", "like", "www", "xhtml", "json", "image",
 	"fonts", "static", "assets", "index", "main", "style", "script",
+	// 压缩/传输编码词汇：CRS 920280 等规则的字面量里有 gzip/deflate，
+	// 而几乎所有客户端默认发送 Accept-Encoding: gzip——不进噪声表的话
+	// 预筛会命中每一条正常请求，形同虚设（v1.6.3 跑分实测发现）。
+	"gzip", "deflate", "identity", "compress", "zstd", "encoding",
 }
 
 // isNoisy 判断提取段是否为噪声：等于噪声词、是噪声词的子串、或包含噪声词
