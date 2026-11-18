@@ -31,6 +31,7 @@ import (
 	"gowaf/internal/geo"
 	"gowaf/internal/guard"
 	"gowaf/internal/intel"
+	"gowaf/internal/logship"
 	"gowaf/internal/notify"
 	"gowaf/internal/policy"
 	"gowaf/internal/proxy"
@@ -183,6 +184,42 @@ const (
 	KeyUpstreamHealth   = "upstream.health_interval" // 上游健康检查间隔（秒）
 	KeyNodeHeartbeatTTL = "node.heartbeat_ttl"       // 节点心跳超时（秒），超时视为离线
 	KeyNodeAgentToken   = "node.agent_token"         // 节点 Agent 上报令牌
+
+	// JA4 TLS 客户端指纹（Bot/扫描器识别的标配）。
+	KeyJA4Enabled      = "guard.ja4.enabled"       // 是否采集指纹并写入事件库（默认开）
+	KeyJA4Blocklist    = "guard.ja4.blocklist"     // 恶意指纹黑名单（逗号分隔，命中即拦）
+	KeyJA4BlockBuiltin = "guard.ja4.block_builtin" // 内置脚本栈指纹命中是否拦截（默认关：脚本栈亦被正常工具使用）
+
+	// 请求防重放。
+	KeyReplayEnabled = "guard.replay.enabled" // 总开关（默认关：仅保护显式携带 nonce 的接口）
+	KeyReplayWindow  = "guard.replay.window"  // 重放判定窗口（秒）
+	KeyReplayHeader  = "guard.replay.header"  // nonce 请求头名（默认 X-WAF-Nonce）
+
+	// 等候室（并发阈值排队放行）。
+	KeyWaitEnabled  = "waitroom.enabled"    // 总开关（默认关）
+	KeyWaitMax      = "waitroom.max_active" // 同时转发到上游的最大并发数
+	KeyWaitTimeout  = "waitroom.timeout_ms" // 排队等候上限（毫秒）
+	KeyWaitInterval = "waitroom.interval"   // 等候页自动重试间隔（秒）
+
+	// 日志外发（对接 SIEM：Syslog RFC5424 / Kafka）。
+	KeyLogShipEnabled        = "logship.enabled"         // 总开关
+	KeyLogShipMinAction      = "logship.min_action"      // 最低外发动作级别：all/log/block
+	KeyLogShipSyslogEnabled  = "logship.syslog.enabled"  // Syslog 渠道开关
+	KeyLogShipSyslogAddr     = "logship.syslog.addr"     // 目标地址 host:port
+	KeyLogShipSyslogProto    = "logship.syslog.proto"    // udp / tcp / tls
+	KeyLogShipSyslogFacility = "logship.syslog.facility" // facility（0~23）
+	KeyLogShipSyslogHostname = "logship.syslog.hostname" // 帧内 hostname（空=gowaf）
+	KeyLogShipKafkaEnabled   = "logship.kafka.enabled"   // Kafka 渠道开关
+	KeyLogShipKafkaBrokers   = "logship.kafka.brokers"   // broker 列表（逗号分隔）
+	KeyLogShipKafkaTopic     = "logship.kafka.topic"     // 目标 topic
+	KeyLogShipQueueSize      = "logship.queue_size"      // 外发队列容量
+
+	// 人机校验挑战降级链：环境校验失败后的处置序列。
+	// 取值逗号分隔，子集组合自 "pow,captcha,ban"：pow 纯拒绝（原行为），
+	// captcha 降级到图形验证码，ban 答错超阈值封禁。默认 "pow"。
+	KeyChallChain           = "guard.challenge.chain"
+	KeyCaptchaFailThreshold = "guard.captcha.fail_threshold" // 验证码窗口内答错次数阈值（达阈值且含 ban 时封禁）
+	KeyCaptchaFailWindow    = "guard.captcha.fail_window"    // 验证码失败计数窗口（秒）
 )
 
 // Runtime 聚合数据面与控制面共享的全部组件，是整个 WAF 的运行时中枢。
@@ -241,6 +278,15 @@ type Runtime struct {
 	// challLimiter 是人机校验的软阈值计数器：超过它先下发校验，而不是像硬限流那样直接 429。
 	// 独立实例，避免软限流消耗硬限流的令牌（否则「校验通过后继续正常浏览」会被自己的计数卡死）。
 	challLimiter atomic.Pointer[guard.Limiter]
+
+	// WaitRoom 等候室（并发阈值排队）：关闭或未 Reload 时为 nil。
+	WaitRoom atomic.Pointer[guard.WaitRoom]
+	// Shipper 日志外发器（Syslog/Kafka）：关闭时为 nil。Reload 时按配置整体重建。
+	Shipper atomic.Pointer[logship.Shipper]
+	// Replay 防重放守卫（nonce 去重窗口）。
+	Replay *guard.ReplayGuard
+	// captchaFails 验证码答错计数器（窗口内达阈值且降级链含 ban 时封禁）。
+	captchaFails *guard.HitTracker
 
 	router  atomic.Pointer[proxy.Router] // 路由快照：Reload 时整体替换，读路径无锁
 	iplist  guard.Holder                 // IP 名单快照容器（内部 atomic.Pointer，读无锁）
@@ -303,6 +349,10 @@ func New(cfg *config.Config, st *store.Store, certs *proxy.CertManager, version 
 	// 防篡改基线仓库与自定义 CC 计数器。
 	r.Tamper = tamper.New()
 	r.PolicyHits = guard.NewHitTracker()
+	// 防重放守卫（窗口热生效走 Reload；这里先建默认实例防 nil）
+	r.Replay = guard.NewReplayGuard(300)
+	// 验证码答错计数器（降级链 ban 级使用）。
+	r.captchaFails = guard.NewHitTracker()
 
 	// ACME 管理器：状态（账户密钥、订单）落盘 data/acme/，签出的证书写入
 	// tls.cert_dir 后回调 CertManager.Reload 热生效；未启用 TLS 时回调为空操作。
@@ -799,6 +849,33 @@ func (r *Runtime) Reload(ctx context.Context) error {
 	}
 	r.tamper.Store(tp)
 
+	// 等候室：开关与并发阈值热生效（实例重建即清空在途排队，
+	// 持有槽位的旧请求结束时 Release 旧实例，无跨实例影响）。
+	if r.settingFromBool(sm, KeyWaitEnabled, false) {
+		maxActive := r.settingFromInt(sm, KeyWaitMax, 100)
+		if maxActive <= 0 {
+			maxActive = 100
+		}
+		r.WaitRoom.Store(guard.NewWaitRoom(maxActive))
+	} else {
+		r.WaitRoom.Store(nil)
+	}
+
+	// 防重放：窗口变化重建守卫（旧 seen 表随之作废，安全侧选择）。
+	if r.settingFromBool(sm, KeyReplayEnabled, false) {
+		r.Replay = guard.NewReplayGuard(r.settingFromInt(sm, KeyReplayWindow, 300))
+	}
+
+	// 日志外发（Syslog/Kafka）：配置整体重建 Shipper。旧实例交给 Close 耗尽；
+	// Reload 频率有限（设置保存时触发），泄漏面可忽略。
+	if old := r.Shipper.Swap(nil); old != nil {
+		go old.Close()
+	}
+	if cfgShip := r.compileShipConfig(sm); cfgShip.Enabled {
+		queueSize := r.settingFromInt(sm, KeyLogShipQueueSize, 0)
+		r.Shipper.Store(logship.New(cfgShip, queueSize))
+	}
+
 	// 站点多上游（双链路）：按站点分组，BuildRouter 把主上游与额外目标合并。
 	var upRows []model.SiteUpstream
 	if err := r.Store.Gorm().WithContext(ctx).Where("enabled = 1").
@@ -886,6 +963,64 @@ func (r *Runtime) Reload(ctx context.Context) error {
 
 // PolicySet 返回当前精准访问控制快照（原子读取）。
 func (r *Runtime) PolicySet() *policy.Set { return r.Policy.Load() }
+
+// compileShipConfig 从待生效设置表编译日志外发配置。
+// 参数 sm：待生效的设置键值表。
+// 返回 logship.Config：总开关关闭时各渠道字段无效。
+func (r *Runtime) compileShipConfig(sm map[string]string) logship.Config {
+	cfg := logship.Config{
+		Enabled:   r.settingFromBool(sm, KeyLogShipEnabled, false),
+		MinAction: r.settingFrom(sm, KeyLogShipMinAction, "block"),
+	}
+	cfg.Syslog = logship.SyslogConfig{
+		Enabled:  cfg.Enabled && r.settingFromBool(sm, KeyLogShipSyslogEnabled, false),
+		Addr:     strings.TrimSpace(r.settingFrom(sm, KeyLogShipSyslogAddr, "")),
+		Proto:    strings.ToLower(r.settingFrom(sm, KeyLogShipSyslogProto, "udp")),
+		Facility: r.settingFromInt(sm, KeyLogShipSyslogFacility, 4),
+		Hostname: strings.TrimSpace(r.settingFrom(sm, KeyLogShipSyslogHostname, "")),
+	}
+	if cfg.Syslog.Proto != "udp" && cfg.Syslog.Proto != "tcp" && cfg.Syslog.Proto != "tls" {
+		cfg.Syslog.Proto = "udp"
+	}
+	if cfg.Syslog.Facility < 0 || cfg.Syslog.Facility > 23 {
+		cfg.Syslog.Facility = 4
+	}
+	cfg.Kafka = logship.KafkaConfig{
+		Enabled: cfg.Enabled && r.settingFromBool(sm, KeyLogShipKafkaEnabled, false),
+		Topic:   strings.TrimSpace(r.settingFrom(sm, KeyLogShipKafkaTopic, "")),
+		Brokers: splitList(r.settingFrom(sm, KeyLogShipKafkaBrokers, "")),
+	}
+	// 至少一个渠道就绪才启用（配置不完整时静默不外发，避免每次 Reload 报错刷屏）
+	if cfg.Syslog.Enabled && cfg.Syslog.Addr == "" {
+		cfg.Syslog.Enabled = false
+	}
+	if cfg.Kafka.Enabled && (cfg.Kafka.Topic == "" || len(cfg.Kafka.Brokers) == 0) {
+		cfg.Kafka.Enabled = false
+	}
+	return cfg
+}
+
+// Ship 事件外发入口：未启用时为空操作，热路径只做一次非阻塞入队。
+// 参数 e：待外发事件。
+func (r *Runtime) Ship(e model.Event) {
+	if s := r.Shipper.Load(); s != nil {
+		s.Send(e)
+	}
+}
+
+// CaptchaFail 统计一次验证码答错，返回窗口内次数与是否达到封禁阈值。
+// 参数 ip：客户端 IP。返回 (int, bool)：窗口累计次数与是否达阈值。
+func (r *Runtime) CaptchaFail(ip string) (int, bool) {
+	window := int64(r.SettingInt(KeyCaptchaFailWindow, 600)) * 1000
+	threshold := r.SettingInt(KeyCaptchaFailThreshold, 5)
+	return r.captchaFails.Add(ip, store.NowMS(), window, threshold)
+}
+
+// CaptchaCleanup 清理验证码答错计数（后台维护循环调用）。
+// 参数 now：当前毫秒时间戳。返回 int：清理条数。
+func (r *Runtime) CaptchaCleanup(now int64) int {
+	return r.captchaFails.Cleanup(now, 3600*1000)
+}
 
 // UpstreamHealthInterval 返回上游健康检查间隔。
 func (r *Runtime) UpstreamHealthInterval() time.Duration {
@@ -1233,5 +1368,37 @@ func DefaultSettings(cfg *config.Config) map[string]string {
 
 		// ACME 默认 Let's Encrypt 生产环境目录；测试签发请临时指向 staging 地址。
 		KeyACMEDirectory: acme.LetsEncryptDirectory,
+
+		// JA4 指纹：采集默认开（事件库记录，成本低价值高）；
+		// 内置脚本栈指纹默认只记录不拦截（脚本栈亦被正常工具使用，避免误伤）。
+		KeyJA4Enabled:      "true",
+		KeyJA4Blocklist:    "",
+		KeyJA4BlockBuiltin: "false",
+
+		// 请求防重放：默认关。只对显式携带 nonce 头的请求生效，
+		// 由客户端（如 API 网关）决定哪些接口参与防重放。
+		KeyReplayEnabled: "false",
+		KeyReplayWindow:  "300",
+		KeyReplayHeader:  "X-WAF-Nonce",
+
+		// 等候室：默认关。大促/放票类站点按需开启。
+		KeyWaitEnabled:  "false",
+		KeyWaitMax:      "100",
+		KeyWaitTimeout:  "5000",
+		KeyWaitInterval: "3",
+
+		// 日志外发：默认关，渠道地址就绪后由管理员开启。
+		KeyLogShipEnabled:        "false",
+		KeyLogShipMinAction:      "block",
+		KeyLogShipSyslogEnabled:  "false",
+		KeyLogShipSyslogProto:    "udp",
+		KeyLogShipSyslogFacility: "4",
+		KeyLogShipKafkaEnabled:   "false",
+		KeyLogShipQueueSize:      "4096",
+
+		// 挑战降级链：默认 pow（环境校验失败即拒绝，与 v1.6.0 行为一致）。
+		KeyChallChain:           "pow",
+		KeyCaptchaFailThreshold: "5",
+		KeyCaptchaFailWindow:    "600",
 	}
 }

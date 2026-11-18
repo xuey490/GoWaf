@@ -1,0 +1,12 @@
+[
+  {
+    "fingerprint": "t13d1312h2_f57a46bbacb6_f50d94e863eb",
+    "label": "Go 标准库 crypto/tls 默认客户端（Go 1.27，SNI=example.com，ALPN=h2）",
+    "source": "本仓库 internal/ja4 真实握手采集（2026-11-18，go1.27.3 windows/amd64）；Go 栈是大量采集脚本与自动化工具的默认实现"
+  },
+  {
+    "fingerprint": "t13i2011h1_2b729b4bf6f3_36bf25f296df",
+    "label": "curl 8.22 / Windows Schannel 默认客户端（IP 直连无 SNI，ALPN=http/1.1）",
+    "source": "本仓库 internal/ja4 真实握手采集（2026-11-18，curl 8.22.0 Schannel）；无 SNI 的 i 形态常出现在直连 IP 的脚本扫描中"
+  }
+]

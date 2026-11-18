@@ -12,6 +12,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"html"
 	"io"
 	"log"
 	"math/rand"
@@ -19,6 +20,7 @@ import (
 	"net/http"
 	"net/netip"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -27,6 +29,7 @@ import (
 	"gowaf/internal/detect"
 	"gowaf/internal/dprotect"
 	"gowaf/internal/guard"
+	"gowaf/internal/ja4"
 	"gowaf/internal/metrics"
 	"gowaf/internal/notify"
 	"gowaf/internal/policy"
@@ -100,6 +103,12 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	// 0.6) 验证码挑战端点（/.waf-captcha/）：挑战降级链的换证通道，
+	//      与策略认证同级——被门禁挡住的访客靠它换取通行证，必须先于全部闸门。
+	if strings.HasPrefix(r.URL.Path, captchaPathPrefix) {
+		h.handleCaptcha(w, r, clientIP)
+		return
+	}
 	// 按请求头 Host 匹配站点路由；未配置的域名不属于任何站点，直接 404
 	route := h.rt.Router().Match(r.Host)
 	if route == nil {
@@ -156,6 +165,18 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			})
 		}
 		return
+	}
+
+	// 4.4) JA4 指纹拦截：TLS ClientHello 指纹命中黑名单直接拒绝。
+	//      黑名单两层：管理员配置的恶意指纹（guard.ja4.blocklist，命中即拦）；
+	//      内置脚本栈指纹（guard.ja4.block_builtin，默认只记录不拦——脚本栈
+	//      同时被大量正常工具使用）。非 TLS 连接无指纹，直接跳过。
+	if !observe && h.rt.SettingBool(runtime.KeyJA4Enabled, true) {
+		if fp := ja4.Lookup(r.RemoteAddr); fp != "" && h.ja4Blocked(fp) {
+			metrics.JA4Blocked.Inc()
+			h.reject(w, r, route, clientIP, reqID, start, "block", "ja4", http.StatusForbidden, nil)
+			return
+		}
 	}
 
 	// 4.5) Bot 管理：蜜罐/策略/rDNS 验证/行为评分。
@@ -229,6 +250,20 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.serveChallenge(w, r, clientIP)
 		h.recordEvent(route, clientIP, reqID, start, r, http.StatusForbidden, "challenge", nil, 0, "", true)
 		return
+	}
+
+	// 5.8) 请求防重放：客户端携带 nonce 头（默认 X-WAF-Nonce）的请求，
+	//      窗口内同 nonce 第二次出现判定为重放，直接 403。不带头不校验——
+	//      防重放由调用方显式参与（API 网关对写接口注入 nonce）。
+	if !observe && h.rt.SettingBool(runtime.KeyReplayEnabled, false) {
+		if nonce := r.Header.Get(h.rt.Setting(runtime.KeyReplayHeader, "X-WAF-Nonce")); nonce != "" {
+			if !h.rt.Replay.Check(nonce, store.NowMS()) {
+				metrics.ReplayBlocked.Inc()
+				h.rejectWithBody(w, r, route, clientIP, reqID, start,
+					"block", "replay", http.StatusForbidden, "检测到重放请求（nonce 已使用）")
+				return
+			}
+		}
 	}
 
 	// 6) 限流：启用站点自定义防护的站点用独立计数（不占全局指标），其余走全局
@@ -497,8 +532,44 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// 9.5) 等候室：并发阈值外排队等候（大促场景平滑放行）。
+	//      阈值内立即放行；排队超时返回 429 等候页（Retry-After + 自动刷新，
+	//      浏览器按间隔重试，等效继续排队）。白名单/缓存命中/Bot 放行路径
+	//      不经过这里——等候室只约束真正打到上游的并发。
+	if wr := h.rt.WaitRoom.Load(); wr != nil {
+		timeout := time.Duration(h.rt.SettingInt(runtime.KeyWaitTimeout, 5000)) * time.Millisecond
+		if !wr.Acquire(timeout) {
+			metrics.WaitRoomRejected.Inc()
+			h.serveWaitPage(w, r, route)
+			return
+		}
+		defer func() {
+			wr.Release()
+			a, _ := wr.Stats()
+			metrics.WaitRoomActive.Set(float64(a))
+		}()
+	}
+
 	// 10) 转发
 	h.forward(w, r, route, clientIP, reqID, start, &result, cacheRule, cacheKey)
+}
+
+// ja4Blocked 判断 JA4 指纹是否应被拦截：先查管理员黑名单（精确匹配），
+// 再查内置脚本栈清单（受 block_builtin 开关控制）。
+// 参数 fp：JA4 指纹（非空）。
+// 返回 bool：应拦截返回 true。
+func (h *Handler) ja4Blocked(fp string) bool {
+	for _, item := range strings.Split(h.rt.Setting(runtime.KeyJA4Blocklist, ""), ",") {
+		if strings.TrimSpace(item) == fp {
+			return true
+		}
+	}
+	if h.rt.SettingBool(runtime.KeyJA4BlockBuiltin, false) {
+		if _, ok := ja4.MatchBuiltin(fp); ok {
+			return true
+		}
+	}
+	return false
 }
 
 // earlyPolicyVerdict 在页面缓存查找之前给出「可提前执行」的策略结论。
@@ -884,7 +955,7 @@ func (h *Handler) rejectWithBody(w http.ResponseWriter, r *http.Request, route *
 	w.Header().Set("X-WAF-Action", action)
 	w.Header().Set("X-WAF-Reason", reason)
 	w.WriteHeader(status)
-	_, _ = io.WriteString(w, blockPage(status, text, reqID))
+	_, _ = io.WriteString(w, h.blockPageFor(route, status, text, reqID))
 
 	var rs *detect.Result
 	if len(result) > 0 {
@@ -1087,6 +1158,30 @@ func (h *Handler) autoBanStrikes(ip string, resetMS int64) int {
 	return int(n)
 }
 
+// blockPageFor 生成拦截页：站点启用自定义模板时渲染模板（占位值一律 HTML
+// 转义，模板本身是管理员受控内容），否则使用内置默认模板。
+// 参数 route：站点路由（可为 nil，如校验端点场景）；参数 status：HTTP 状态码；
+// 参数 text：提示文案；参数 reqID：请求 ID。
+// 返回 string：完整 HTML 页面文本。
+func (h *Handler) blockPageFor(route *proxy.Route, status int, text, reqID string) string {
+	if route != nil && route.BlockPage != nil && route.BlockPage.Enabled == 1 {
+		return renderBlockPage(route.BlockPage.HTML, status, text, reqID, route.SiteName)
+	}
+	return blockPage(status, text, reqID)
+}
+
+// renderBlockPage 渲染自定义拦截页模板。
+// 支持占位符：{{status}} / {{reason}} / {{reqid}} / {{site}}，
+// 除 status 外全部 HTML 转义，防止事件数据二次注入。
+func renderBlockPage(tmpl string, status int, text, reqID, site string) string {
+	return strings.NewReplacer(
+		"{{status}}", strconv.Itoa(status),
+		"{{reason}}", html.EscapeString(text),
+		"{{reqid}}", html.EscapeString(reqID),
+		"{{site}}", html.EscapeString(site),
+	).Replace(tmpl)
+}
+
 // recordEvent 累加请求指标，并把事件异步入队落库。
 // 参数 route：站点路由；参数 ip：客户端 IP；参数 reqID：请求 ID；参数 start：请求进入时间；
 // 参数 r：客户端请求；参数 status：响应状态码；参数 action：处置动作；
@@ -1127,7 +1222,13 @@ func (h *Handler) recordEvent(route *proxy.Route, ip netip.Addr, reqID string, s
 		score = result.Score
 	}
 
-	h.rt.Events.Enqueue(model.Event{
+	// JA4 指纹：仅 TLS 连接有值，采集开关关闭时不查询（省一次查表）
+	ja4FP := ""
+	if r.TLS != nil && h.rt.SettingBool(runtime.KeyJA4Enabled, true) {
+		ja4FP = ja4.Lookup(r.RemoteAddr)
+	}
+
+	ev := model.Event{
 		TS:         start.UnixMilli(),
 		Site:       route.SiteName,
 		ClientIP:   ip.String(),
@@ -1146,7 +1247,12 @@ func (h *Handler) recordEvent(route *proxy.Route, ip netip.Addr, reqID string, s
 		ReqID:      reqID,
 		LatencyUS:  latencyUS,
 		Upstream:   upstream,
-	})
+		JA4:        truncate(ja4FP, 64),
+	}
+	h.rt.Events.Enqueue(ev)
+
+	// 事件外发（Syslog/Kafka）：未启用时为空操作
+	h.rt.Ship(ev)
 
 	// 拦截/挑战实时推给控制台（正常流量不推，避免刷屏）
 	if h.rt.OnEvent != nil && action != "pass" {

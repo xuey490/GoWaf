@@ -44,6 +44,8 @@ type Route struct {
 	// Guard 站点启用自定义防护时为非 nil，阈值/模式已解析为生效值；
 	// nil 表示跟随全局。同时它也是"限流计数独立"的标记。
 	Guard *SiteGuard
+	// BlockPage 站点级自定义拦截页（nil 表示使用内置模板）。Reload 时编译。
+	BlockPage *model.BlockPage
 }
 
 // SiteGuard 站点级防护生效值（已与全局合并，数据面直接用，不再查设置）。
@@ -164,6 +166,14 @@ func BuildRouterWithUpstreams(sites []model.Site, guards map[uint]*SiteGuard, ex
 			RateLimitBurst: rl.Burst,
 			BehindCDN:      strings.ToLower(strings.TrimSpace(s.BehindCDN)),
 			Guard:          guards[s.ID],
+		}
+		// 自定义拦截页：配置非法只记日志跳过（fail-open，退回内置模板），
+		// 不能因为一段坏模板让整个站点加载失败
+		if bp, err := model.ParseBlockPage(s.BlockPage); err != nil {
+			// router.go 无 logger 依赖，用 println 兜底；Reload 日志可见性由 runtime 层保证
+			println("[router] 站点", s.Name, "拦截页配置非法，退回内置模板:", err.Error())
+		} else if bp != nil && bp.Enabled == 1 {
+			route.BlockPage = bp
 		}
 		if route.MaxBodyBytes <= 0 {
 			route.MaxBodyBytes = 262144 // 未配置时默认 256 KiB

@@ -111,8 +111,8 @@ func (w *EventWriter) loop(batchSize int, flush time.Duration) {
 // eventInsertSQL 事件批量插入的预编译 SQL，占位符顺序与 events 表列一一对应。
 const eventInsertSQL = `INSERT INTO events
 (ts, site, client_ip, method, host, path, query, status, action, score,
- categories, rule_ids, ua, referer, req_id, latency_us, upstream, country, bytes)
-VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+ categories, rule_ids, ua, referer, req_id, latency_us, upstream, country, bytes, ja4)
+VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
 
 // insertEvents 在单个事务中批量写入一批事件。
 // 参数 batch：待写入的事件，逐行绑定到预编译语句执行。
@@ -133,7 +133,8 @@ func (s *Store) insertEvents(batch []model.Event) error {
 		if _, err := stmt.Exec(e.TS, e.Site, e.ClientIP, e.Method, e.Host, truncate(e.Path, 1024),
 			truncate(e.Query, 2048), e.Status, e.Action, e.Score,
 			defaultJSON(e.Categories), defaultJSON(e.RuleIDs), truncate(e.UA, 512),
-			truncate(e.Referer, 512), e.ReqID, e.LatencyUS, e.Upstream, e.Country, e.Bytes); err != nil {
+			truncate(e.Referer, 512), e.ReqID, e.LatencyUS, e.Upstream, e.Country, e.Bytes,
+			truncate(e.JA4, 64)); err != nil {
 			_ = stmt.Close()
 			_ = tx.Rollback()
 			return err
@@ -204,8 +205,9 @@ func (s *Store) QueryEvents(q EventQuery) ([]model.Event, int64, error) {
 	}
 	offset := (q.Current - 1) * q.Size
 
-	sqlStr := `SELECT id, ts, site, client_ip, method, host, path, query, status, action, score,
- categories, rule_ids, ua, referer, req_id, latency_us, upstream, country, bytes
+	eventCols := `id, ts, site, client_ip, method, host, path, query, status, action, score,
+ categories, rule_ids, ua, referer, req_id, latency_us, upstream, country, bytes, ja4`
+	sqlStr := `SELECT ` + eventCols + `
  FROM events` + where + ` ORDER BY ts DESC LIMIT ? OFFSET ?`
 	rows, err := s.read.Query(sqlStr, append(args, q.Size, offset)...)
 	if err != nil {
@@ -218,7 +220,7 @@ func (s *Store) QueryEvents(q EventQuery) ([]model.Event, int64, error) {
 		var e model.Event
 		if err := rows.Scan(&e.ID, &e.TS, &e.Site, &e.ClientIP, &e.Method, &e.Host, &e.Path, &e.Query,
 			&e.Status, &e.Action, &e.Score, &e.Categories, &e.RuleIDs, &e.UA, &e.Referer,
-			&e.ReqID, &e.LatencyUS, &e.Upstream, &e.Country, &e.Bytes); err != nil {
+			&e.ReqID, &e.LatencyUS, &e.Upstream, &e.Country, &e.Bytes, &e.JA4); err != nil {
 			return nil, 0, err
 		}
 		out = append(out, e)
@@ -279,11 +281,11 @@ func buildEventWhere(q EventQuery) (string, []any) {
 // 返回 (*model.Event, error)：事件；不存在时返回 (nil, nil)；查询失败时返回错误。
 func (s *Store) EventByID(id uint) (*model.Event, error) {
 	row := s.read.QueryRow(`SELECT id, ts, site, client_ip, method, host, path, query, status, action, score,
- categories, rule_ids, ua, referer, req_id, latency_us, upstream, country, bytes FROM events WHERE id = ?`, id)
+ categories, rule_ids, ua, referer, req_id, latency_us, upstream, country, bytes, ja4 FROM events WHERE id = ?`, id)
 	var e model.Event
 	if err := row.Scan(&e.ID, &e.TS, &e.Site, &e.ClientIP, &e.Method, &e.Host, &e.Path, &e.Query,
 		&e.Status, &e.Action, &e.Score, &e.Categories, &e.RuleIDs, &e.UA, &e.Referer,
-		&e.ReqID, &e.LatencyUS, &e.Upstream, &e.Country, &e.Bytes); err != nil {
+		&e.ReqID, &e.LatencyUS, &e.Upstream, &e.Country, &e.Bytes, &e.JA4); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
@@ -512,7 +514,7 @@ func (s *Store) ArchiveEvents(ctx context.Context, ts int64, limit int) ([]model
 		limit = 5000
 	}
 	rows, err := s.read.QueryContext(ctx, `SELECT id, ts, site, client_ip, method, host, path, query, status,
- action, score, categories, rule_ids, ua, referer, req_id, latency_us, upstream, country, bytes
+ action, score, categories, rule_ids, ua, referer, req_id, latency_us, upstream, country, bytes, ja4
  FROM events WHERE ts < ? ORDER BY ts ASC LIMIT ?`, ts, limit)
 	if err != nil {
 		return nil, err
@@ -523,7 +525,7 @@ func (s *Store) ArchiveEvents(ctx context.Context, ts int64, limit int) ([]model
 		var e model.Event
 		if err := rows.Scan(&e.ID, &e.TS, &e.Site, &e.ClientIP, &e.Method, &e.Host, &e.Path, &e.Query,
 			&e.Status, &e.Action, &e.Score, &e.Categories, &e.RuleIDs, &e.UA, &e.Referer,
-			&e.ReqID, &e.LatencyUS, &e.Upstream, &e.Country, &e.Bytes); err != nil {
+			&e.ReqID, &e.LatencyUS, &e.Upstream, &e.Country, &e.Bytes, &e.JA4); err != nil {
 			return nil, err
 		}
 		out = append(out, e)

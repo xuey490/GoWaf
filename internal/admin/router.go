@@ -74,6 +74,8 @@ func NewRouter(o Options) *gin.Engine {
 			authed.GET("/auth/csrf", h.CSRFToken)
 			authed.GET("/user/info", h.Info)
 			authed.PUT("/user/password", h.UpdatePassword)
+			// 控制台 TOTP 两步验证（绑定状态查询走 GET，绑定/开关走写操作组）
+			authed.GET("/user/totp", h.TotpStatus)
 			authed.GET("/user/list", h.UserList)
 			authed.GET("/system/info", h.SystemInfo)
 			authed.GET("/system/debug", h.MetricsDebug)
@@ -155,6 +157,11 @@ func NewRouter(o Options) *gin.Engine {
 
 				// 防篡改基线
 				w.POST("/tamper/refresh", middleware.RequirePerm(o.Store, "settings:write"), h.TamperRefresh)
+
+				// 控制台 TOTP 两步验证：本人操作，登录态即可
+				w.POST("/user/totp/setup", h.TotpSetup)
+				w.POST("/user/totp/enable", h.TotpEnable)
+				w.POST("/user/totp/disable", h.TotpDisable)
 
 				w.POST("/ips", middleware.RequirePerm(o.Store, "ip:ban"), h.IPCreate)
 				w.PUT("/ips/:id", middleware.RequirePerm(o.Store, "ip:ban"), h.IPUpdate)
