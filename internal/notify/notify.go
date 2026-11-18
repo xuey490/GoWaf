@@ -36,7 +36,7 @@ type Event struct {
 
 // Config 通知配置，每次发送前从设置表现读，改配置立即生效。
 type Config struct {
-	Enabled  bool          // 通知总开关
+	Enabled  bool          // 通知总开关（邮件渠道）
 	Host     string        // SMTP 服务器地址
 	Port     int           // SMTP 端口，<=0 时发送侧按 465 处理
 	User     string        // SMTP 登录用户名（通常即发件邮箱）
@@ -48,6 +48,10 @@ type Config struct {
 	MinScore int           // 最低评分阈值，低于该值的事件不通知
 	Window   time.Duration // 聚合窗口：首批事件入队后等满该时长才合并发送
 	Cooldown time.Duration // 同一 IP 的冷却期，期内重复事件不再通知
+
+	// Webhook 渠道：与邮件共用总开关以外的过滤逻辑（MinScore/Window/Cooldown），
+	// 有独立的 notify.webhook.enabled 开关。
+	Webhook WebhookConfig
 }
 
 // Notifier 聚合 + 异步发送。Send 只把事件放进缓冲队列，后台协程按聚合窗口
@@ -190,9 +194,10 @@ func (n *Notifier) pruneLocked(now time.Time, cooldown time.Duration) {
 	}
 }
 
-// deliver 把一批事件合成摘要邮件并发送，无论成败都落一条 notify_logs 记录。
+// deliver 把一批事件合成摘要发送到全部已配置渠道（邮件 + webhook），
+// 无论成败都落 notify_logs 记录。
 // 参数 cfg：通知配置；参数 evs：本窗口聚合出的事件列表（空列表直接返回）。
-// 无返回值；发信失败只记日志、状态记为 fail，不向调用方报错。
+// 无返回值；发送失败只记日志、状态记为 fail，不向调用方报错。
 func (n *Notifier) deliver(cfg Config, evs []Event) {
 	if len(evs) == 0 {
 		return
@@ -222,6 +227,9 @@ func (n *Notifier) deliver(cfg Config, evs []Event) {
 	if n.save != nil {
 		n.save(lg)
 	}
+
+	// webhook 渠道：独立开关，逐目标发送并逐条落记录。
+	n.deliverWebhooks(cfg, evs)
 }
 
 // SendTest 用给定配置发一封测试邮件，供控制台「测试发送」按钮使用。

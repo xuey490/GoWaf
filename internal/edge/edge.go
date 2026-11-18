@@ -25,6 +25,7 @@ import (
 	"gowaf/internal/bot"
 	"gowaf/internal/cache"
 	"gowaf/internal/detect"
+	"gowaf/internal/dprotect"
 	"gowaf/internal/guard"
 	"gowaf/internal/metrics"
 	"gowaf/internal/notify"
@@ -80,6 +81,12 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		reqID = newRequestID()
 	}
 	w.Header().Set("X-Request-ID", reqID)
+
+	// 0) ACME HTTP-01 挑战：证书验证请求可能出现在任何 Host 上（包括尚未配置
+	//    站点的新域名），必须先于站点路由处理；只在 80 端口明文流量上应答。
+	if r.TLS == nil && h.rt.ACME != nil && h.rt.ACME.ServeChallenge(w, r) {
+		return
+	}
 
 	clientIP := h.clientIP(r)
 	// 按请求头 Host 匹配站点路由；未配置的域名不属于任何站点，直接 404
@@ -204,6 +211,15 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// 5.7) 动态防护门禁：开启 Challenge 的站点，未通过 PoW 的访客先完成校验
+	//      再拿正文。与既有挑战链路共用通行证（30 分钟有效，绑定 IP），
+	//      「动态加密 + 人机校验」双层叠加，不跑 JS 的客户端连密文都拿不到。
+	if h.dprotectChallengeGate(route, r, clientIP) {
+		h.serveChallenge(w, r, clientIP)
+		h.recordEvent(route, clientIP, reqID, start, r, http.StatusForbidden, "challenge", nil, 0, "", true)
+		return
+	}
+
 	// 6) 限流：启用站点自定义防护的站点用独立计数（不占全局指标），其余走全局
 	if !skipDetect {
 		if ok, reason := h.rt.LimiterFor(route.SiteID).Allow(clientIP.String(), store.NowMS()); !ok {
@@ -248,10 +264,12 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// 6.5) 页面缓存：命中直接返回，未命中记住规则，回源后由加速 writer 写入缓存。
 	// 只处理匿名 GET/HEAD（带 Range 的断点续传不缓存），登录用户与写请求不参与。
+	// 动态防护适用的请求整段跳过缓存：每个请求的加密密钥都是一次性的，
+	// 缓存一份密文页会让后面所有访客解密失败，宁可不缓存。
 	var cacheRule *cache.Rule
 	cacheKey := ""
 	if h.rt.Cache.Enabled() && (r.Method == http.MethodGet || r.Method == http.MethodHead) &&
-		r.Header.Get("Range") == "" {
+		r.Header.Get("Range") == "" && !dprotect.Applies(h.rt.DProtect(), r.Method, r.URL.Path) {
 		guest := r.Header.Get("Cookie") == "" && r.Header.Get("Authorization") == ""
 		if rule, ok := h.rt.Cache.Match(route.SiteName, r.URL.Path, guest); ok {
 			cr := rule
@@ -323,24 +341,47 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// 9) 规则检测
+	// 9) 规则检测。三个引擎（自研规则 / CRS / libinjection）共用超时熔断与
+	//    panic 隔离（见 hardening.go）：单引擎超时或异常退出都不拖垮主链路，
+	//    按 engine.fail_mode 决定放行（默认）或拦截。
 	var result detect.Result
+	engineDegraded := false
 	if !skipDetect && !skipBody && route.DetectBody {
 		in := buildInput(r, body)
 		in.Site = route.SiteName
-		result = h.rt.Engine.Inspect(&in)
+		// 加固参数每次现读：控制台改完设置立即生效，无需重启。
+		budget := engineBudget(h.rt.SettingInt(runtime.KeyEngineTimeoutMS, 2000))
+		failMode := h.rt.Setting(runtime.KeyEngineFailMode, "open")
+
+		var degraded bool
+		result, degraded = inspectGuarded("rules", budget, func() detect.Result { return h.rt.Engine.Inspect(&in) })
+		engineDegraded = engineDegraded || degraded
 
 		// CRS 第二引擎：覆盖通用攻击特征。两个引擎分数相加后再判动作，
 		// 这样「自研规则 30 分 + CRS 一条 error 45 分」也能累计到拦截阈值。
 		if crs := h.rt.CRS(); crs != nil && result.Action != "ban" {
-			cres := crs.Inspect(&in)
+			cres, d := inspectGuarded("crs", budget, func() detect.Result { return crs.Inspect(&in) })
+			engineDegraded = engineDegraded || d
 			// 例外对第二引擎同样生效，否则「标记误报」之后照样被拦。
 			h.rt.Engine.FilterByException(&cres, route.SiteName, in.Path, in.Params)
 			mergeResult(&result, &cres)
 		}
 
+		// libinjection 第三引擎：语义级 SQLi/XSS 判定，对变形 payload 的泛化能力
+		// 优于正则，是「不依赖规则库也能识别攻击」的最小可行近似。
+		// 分数并入统一评分体系，误报治理走同一套例外规则（engine.libi.* 设置）。
+		if li := h.rt.Libi(); li.Enabled() && result.Action != "ban" {
+			lres, d := inspectGuarded("libi", budget, func() detect.Result { return li.Inspect(&in) })
+			engineDegraded = engineDegraded || d
+			h.rt.Engine.FilterByException(&lres, route.SiteName, in.Path, in.Params)
+			mergeResult(&result, &lres)
+		}
+
 		// 上传文件与反序列化载荷：解析 multipart/二进制协议标记，补规则正则的盲区。
-		payload := detect.InspectPayload(r.Header.Get("Content-Type"), body)
+		payload, d := inspectGuarded("payload", budget, func() detect.Result {
+			return detect.InspectPayload(r.Header.Get("Content-Type"), body)
+		})
+		engineDegraded = engineDegraded || d
 		mergeResult(&result, &payload)
 
 		// Bot / 策略的 log 结果并入最终事件，保留命中信息。
@@ -348,6 +389,10 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		mergeResult(&result, &policyLog)
 
 		h.applyGuardAction(&result, route)
+		// 引擎降级处理必须在动作重判之后：降级结果的分数是 0，先判会被覆盖成 pass。
+		if engineDegraded {
+			handleEngineFailure(&result, failMode, h.rt.Engine.Mode() == "observe")
+		}
 		metrics.DetectDuration.Observe(float64(result.ElapsedUS) / 1e6)
 		for _, hit := range result.Hits {
 			metrics.RuleHits.WithLabelValues(hit.RuleID, hit.Category).Inc()
@@ -662,6 +707,7 @@ func (h *Handler) forward(w http.ResponseWriter, r *http.Request, route *proxy.R
 	cacheRule *cache.Rule, cacheKey string) {
 
 	rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
+	var evResult *detect.Result // 响应改写层产生的归因结果（敏感信息命中等）
 	if route.Upstream != nil {
 		// 传给上游的协议与真实 IP。X-Real-IP 是 proxy 层还原 XFF 的依据，
 		// 解析失败时不能写成 "invalid IP"，否则上游日志会出现垃圾值。
@@ -671,21 +717,46 @@ func (h *Handler) forward(w http.ResponseWriter, r *http.Request, route *proxy.R
 		r.Header.Set("X-Forwarded-Proto", scheme(r))
 		// 加速 writer：缓存未命中时负责写入，同时按客户端能力压缩/转 WebP。
 		aw := newAccelWriter(rec, r, h.rt.Cache, h.rt.Cache.Settings(), cacheRule, cacheKey)
-		h.rt.Upstreams.Get(route).ServeHTTP(aw, r)
+		// 响应改写层（敏感信息过滤 / 动态防护）：有阶段适用时插在加速 writer
+		// 之前——变换必须发生在重新压缩之前。同时强制上游回明文（identity），
+		// 否则拿到的是压缩字节，扫描与 DOM 加密都无从下手；客户端侧的压缩
+		// 由 accelWriter 在 Close 时按其 Accept-Encoding 现算，不受影响。
+		stages := h.activeStages(route, r)
+		if len(stages) > 0 {
+			r.Header.Set("Accept-Encoding", "identity")
+			tw := newTransformWriter(aw, stages)
+			h.rt.Upstreams.Get(route).ServeHTTP(tw, r)
+			tw.Close()
+			if len(tw.results) > 0 {
+				merged := detect.Result{Hits: []detect.Hit{}, Categories: []string{}, RuleIDs: []string{}}
+				if result != nil {
+					merged = *result
+				}
+				for _, tr := range tw.results {
+					mergeResult(&merged, &tr)
+				}
+				evResult = &merged
+			}
+		} else {
+			h.rt.Upstreams.Get(route).ServeHTTP(aw, r)
+		}
 		aw.Close()
 	} else {
 		http.Error(rec, "站点未配置上游", http.StatusBadGateway)
 	}
+	if evResult == nil {
+		evResult = result
+	}
 
 	latency := time.Since(start)
 	action := "pass"
-	if result != nil && result.Action == "log" {
+	if evResult != nil && evResult.Action == "log" {
 		action = "log"
 	}
 	if rec.status >= 500 {
 		metrics.UpstreamErrors.WithLabelValues(route.SiteName).Inc()
 	}
-	h.recordEvent(route, ip, reqID, start, r, rec.status, action, result, latency.Microseconds(), route.UpstreamRaw, shouldSample(h.sampleRate, action, h.rand))
+	h.recordEvent(route, ip, reqID, start, r, rec.status, action, evResult, latency.Microseconds(), route.UpstreamRaw, shouldSample(h.sampleRate, action, h.rand))
 }
 
 // reject 返回默认文案的拒绝响应并记录事件。

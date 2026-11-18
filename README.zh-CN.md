@@ -150,7 +150,11 @@ Windows 服务模式用 `gowaf svc install|start|stop|uninstall` 实现（单二
 |---|---|
 | **反向代理** | Host 透传、多站点按域名/SNI 分流、WebSocket 原生升级、流式响应（FlushInterval）、内部反代站点透明兼容 |
 | **TLS 终止** | 443 在 WAF 终止，SNI 多证书 + 通配符匹配，自动读取面板证书目录，`default_cert` 智能兜底；`--http-only` 可只接管 80 |
-| **规则检测（双引擎）** | ① 181 条自研 YAML 规则：SQLi / XSS / 路径穿越 / RCE / 扫描器 / 敏感文件 / 文件上传 / 协议异常，AC 预筛 + RE2 精匹配，评分制，高危规则可设 `ban`（命中即封）；② 内嵌 OWASP CRS v4（Coraza v3），只加载请求阶段规则，偏执等级 1–4，两个引擎分数相加后统一判定 |
+| **证书管理与 ACME** | 控制台「证书管理」页：证书列表（到期 <30 天标红）、上传 / 删除 / 手动重载；Let's Encrypt（或任意 ACME v2）自动签发——HTTP-01 由 80 端口自动应答（边缘在站点路由前拦截），DNS-01（泛域名必选）返回 TXT 记录由管理员添加后验证；签发后写入 `tls.cert_dir` 并立即热加载，ACME 账户密钥持久化 `data/acme/`，支持 staging 测试环境 |
+| **规则检测（三引擎）** | ① 181 条自研 YAML 规则：SQLi / XSS / 路径穿越 / RCE / 扫描器 / 敏感文件 / 文件上传 / 协议异常，AC 预筛 + RE2 精匹配，评分制，高危规则可设 `ban`（命中即封）；② 内嵌 OWASP CRS v4（Coraza v3），只加载请求阶段规则，偏执等级 1–4；③ **libinjection 语义通道**：词法/指纹级 SQLi/XSS 判定（规则 ID `libi-*`），对变形 payload 的泛化优于正则——三引擎分数相加后统一判定，误报治理走同一套例外规则 |
+| **引擎加固** | 三引擎与载荷解析统一套**超时熔断 + panic 隔离**：单引擎超过 `engine.timeout_ms`（默认 2s）熔断、异常 recover，进程不倒；失效按 `engine.fail_mode` 处理——`open`（默认）放行并记录（事件可搜 `engine-degraded` 归因），`closed` 拦截；观察模式下 closed 也不真拦。新增指标 `waf_detect_errors_total` |
+| **响应敏感信息过滤** | 响应链路扫描手机号 / 身份证 / 银联卡 / 云密钥（AWS、OpenAI、GitHub、阿里云、Google、PEM 私钥块）/ JWT：`observe` 只记录、`mask` 就地打码后下发；只处理 ≤1MB 的 2xx 文本类响应，压缩/流式/二进制一律透传；命中永不参与拦截只归因（`resp-*`，事件不存原文） |
+| **动态防护（HTML/JS 动态加密）** | 服务端按请求派生一次性密钥加密 HTML 文本节点，页面尾部注入解密脚本，浏览器执行还原；不跑 JS 的采集器拿到的是乱码。可与 PoW 人机校验联动（未过校验的访客先完成挑战再拿正文）；script/style/textarea 与属性值不动、解析失败原文透传（fail-open）；适用的请求自动跳过页面缓存 |
 | **误报治理** | 例外规则按「站点 / 规则号 / 分类 / 路径前缀 / 参数名」组合放过（已填的维度必须全部命中），同时作用于自研引擎与 CRS；规则运营支持分组统计、命中样例、批量启停、导入导出 |
 | **上传与反序列化检测** | multipart 危险扩展名 / 双扩展名 / 文件名攻击 / 图片魔数不符 / ELF·MZ·Class 可执行头；Java 原生流、.NET BinaryFormatter、pickle、PHP 序列化、`@type` 自动类型、YAML 不安全标签、原型链污染——统一并入 `detect.Result` 按分数处置 |
 | **精准访问控制** | 条件树（AND / OR / 嵌套分组，最深 4 层、单策略 ≤ 64 条件）在 Reload 时编译成不可变快照，热路径无锁无 JSON 解析；字段覆盖 `client_ip` / `country` / `region` / `host` / `method` / `path` / `query` / `ua` / `referer` / `content_type` / `body` 及 `header.*` / `cookie.*` / `arg.*`；操作符 `eq` `ne` `contains` `prefix` `suffix` `regex` `cidr`（裸 IP 自动补 `/32`·`/128`）`in` 数值比较 `exists`；动作 `allow` `block` `challenge` `log` `ban`，**按优先级第一条命中生效**，编译失败整体拒绝并保留旧快照 |
@@ -161,12 +165,14 @@ Windows 服务模式用 `gowaf svc install|start|stop|uninstall` 实现（单二
 | **IPv6 监听** | 可选 `server.listen_v6` / `server.tls_listen_v6`，与 v4 共用数据面 Handler；**不默认双栈**——各发行版 `v6only` 语义不同，强行绑 `::` 可能让老部署升级后起不来 |
 | **威胁情报** | 订阅公共/自建 IP 清单（10 个预设源一键添加），支持自定义 Header/Token 与 JSON 列表（AbuseIPDB、CrowdSec CTI）；命中的 IP 直接拦截并自动写入封禁管理，可在封禁列表统一释放 |
 | **限流与封禁** | 单 IP RPS / 突发 / 每分钟阈值；**每站点独立限流实例**（互不占用全局指标）；自动封禁带连击机制（反复触发 → 加倍 → 永久封禁）；IP 白名单；名单与封禁均支持全局 / 站点作用域 |
-| **告警通知** | 封禁事件按时间窗合并成一封摘要邮件（同 IP 冷却去重），SMTP 支持 ssl / starttls / none；通道预留飞书 / 短信 / 微信，当前版本只实现邮件 |
+| **告警通知** | 封禁事件按时间窗合并成摘要（同 IP 冷却去重）：邮件（SMTP ssl / starttls / none）+ **Webhook 渠道**——飞书 / 钉钉（均可选签名）/ 企业微信 / 通用 JSON POST（`{title, text, count, events}`），每目标独立落发送记录，控制台可逐渠道配置并测试发送 |
+| **OpenAPI 与 MCP** | API Token（SHA-256 摘要落库、明文仅创建时返回、`read` / `read,write` 作用域）以 Bearer 访问既有 `/api/*` 与 `/api/v1` 契约面，read-only 令牌访问写接口一律 403；`gowaf mcp` 子命令提供 11 个 MCP 工具（overview / events / ban_ip / rule_test …），AI 客户端凭 `GOWAF_URL` + `GOWAF_TOKEN` 直接管理面板 |
+| **容器化部署** | 多阶段 Dockerfile（前端产物已内嵌，无需 node）+ compose.yaml：alpine 运行镜像 + 非 root 运行 + `/healthz` 健康检查，数据库 / 证书 / JWT 密钥 / ACME 状态收敛到 `/data` 卷，`docker compose up -d --build` 一键起 |
 | **IP 归属地** | 内置离线库（ip2region 派生，21.6 万 IPv4 区间，1.3MB 嵌入二进制），攻击事件列表、详情与告警邮件直接显示国家/省市，零出网、零限速 |
 | **站点级防护配置** | 全局配置 + 各站点覆盖：站点开启后以站点为准，限流计数按「站点 + IP」隔离 |
 | **Cloudflare 适配** | 回源网段写入 trusted_proxies，按真实访客 IP 限流/封禁/记录（`cloudflare on` 一键开启，支持联网刷新官方网段）；CDN 标记支持全局或按站点 |
 | **计划任务中心** | 定期清理攻击事件（按保留天数）、定期备份规则快照到 `data/backups/`，支持手动触发 |
-| **控制台** | Vue 3 单页管理端 **16 个模块**：仪表盘 / 攻击事件 / 检测规则 / 访问策略 / Bot 管理 / 页面缓存 / 例外规则 / 威胁情报 / 黑白名单 / 封禁管理 / 防护站点 / 节点管理 / 告警通知 / 防护配置 / 计划任务 / 审计日志；JWT + CSRF + 登录锁定 + 按权限位校验写操作（`policy:write` / `bot:write` / `cache:write` / `node:write` …） |
+| **控制台** | Vue 3 单页管理端 **17 个模块**：仪表盘 / 攻击事件 / 检测规则 / 访问策略 / Bot 管理 / 页面缓存 / 例外规则 / 威胁情报 / 黑白名单 / 封禁管理 / 防护站点 / **证书管理** / 节点管理 / 告警通知 / 防护配置 / 计划任务 / 审计日志；JWT + CSRF + 登录锁定 + 按权限位校验写操作（`policy:write` / `bot:write` / `cache:write` / `node:write` …） |
 | **自愈与运维** | 端口漂移自愈（面板改回端口每 60 秒自动纠正）、`doctor` 只读体检（部署形态 / 证书对照表 / 站点清单 / 端口占用）、日志 logrotate |
 | **安全防线** | 无限代理自环防护（上游指向自身 80/443/8899 拒绝加载）、控制台默认仅回环、配置校验失败拒绝启动、情报匹配跳过回环/私网网段防自锁 |
 

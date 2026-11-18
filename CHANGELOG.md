@@ -4,6 +4,105 @@
 
 ---
 
+## [v1.4.0] - 未发布
+
+本版是对标雷池 SafeLine 社区版做的能力补齐：**语义检测通道、引擎加固、响应侧能力
+（敏感信息过滤 + 动态防护）、ACME 自动签发、webhook 告警、OpenAPI + API Token +
+MCP、容器化发布**一次性落地。含一次数据库迁移（009_api_tokens，启动时自动执行），
+替换二进制升级即可；全部新引擎默认关闭或处于低敏配置，升级不改变现有拦截行为。
+
+### 新增
+
+- **libinjection 语义检测通道（第三引擎）**
+  自研规则与 CRS 都是特征匹配，变形 payload 靠写规则追不完。新增基于
+  libinjection 的词法/指纹通道：对 query 与 body 做语义级 SQLi/XSS 判定，
+  分数并入统一评分体系（默认 sqli 45 / xss 35，压在默认拦截阈值 60 之下、
+  挑战阈值 30 之上——误报代价是一次无感人机校验而非直接拦截）。
+  误报治理走既有例外规则（规则 ID `libi-sqli` / `libi-xss`），
+  开关与分值在「防护配置」页热改（`engine.libi.*`）。默认启用。
+
+- **检测引擎加固：超时熔断 + panic 隔离 + 失效策略**
+  检测与控制面同进程，此前任何一个引擎 panic 都会带倒整个数据面，病态正则
+  或规则包能把单请求检测拖到几十秒。现在三个引擎（自研 / CRS / libi）与
+  载荷解析统一套上保护：单引擎超过 `engine.timeout_ms`（默认 2000ms）熔断、
+  panic 一律 recover 隔离，失效时按 `engine.fail_mode` 处理——`open`（默认）
+  放行并记录事件（可搜 `engine-degraded` 归因），`closed` 拦截；观察模式下
+  closed 也不真拦。新增指标 `waf_detect_errors_total`。
+
+- **响应体敏感信息过滤（respfilter）**
+  请求侧再严，也拦不住上游应用自己把敏感数据吐出去。新增响应链路扫描：
+  中国手机号 / 身份证 / 银联卡 / 云密钥（AWS、OpenAI、GitHub、阿里云、Google、
+  PEM 私钥块）/ JWT，`observe`（默认）只记录、`mask` 就地打码后下发。
+  只处理 ≤1MB 的 2xx 文本类响应，压缩/流式/二进制一律透传；
+  命中带归因（`resp-*` 规则 ID）进事件页与采样例外（必记录）。
+  开关、模式、类别、排除路径均可热改（`respfilter.*`）。默认关闭。
+
+- **动态防护：HTML/JS 每次访问动态加密（dprotect）**
+  雷池同思路的反爬能力：服务端按请求派生一次性密钥，把 HTML 文本节点加密成
+  乱码，页面尾部注入解密脚本，浏览器执行后还原；curl / requests 这类不跑 JS
+  的客户端拿到的永远是密文。只处理 ≤2MB 的 200 text/html 响应，GET/HEAD 生效；
+  script/style/textarea/noscript 与属性值不动，解析失败按原文透传（fail-open）。
+  `dprotect.challenge` 开启后与**人机校验联动**：未通过 PoW 的访客先完成校验
+  再拿正文，两层叠加才是完整的「动态加密 + 人机校验」语义。
+  注意：动态防护适用的请求会整段跳过页面缓存（每请求密钥唯一，缓存密文页
+  会全员解密失败）。默认关闭。
+
+- **ACME 证书自动签发 + 控制台证书管理页**
+  新增 Let's Encrypt（或任意 ACME v2）签发：HTTP-01 由数据面 80 端口自动应答
+  （边缘在站点路由之前拦截 `/.well-known/acme-challenge/*`），DNS-01 返回
+  TXT 记录值由管理员添加后触发验证（泛域名必须走 DNS-01）；签出的证书写入
+  `tls.cert_dir` 并立即热加载。控制台新增「证书管理」页：证书列表（到期时间
+  <30 天标红）、上传/删除/手动重载、ACME 订单与挑战详情、staging 环境开关。
+  ACME 账户密钥持久化在 `data/acme/`；订单状态仅存内存（重启后重新下单即可）。
+
+- **告警 Webhook 渠道：飞书 / 钉钉 / 企业微信 / 通用**
+  此前告警只有邮件。新增 webhook 渠道：三平台群机器人（飞书/钉钉支持可选
+  签名）+ 通用 JSON POST（`{title, text, count, events}`，方便接自建告警网关），
+  与邮件共用聚合窗口 / 冷却 / 最低分过滤；每目标独立落 notify_logs
+  （channel 形如 `webhook:feishu`），「告警通知」页可逐渠道配置并测试发送。
+
+- **OpenAPI（/api/v1）+ API Token + MCP Server**
+  新增 API Token（SHA-256 摘要落库，明文仅创建时返回一次，`read` / `read,write`
+  两种作用域）：Bearer 方式对既有 `/api/*` 与新增 `/api/v1` 别名组生效，
+  read-only 令牌访问写接口一律 403（`RequireAPIScope`），令牌管理在
+  `GET/POST /api/tokens`。`/api/v1` 提供外部集成用的稳定契约面
+  （overview / timeseries / events / sites / bans / rules / settings / rules.test /
+  bans 写接口等）。新增 `gowaf mcp` 子命令：stdio 上的 MCP（JSON-RPC 2.0）server，
+  11 个工具（waf_overview / events / ban_ip / rule_test 等），凭
+  `GOWAF_URL` + `GOWAF_TOKEN` 环境变量接入，AI 客户端（Claude 等）可直接管理面板。
+
+- **容器化发布：Dockerfile + compose.yaml**
+  单二进制 + 纯静态编译天然适合容器：多阶段构建（无需 node，前端产物已提交），
+  运行镜像 alpine + CA 证书 + tzdata + 非 root 用户，健康检查 `/healthz`，
+  全部持久化状态收敛到 `/data` 卷；`deploy/config.docker.yaml` 容器专用配置，
+  `docker compose up -d --build` 一键起。
+
+### 变更
+
+- 数据面响应链路：有响应侧能力（respfilter / dprotect）适用时，会在上游与
+  加速 writer 之间插入改写层，并把发往上游的 Accept-Encoding 置为 identity
+  （客户端侧压缩不受影响，仍由 accelWriter 按客户端能力现算）。
+- 写接口组新增 API Token 作用域中间件（JWT 会话不受任何影响）。
+- 「防护配置」「告警通知」「设置」白名单与校验扩容：
+  `engine.libi.*` / `engine.timeout_ms` / `engine.fail_mode` / `respfilter.*` /
+  `dprotect.*` / `notify.webhook.*` / `acme.*`；飞书/钉钉签名密钥与 SMTP 密码
+  同语义掩码回显。
+
+### 说明
+
+- 全部新引擎默认值保守：libi 开启但分数压在挑战阈值下、respfilter 关闭、
+  dprotect 关闭、webhook 关闭、ACME 按需创建订单——升级不改变现有拦截行为。
+- 响应侧命中（`resp-*`）永不参与评分与拦截，只记录或打码；事件里不保存命中
+  原文（证据即敏感内容）。
+- 动态防护的加密强度定位是「提高爬取成本」：密钥随页面下发（浏览器要能解密），
+  按 JSON 字节数组混淆存放；配合 `dprotect.challenge` 的 PoW 门禁才是完整语义。
+- MCP 客户端凭据走 API Token：创建 `read,write` 令牌 → 设 `GOWAF_URL` /
+  `GOWAF_TOKEN` → 客户端接入 `gowaf mcp`。
+- 数据库迁移 009（`api_tokens` 表）启动时自动执行；回滚到 v1.3.2 前无需清理
+  （旧版本忽略该表）。
+
+---
+
 ## [v1.3.2] - 2026-11-17
 
 本版补上 v1.3.0 遗留的一处前端缺口：Bot 模块的六个全局参数此前只能改库或手工调接口，

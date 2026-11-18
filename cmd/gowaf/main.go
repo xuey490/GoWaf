@@ -15,6 +15,7 @@ import (
 
 	"gowaf/internal/app"
 	"gowaf/internal/config"
+	"gowaf/internal/mcp"
 )
 
 // 以下三个变量由构建脚本通过 -ldflags -X 注入，源码内的值仅作默认。
@@ -36,6 +37,16 @@ func main() {
 	// `gowaf svc ...`：Windows 服务注册管理
 	if len(os.Args) > 1 && os.Args[1] == "svc" {
 		runSvc(os.Args[2:])
+		return
+	}
+
+	// `gowaf mcp`：MCP server（stdio 上的 JSON-RPC），供 AI 客户端（Claude 等）
+	// 管理面板数据。凭据经环境变量注入：GOWAF_URL（控制台地址，默认
+	// http://127.0.0.1:8899）与 GOWAF_TOKEN（API Token，控制台「API 令牌」创建）。
+	if len(os.Args) > 1 && os.Args[1] == "mcp" {
+		if err := mcp.Run(os.Stdin, os.Stdout, version); err != nil {
+			log.Fatalf("[mcp] 运行失败: %v", err)
+		}
 		return
 	}
 

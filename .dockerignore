@@ -1,0 +1,13 @@
+# 容器构建上下文瘦身：前端源码/数据/构建产物/文档都不进镜像
+.git
+.github
+Frontend
+data
+bin
+dist
+docs
+deploy/*.ps1
+deploy/*.sh
+deploy/config.example.yaml
+*.md
+!README.md
