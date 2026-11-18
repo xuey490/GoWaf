@@ -142,21 +142,45 @@ func (s *Store) SeedSettings(values map[string]string) error {
 	return nil
 }
 
-// SeedSites 把配置中的站点种子写入库，同名站点已存在则跳过（幂等）。
+// SeedSites 把配置中的站点种子写入库，幂等规则分两层：
+//
+//  1. 同名站点已存在 → 跳过（历史行为，保持不变）；
+//  2. 没有同名站点，但有站点已经绑定了种子里的任一域名 → 把种子新增的域名并进
+//     该站点，不新建。
+//
+// 第二层是必需的：deploy/install.sh 每次安装都会按宝塔/Nginx 的 vhost 重新生成
+// config.yaml，而 vhost 的主域名（Apache ServerName / Nginx server_name 首项）
+// 可能变化——宝塔给站点挂的 hash 前缀临时域名就是这种情况。只按名字去重会让
+// 同一台机器在每次"主域名变更 + 重装"后多出一份重复站点，页面上表现为同一个
+// 域名出现多条记录。
+//
 // 参数 sites：待初始化的站点列表。
-// 返回 error：任一站点查询或写入失败时返回错误。
+// 返回 error：查询、写入或更新 hosts 失败时返回错误。
 func (s *Store) SeedSites(sites []config.SiteSeed) error {
+	if len(sites) == 0 {
+		return nil
+	}
 	now := NowMS()
+	var existing []model.Site
+	if err := s.gorm.Find(&existing).Error; err != nil {
+		return err
+	}
 	for _, item := range sites {
-		var count int64
-		if err := s.gorm.Model(&model.Site{}).Where("name = ?", item.Name).Count(&count).Error; err != nil {
-			return err
-		}
-		if count > 0 {
+		if idx, ok := matchSeedSite(existing, item); ok {
+			row := &existing[idx]
+			merged, changed := mergeSeedHosts(row.Hosts, item.Hosts)
+			if !changed {
+				continue
+			}
+			if err := s.gorm.Model(&model.Site{}).Where("id = ?", row.ID).
+				Updates(map[string]any{"hosts": merged, "updated_at": now}).Error; err != nil {
+				return err
+			}
+			row.Hosts = merged
 			continue
 		}
 		hosts, _ := json.Marshal(item.Hosts)
-		if err := s.gorm.Create(&model.Site{
+		row := model.Site{
 			Name:          item.Name,
 			Hosts:         string(hosts),
 			Upstream:      item.Upstream,
@@ -168,11 +192,82 @@ func (s *Store) SeedSites(sites []config.SiteSeed) error {
 			BehindCDN:     model.NormalizeBehindCDN(item.BehindCDN),
 			CreatedAt:     now,
 			UpdatedAt:     now,
-		}).Error; err != nil {
+		}
+		if err := s.gorm.Create(&row).Error; err != nil {
 			return err
 		}
+		existing = append(existing, row)
 	}
 	return nil
+}
+
+// matchSeedSite 找出种子对应的既有站点下标：先按名字（忽略大小写）精确匹配，
+// 再按域名交集匹配。
+// 参数 existing：库中全部站点；item：待写入的种子。
+// 返回 (下标, 是否命中)。
+func matchSeedSite(existing []model.Site, item config.SiteSeed) (int, bool) {
+	for i := range existing {
+		if strings.EqualFold(existing[i].Name, item.Name) {
+			return i, true
+		}
+	}
+	for _, h := range item.Hosts {
+		host := normalizeSeedHost(h)
+		// 通配符与空域名不参与交集判定：让兜底站点保持独立
+		if host == "" || host == "*" {
+			continue
+		}
+		for i := range existing {
+			if seedHostsContain(existing[i].Hosts, host) {
+				return i, true
+			}
+		}
+	}
+	return 0, false
+}
+
+// seedHostsContain 判断站点 hosts（JSON 数组）中是否已包含指定域名。
+// 参数 raw：站点的 hosts 字段原文；host：已规整的待比较域名。
+func seedHostsContain(raw, host string) bool {
+	var list []string
+	if json.Unmarshal([]byte(raw), &list) != nil {
+		return false
+	}
+	for _, h := range list {
+		if normalizeSeedHost(h) == host {
+			return true
+		}
+	}
+	return false
+}
+
+// mergeSeedHosts 把种子的域名并入既有站点的 hosts，返回新 JSON 与是否发生变化。
+// 保留既有顺序，新增域名追加在末尾（去重按规整后的小写域名比较）。
+// 参数 raw：站点 hosts 原文；add：种子域名列表。
+func mergeSeedHosts(raw string, add []string) (string, bool) {
+	var list []string
+	_ = json.Unmarshal([]byte(raw), &list)
+	seen := make(map[string]bool, len(list))
+	for _, h := range list {
+		seen[normalizeSeedHost(h)] = true
+	}
+	changed := false
+	for _, h := range add {
+		key := normalizeSeedHost(h)
+		if key == "" || seen[key] {
+			continue
+		}
+		seen[key] = true
+		list = append(list, h)
+		changed = true
+	}
+	out, _ := json.Marshal(list)
+	return string(out), changed
+}
+
+// normalizeSeedHost 规整域名用于比较：转小写、去首尾空白。
+func normalizeSeedHost(h string) string {
+	return strings.ToLower(strings.TrimSpace(h))
 }
 
 // ImportBuiltinRules 从 YAML 文件同步内置规则到 rules 表。
