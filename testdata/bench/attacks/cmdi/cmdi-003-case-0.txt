@@ -1,0 +1,4 @@
+GET /a?url=%26%26%20uNaMe%20-A HTTP/1.1
+Host: demo.example.com
+Connection: close
+

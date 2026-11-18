@@ -1,0 +1,4 @@
+GET /a?id=eval(gzinflate(base64_decode(\u0027x\u0027)))\u003B HTTP/1.1
+Host: demo.example.com
+Connection: close
+

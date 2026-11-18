@@ -1,0 +1,4 @@
+GET /a?redirect=hTtP://127.0.0.1.nIp.Io/ HTTP/1.1
+Host: demo.example.com
+Connection: close
+

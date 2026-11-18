@@ -1,0 +1,4 @@
+GET /a?token=\u003Cembed%20src%3D\u0022data:text/html\u003Bbase64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg%3D%3D\u0022\u003E HTTP/1.1
+Host: demo.example.com
+Connection: close
+

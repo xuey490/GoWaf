@@ -1,0 +1,4 @@
+GET /a?file={__tYpE(nAmE:"uSeR"){fIeLdS{nAmE%20tYpE{nAmE}}}} HTTP/1.1
+Host: demo.example.com
+Connection: close
+

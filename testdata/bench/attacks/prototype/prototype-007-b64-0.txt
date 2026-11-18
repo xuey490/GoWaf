@@ -1,0 +1,4 @@
+GET /a?data=ZGVlcG1lcmdlKHRhcmdldCx7Il9fcHJvdG9fXyI6e319KQ%3D%3D HTTP/1.1
+Host: demo.example.com
+Connection: close
+

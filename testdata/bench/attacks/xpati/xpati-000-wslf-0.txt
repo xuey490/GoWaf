@@ -1,0 +1,4 @@
+GET /a?q=']%0aor%0a'a'%3D'a HTTP/1.1
+Host: demo.example.com
+Connection: close
+

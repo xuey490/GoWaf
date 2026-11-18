@@ -1,0 +1,8 @@
+POST /mail/parse HTTP/1.1
+Host: demo.example.com
+User-Agent: mail-gateway/2.2
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 95
+Connection: close
+
+body=Hi+team%2C+the+weekly+sync+moves+to+3pm+on+Thursday.+Please+review+the+agenda+before+then.

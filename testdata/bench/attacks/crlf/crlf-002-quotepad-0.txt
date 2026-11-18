@@ -1,0 +1,4 @@
+GET /a?file="x%0aContent-Length:0%0d%0a" HTTP/1.1
+Host: demo.example.com
+Connection: close
+

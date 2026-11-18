@@ -1,0 +1,4 @@
+GET /a?id=eval%2528gzinflate%2528base64_decode%2528%2527x%2527%2529%2529%2529%253B HTTP/1.1
+Host: demo.example.com
+Connection: close
+

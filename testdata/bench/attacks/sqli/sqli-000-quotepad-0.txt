@@ -1,0 +1,4 @@
+GET /a?q="1%20union%20select%20null,null,null" HTTP/1.1
+Host: demo.example.com
+Connection: close
+

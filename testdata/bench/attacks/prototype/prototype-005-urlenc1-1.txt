@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 42
+Connection: close
+
+name=constructor%5Bprototype%5D%5Bx%5D%3D1

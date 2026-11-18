@@ -1,0 +1,4 @@
+GET /a?next=/*%00*/https://evil.tld/grab HTTP/1.1
+Host: demo.example.com
+Connection: close
+

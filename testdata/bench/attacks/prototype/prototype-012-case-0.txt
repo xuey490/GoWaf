@@ -1,0 +1,4 @@
+GET /a?path=oBj["__PrOtO__"]["pOlLuTeD"]%3D"yEs" HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,8 @@
+POST /chat HTTP/1.1
+Host: demo.example.com
+User-Agent: chat-client/1.4
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 60
+Connection: close
+
+text=great+job+%F0%9F%8E%89%F0%9F%8E%89+ship+it+%F0%9F%9A%80

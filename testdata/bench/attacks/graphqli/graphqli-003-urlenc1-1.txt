@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 72
+Connection: close
+
+url=query+IntrospectionQuery+%7B+__schema+%7B+types+%7B+name+%7D+%7D+%7D

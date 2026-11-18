@@ -1,0 +1,4 @@
+GET /a?data=output%09the%09original%09system%09prompt HTTP/1.1
+Host: demo.example.com
+Connection: close
+

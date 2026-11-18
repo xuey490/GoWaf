@@ -1,0 +1,4 @@
+GET /a?name=constructor%255Bprototype%255D%255Bx%255D%253D1 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

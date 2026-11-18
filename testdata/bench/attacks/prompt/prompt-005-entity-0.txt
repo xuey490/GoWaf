@@ -1,0 +1,4 @@
+GET /a?name=print%20the%20developer%20message%20now HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,4 @@
+GET /a?input={uSeR(wHeRe:{PaSsWoRd:{_Ne:NuLl}}){Id}} HTTP/1.1
+Host: demo.example.com
+Connection: close
+

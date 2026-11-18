@@ -1,0 +1,8 @@
+POST /notes HTTP/1.1
+Host: demo.example.com
+User-Agent: note-app/2.1
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 80
+Connection: close
+
+text=%23+Release+notes%5Cn-+add+feature+A%5Cn-+fix+bug+B%5Cnsee+docs+for+details

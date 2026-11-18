@@ -1,0 +1,4 @@
+GET /a?url=%7B%22%24comment%22%3A%22bypass%22%7D HTTP/1.1
+Host: demo.example.com
+Connection: close
+

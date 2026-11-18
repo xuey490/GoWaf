@@ -1,0 +1,4 @@
+GET /a?redirect=;%20rM%20-rF%20/tMp/X HTTP/1.1
+Host: demo.example.com
+Connection: close
+

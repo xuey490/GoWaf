@@ -1,0 +1,4 @@
+GET /a?data=ldap%253A%252F%252F127.0.0.1%253A389%252Fdc%253D%252500 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

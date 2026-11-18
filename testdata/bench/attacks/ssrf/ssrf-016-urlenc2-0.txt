@@ -1,0 +1,4 @@
+GET /a?file=tftp%253A%252F%252F10.0.0.5%252Fx.conf HTTP/1.1
+Host: demo.example.com
+Connection: close
+

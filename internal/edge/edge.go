@@ -555,7 +555,9 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 // ja4Blocked 判断 JA4 指纹是否应被拦截：先查管理员黑名单（精确匹配），
-// 再查内置脚本栈清单（受 block_builtin 开关控制）。
+// 再查内置清单——只有 malware 类目（公开报告的恶意软件 C2 栈）会随
+// block_builtin 开关被拦截；script/browser/iot 等类目是参考数据，
+// 脚本栈被大量正常工具使用、浏览器是基线对照，拦截都会造成误伤。
 // 参数 fp：JA4 指纹（非空）。
 // 返回 bool：应拦截返回 true。
 func (h *Handler) ja4Blocked(fp string) bool {
@@ -565,7 +567,7 @@ func (h *Handler) ja4Blocked(fp string) bool {
 		}
 	}
 	if h.rt.SettingBool(runtime.KeyJA4BlockBuiltin, false) {
-		if _, ok := ja4.MatchBuiltin(fp); ok {
+		if e, ok := ja4.MatchBuiltin(fp); ok && e.Category == ja4.CatMalware {
 			return true
 		}
 	}

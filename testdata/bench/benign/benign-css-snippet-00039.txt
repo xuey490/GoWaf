@@ -1,0 +1,8 @@
+POST /theme/preview HTTP/1.1
+Host: demo.example.com
+User-Agent: site-builder/3.0
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 75
+Connection: close
+
+css=table+td%7Bborder-bottom%3A1px+solid+%23eee%7Dth%7Btext-align%3Aleft%7D

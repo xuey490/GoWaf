@@ -1,0 +1,4 @@
+GET /a?file=%7B__type%28name%3A%22User%22%29%7Bfields%7Bname%2Btype%7Bname%7D%7D%7D%7D HTTP/1.1
+Host: demo.example.com
+Connection: close
+

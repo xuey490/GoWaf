@@ -1,0 +1,4 @@
+GET /a?file="{"constructor.prototype":{}}" HTTP/1.1
+Host: demo.example.com
+Connection: close
+

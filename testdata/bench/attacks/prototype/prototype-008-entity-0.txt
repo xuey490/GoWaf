@@ -1,0 +1,4 @@
+GET /a?search=Object.assign({},{%26%23x22;__proto__%26%23x22;:{}}) HTTP/1.1
+Host: demo.example.com
+Connection: close
+

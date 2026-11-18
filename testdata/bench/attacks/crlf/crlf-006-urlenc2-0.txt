@@ -1,0 +1,4 @@
+GET /a?redirect=q%253Dx%250D%250AContent-Length%253A0 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

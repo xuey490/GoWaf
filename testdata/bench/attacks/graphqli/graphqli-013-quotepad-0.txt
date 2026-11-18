@@ -1,0 +1,4 @@
+GET /a?token='{__schema%20{%20types%20{%20name%20fields%20{%20name%20}%20}%20}}' HTTP/1.1
+Host: demo.example.com
+Connection: close
+

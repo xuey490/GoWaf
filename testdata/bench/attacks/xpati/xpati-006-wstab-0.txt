@@ -1,0 +1,4 @@
+GET /a?redirect=]%09or%09position()%3D1%09or%09' HTTP/1.1
+Host: demo.example.com
+Connection: close
+

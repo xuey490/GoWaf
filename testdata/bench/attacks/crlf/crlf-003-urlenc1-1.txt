@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 58
+Connection: close
+
+url=http%3A%2F%2Fx%2F%250d%250aX-Forwarded-For%3A127.0.0.1

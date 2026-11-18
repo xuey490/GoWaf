@@ -1,0 +1,4 @@
+GET /a?page=%5B%7B%22query%22%3A%22query%7Ba%7D%22%7D%2C%7B%22query%22%3A%22query%7Bb%7D%22%7D%2C%7B%22query%22%3A%22query%7Bc%7D%22%7D%2C%7B%22query%22%3A%22query%7Bd%7D%22%7D%5D HTTP/1.1
+Host: demo.example.com
+Connection: close
+

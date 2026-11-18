@@ -1,0 +1,5 @@
+GET /items?from=2024-10-01&to=2024-01-28 HTTP/1.1
+Host: demo.example.com
+User-Agent: dashboard/0.8
+Connection: close
+

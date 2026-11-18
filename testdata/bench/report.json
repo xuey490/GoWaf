@@ -1,0 +1,5328 @@
+{
+  "generatedAt": "2026-11-18T16:21:14Z",
+  "threshold": 30,
+  "attacks": 10183,
+  "detected": 8797,
+  "recall": 0.8638907983894727,
+  "benign": 9970,
+  "falsePositives": 2,
+  "fpRate": 0.00020060180541624874,
+  "elapsedMs": 30763,
+  "byCategory": [
+    {
+      "category": "cmdi",
+      "total": 840,
+      "detected": 758,
+      "rate": 0.9023809523809524
+    },
+    {
+      "category": "crlf",
+      "total": 360,
+      "detected": 195,
+      "rate": 0.5416666666666666
+    },
+    {
+      "category": "deser",
+      "total": 480,
+      "detected": 365,
+      "rate": 0.7604166666666666
+    },
+    {
+      "category": "expr",
+      "total": 528,
+      "detected": 484,
+      "rate": 0.9166666666666666
+    },
+    {
+      "category": "graphqli",
+      "total": 336,
+      "detected": 286,
+      "rate": 0.8511904761904762
+    },
+    {
+      "category": "ldapi",
+      "total": 360,
+      "detected": 268,
+      "rate": 0.7444444444444445
+    },
+    {
+      "category": "lfi",
+      "total": 384,
+      "detected": 353,
+      "rate": 0.9192708333333334
+    },
+    {
+      "category": "nosqli",
+      "total": 504,
+      "detected": 451,
+      "rate": 0.8948412698412699
+    },
+    {
+      "category": "openredirect",
+      "total": 384,
+      "detected": 356,
+      "rate": 0.9270833333333334
+    },
+    {
+      "category": "prompt",
+      "total": 384,
+      "detected": 309,
+      "rate": 0.8046875
+    },
+    {
+      "category": "prototype",
+      "total": 432,
+      "detected": 352,
+      "rate": 0.8148148148148148
+    },
+    {
+      "category": "rce",
+      "total": 720,
+      "detected": 674,
+      "rate": 0.9361111111111111
+    },
+    {
+      "category": "smugg",
+      "total": 7,
+      "detected": 6,
+      "rate": 0.8571428571428571
+    },
+    {
+      "category": "sqli",
+      "total": 840,
+      "detected": 752,
+      "rate": 0.8952380952380953
+    },
+    {
+      "category": "ssrf",
+      "total": 528,
+      "detected": 494,
+      "rate": 0.9356060606060606
+    },
+    {
+      "category": "ssti",
+      "total": 528,
+      "detected": 472,
+      "rate": 0.8939393939393939
+    },
+    {
+      "category": "traver",
+      "total": 528,
+      "detected": 466,
+      "rate": 0.8825757575757576
+    },
+    {
+      "category": "webshell",
+      "total": 480,
+      "detected": 460,
+      "rate": 0.9583333333333334
+    },
+    {
+      "category": "xpati",
+      "total": 360,
+      "detected": 196,
+      "rate": 0.5444444444444444
+    },
+    {
+      "category": "xss",
+      "total": 840,
+      "detected": 770,
+      "rate": 0.9166666666666666
+    },
+    {
+      "category": "xxe",
+      "total": 360,
+      "detected": 330,
+      "rate": 0.9166666666666666
+    }
+  ],
+  "failures": [
+    {
+      "file": "attacks/cmdi/cmdi-000-b64-0.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-000-b64-1.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-000-uni-0.txt",
+      "category": "cmdi",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-920540"
+      ]
+    },
+    {
+      "file": "attacks/cmdi/cmdi-001-b64-0.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-001-b64-1.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-002-b64-0.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-002-b64-1.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-003-b64-0.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-003-b64-1.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-004-b64-0.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-004-b64-1.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-005-b64-0.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-005-b64-1.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-006-b64-1.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-007-b64-1.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-008-b64-1.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-009-b64-0.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-009-b64-1.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-009-encall-0.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-009-encall-1.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-009-urlenc1-0.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-009-urlenc1-1.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-009-urlenc2-0.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-009-urlenc2-1.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-010-b64-0.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-010-b64-1.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-011-b64-0.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-011-b64-1.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-012-b64-1.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-013-b64-0.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-013-b64-1.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-014-b64-0.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-014-b64-1.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-015-b64-1.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-016-b64-0.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-016-b64-1.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-017-b64-0.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-017-b64-1.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-018-b64-1.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-019-b64-0.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-019-b64-1.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-020-b64-0.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-020-b64-1.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-020-comment-0.txt",
+      "category": "cmdi",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-920270"
+      ]
+    },
+    {
+      "file": "attacks/cmdi/cmdi-020-comment-1.txt",
+      "category": "cmdi",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-920270"
+      ]
+    },
+    {
+      "file": "attacks/cmdi/cmdi-020-uni-0.txt",
+      "category": "cmdi",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-920540"
+      ]
+    },
+    {
+      "file": "attacks/cmdi/cmdi-020-uni-1.txt",
+      "category": "cmdi",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-920540"
+      ]
+    },
+    {
+      "file": "attacks/cmdi/cmdi-020-urlenc1-0.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-020-urlenc2-0.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-020-urlenc2-1.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-021-b64-0.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-021-b64-1.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-022-b64-0.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-022-b64-1.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-023-b64-0.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-023-b64-1.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-024-b64-0.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-024-b64-1.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-024-uni-1.txt",
+      "category": "cmdi",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-920540"
+      ]
+    },
+    {
+      "file": "attacks/cmdi/cmdi-025-b64-1.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-026-b64-0.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-026-b64-1.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-027-b64-0.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-027-b64-1.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-027-uni-0.txt",
+      "category": "cmdi",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-920540"
+      ]
+    },
+    {
+      "file": "attacks/cmdi/cmdi-027-uni-1.txt",
+      "category": "cmdi",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-920540"
+      ]
+    },
+    {
+      "file": "attacks/cmdi/cmdi-027-urlenc1-0.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-027-urlenc2-0.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-027-urlenc2-1.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-028-b64-0.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-028-b64-1.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-029-b64-0.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-029-b64-1.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-030-b64-0.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-030-b64-1.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-031-b64-0.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-031-b64-1.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-032-b64-0.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-032-b64-1.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-033-b64-1.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-034-b64-0.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/cmdi/cmdi-034-b64-1.txt",
+      "category": "cmdi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-000-b64-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-000-b64-1.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-000-encall-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-000-encall-1.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-000-urlenc1-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-000-urlenc1-1.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-000-urlenc2-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-000-urlenc2-1.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-001-b64-1.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-001-encall-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-001-encall-1.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-001-urlenc1-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-001-urlenc1-1.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-001-urlenc2-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-001-urlenc2-1.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-002-b64-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-002-b64-1.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-002-case-0.txt",
+      "category": "crlf",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-921120"
+      ]
+    },
+    {
+      "file": "attacks/crlf/crlf-002-case-1.txt",
+      "category": "crlf",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-921120"
+      ]
+    },
+    {
+      "file": "attacks/crlf/crlf-002-comment-0.txt",
+      "category": "crlf",
+      "score": 29,
+      "action": "",
+      "ruleIds": [
+        "crs-920270",
+        "crs-921120"
+      ]
+    },
+    {
+      "file": "attacks/crlf/crlf-002-comment-1.txt",
+      "category": "crlf",
+      "score": 29,
+      "action": "",
+      "ruleIds": [
+        "crs-920270",
+        "crs-921120"
+      ]
+    },
+    {
+      "file": "attacks/crlf/crlf-002-encall-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-002-encall-1.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-002-entity-0.txt",
+      "category": "crlf",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-921120"
+      ]
+    },
+    {
+      "file": "attacks/crlf/crlf-002-entity-1.txt",
+      "category": "crlf",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-921120"
+      ]
+    },
+    {
+      "file": "attacks/crlf/crlf-002-identity-0.txt",
+      "category": "crlf",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-921120"
+      ]
+    },
+    {
+      "file": "attacks/crlf/crlf-002-identity-1.txt",
+      "category": "crlf",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-921120"
+      ]
+    },
+    {
+      "file": "attacks/crlf/crlf-002-quotepad-0.txt",
+      "category": "crlf",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-921120"
+      ]
+    },
+    {
+      "file": "attacks/crlf/crlf-002-quotepad-1.txt",
+      "category": "crlf",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-921120"
+      ]
+    },
+    {
+      "file": "attacks/crlf/crlf-002-uni-0.txt",
+      "category": "crlf",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-921120"
+      ]
+    },
+    {
+      "file": "attacks/crlf/crlf-002-uni-1.txt",
+      "category": "crlf",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-921120"
+      ]
+    },
+    {
+      "file": "attacks/crlf/crlf-002-urlenc1-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-002-urlenc1-1.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-002-urlenc2-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-002-urlenc2-1.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-002-wslf-0.txt",
+      "category": "crlf",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-921120"
+      ]
+    },
+    {
+      "file": "attacks/crlf/crlf-002-wslf-1.txt",
+      "category": "crlf",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-921120"
+      ]
+    },
+    {
+      "file": "attacks/crlf/crlf-002-wstab-0.txt",
+      "category": "crlf",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-921120"
+      ]
+    },
+    {
+      "file": "attacks/crlf/crlf-002-wstab-1.txt",
+      "category": "crlf",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-921120"
+      ]
+    },
+    {
+      "file": "attacks/crlf/crlf-003-b64-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-003-b64-1.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-004-b64-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-004-b64-1.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-004-case-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-004-comment-0.txt",
+      "category": "crlf",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-920270"
+      ]
+    },
+    {
+      "file": "attacks/crlf/crlf-004-encall-0.txt",
+      "category": "crlf",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-921160"
+      ]
+    },
+    {
+      "file": "attacks/crlf/crlf-004-encall-1.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-004-entity-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-004-identity-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-004-quotepad-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-004-uni-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-004-urlenc1-0.txt",
+      "category": "crlf",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-921160"
+      ]
+    },
+    {
+      "file": "attacks/crlf/crlf-004-urlenc1-1.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-004-urlenc2-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-004-urlenc2-1.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-004-wslf-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-004-wstab-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-005-b64-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-005-b64-1.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-005-case-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-005-comment-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-005-encall-0.txt",
+      "category": "crlf",
+      "score": 29,
+      "action": "",
+      "ruleIds": [
+        "crs-921120",
+        "crs-921160"
+      ]
+    },
+    {
+      "file": "attacks/crlf/crlf-005-encall-1.txt",
+      "category": "crlf",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-921120"
+      ]
+    },
+    {
+      "file": "attacks/crlf/crlf-005-entity-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-005-identity-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-005-quotepad-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-005-uni-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-005-urlenc1-0.txt",
+      "category": "crlf",
+      "score": 29,
+      "action": "",
+      "ruleIds": [
+        "crs-921120",
+        "crs-921160"
+      ]
+    },
+    {
+      "file": "attacks/crlf/crlf-005-urlenc1-1.txt",
+      "category": "crlf",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-921120"
+      ]
+    },
+    {
+      "file": "attacks/crlf/crlf-005-urlenc2-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-005-urlenc2-1.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-005-wslf-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-005-wstab-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-006-b64-1.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-006-case-0.txt",
+      "category": "crlf",
+      "score": 29,
+      "action": "",
+      "ruleIds": [
+        "crs-920160",
+        "crs-920170",
+        "crs-920340"
+      ]
+    },
+    {
+      "file": "attacks/crlf/crlf-006-comment-0.txt",
+      "category": "crlf",
+      "score": 29,
+      "action": "",
+      "ruleIds": [
+        "crs-920160",
+        "crs-920170",
+        "crs-920270",
+        "crs-920340"
+      ]
+    },
+    {
+      "file": "attacks/crlf/crlf-006-encall-0.txt",
+      "category": "crlf",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-921120"
+      ]
+    },
+    {
+      "file": "attacks/crlf/crlf-006-encall-1.txt",
+      "category": "crlf",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-921120"
+      ]
+    },
+    {
+      "file": "attacks/crlf/crlf-006-entity-0.txt",
+      "category": "crlf",
+      "score": 29,
+      "action": "",
+      "ruleIds": [
+        "crs-920160",
+        "crs-920170",
+        "crs-920340"
+      ]
+    },
+    {
+      "file": "attacks/crlf/crlf-006-identity-0.txt",
+      "category": "crlf",
+      "score": 29,
+      "action": "",
+      "ruleIds": [
+        "crs-920160",
+        "crs-920170",
+        "crs-920340"
+      ]
+    },
+    {
+      "file": "attacks/crlf/crlf-006-quotepad-0.txt",
+      "category": "crlf",
+      "score": 29,
+      "action": "",
+      "ruleIds": [
+        "crs-920160",
+        "crs-920170",
+        "crs-920340"
+      ]
+    },
+    {
+      "file": "attacks/crlf/crlf-006-uni-0.txt",
+      "category": "crlf",
+      "score": 29,
+      "action": "",
+      "ruleIds": [
+        "crs-920160",
+        "crs-920170",
+        "crs-920340"
+      ]
+    },
+    {
+      "file": "attacks/crlf/crlf-006-urlenc1-0.txt",
+      "category": "crlf",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-921120"
+      ]
+    },
+    {
+      "file": "attacks/crlf/crlf-006-urlenc1-1.txt",
+      "category": "crlf",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-921120"
+      ]
+    },
+    {
+      "file": "attacks/crlf/crlf-006-urlenc2-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-006-urlenc2-1.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-006-wslf-0.txt",
+      "category": "crlf",
+      "score": 29,
+      "action": "",
+      "ruleIds": [
+        "crs-920160",
+        "crs-920170",
+        "crs-920340"
+      ]
+    },
+    {
+      "file": "attacks/crlf/crlf-006-wstab-0.txt",
+      "category": "crlf",
+      "score": 29,
+      "action": "",
+      "ruleIds": [
+        "crs-920160",
+        "crs-920170",
+        "crs-920340"
+      ]
+    },
+    {
+      "file": "attacks/crlf/crlf-007-b64-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-007-b64-1.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-007-case-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-007-comment-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-007-encall-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-007-encall-1.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-007-entity-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-007-identity-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-007-quotepad-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-007-uni-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-007-urlenc1-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-007-urlenc1-1.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-007-urlenc2-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-007-urlenc2-1.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-007-wslf-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-007-wstab-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-008-b64-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-008-b64-1.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-009-b64-1.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-009-encall-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-009-encall-1.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-009-urlenc1-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-009-urlenc1-1.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-009-urlenc2-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-009-urlenc2-1.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-010-b64-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-010-b64-1.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-010-case-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-010-comment-0.txt",
+      "category": "crlf",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-920270"
+      ]
+    },
+    {
+      "file": "attacks/crlf/crlf-010-encall-0.txt",
+      "category": "crlf",
+      "score": 29,
+      "action": "",
+      "ruleIds": [
+        "crs-921120",
+        "crs-921160"
+      ]
+    },
+    {
+      "file": "attacks/crlf/crlf-010-encall-1.txt",
+      "category": "crlf",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-921120"
+      ]
+    },
+    {
+      "file": "attacks/crlf/crlf-010-entity-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-010-identity-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-010-quotepad-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-010-uni-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-010-urlenc1-0.txt",
+      "category": "crlf",
+      "score": 29,
+      "action": "",
+      "ruleIds": [
+        "crs-921120",
+        "crs-921160"
+      ]
+    },
+    {
+      "file": "attacks/crlf/crlf-010-urlenc1-1.txt",
+      "category": "crlf",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-921120"
+      ]
+    },
+    {
+      "file": "attacks/crlf/crlf-010-urlenc2-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-010-urlenc2-1.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-010-wslf-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-010-wstab-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-011-b64-1.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-011-case-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-011-comment-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-011-encall-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-011-encall-1.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-011-entity-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-011-identity-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-011-quotepad-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-011-uni-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-011-urlenc1-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-011-urlenc1-1.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-011-urlenc2-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-011-urlenc2-1.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-011-wslf-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-011-wstab-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-012-b64-1.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-012-encall-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-012-encall-1.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-012-urlenc1-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-012-urlenc1-1.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-012-urlenc2-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-012-urlenc2-1.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-013-b64-1.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-013-encall-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-013-encall-1.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-013-urlenc1-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-013-urlenc1-1.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-013-urlenc2-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-013-urlenc2-1.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-014-b64-1.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-014-encall-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-014-encall-1.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-014-urlenc1-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-014-urlenc1-1.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-014-urlenc2-0.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/crlf/crlf-014-urlenc2-1.txt",
+      "category": "crlf",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-000-b64-1.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-001-b64-0.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-001-b64-1.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-002-b64-0.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-002-b64-1.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-003-b64-1.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-004-b64-0.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-004-b64-1.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-005-b64-1.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-006-b64-0.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-006-b64-1.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-007-b64-0.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-007-b64-1.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-008-b64-0.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-008-b64-1.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-009-b64-0.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-009-b64-1.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-010-b64-1.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-011-b64-0.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-011-b64-1.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-012-b64-0.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-012-b64-1.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-012-case-0.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-012-case-1.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-012-comment-0.txt",
+      "category": "deser",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-920270"
+      ]
+    },
+    {
+      "file": "attacks/deser/deser-012-comment-1.txt",
+      "category": "deser",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-920270"
+      ]
+    },
+    {
+      "file": "attacks/deser/deser-012-encall-0.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-012-encall-1.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-012-identity-0.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-012-identity-1.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-012-quotepad-0.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-012-quotepad-1.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-012-uni-0.txt",
+      "category": "deser",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-920540"
+      ]
+    },
+    {
+      "file": "attacks/deser/deser-012-uni-1.txt",
+      "category": "deser",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-920540"
+      ]
+    },
+    {
+      "file": "attacks/deser/deser-012-urlenc1-0.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-012-urlenc1-1.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-012-urlenc2-0.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-012-urlenc2-1.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-012-wslf-0.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-012-wslf-1.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-012-wstab-0.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-012-wstab-1.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-013-b64-1.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-013-case-0.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-013-comment-0.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-013-entity-0.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-013-identity-0.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-013-quotepad-0.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-013-uni-0.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-013-wslf-0.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-013-wstab-0.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-014-b64-1.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-015-b64-0.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-015-b64-1.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-015-case-0.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-015-comment-0.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-015-encall-0.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-015-entity-0.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-015-identity-0.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-015-uni-0.txt",
+      "category": "deser",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-920540"
+      ]
+    },
+    {
+      "file": "attacks/deser/deser-015-urlenc1-0.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-015-urlenc2-0.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-015-wslf-0.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-015-wstab-0.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-016-b64-0.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-016-b64-1.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-016-case-0.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-016-case-1.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-016-comment-0.txt",
+      "category": "deser",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-920270"
+      ]
+    },
+    {
+      "file": "attacks/deser/deser-016-comment-1.txt",
+      "category": "deser",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-920270"
+      ]
+    },
+    {
+      "file": "attacks/deser/deser-016-encall-0.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-016-encall-1.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-016-entity-0.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-016-entity-1.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-016-identity-0.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-016-identity-1.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-016-quotepad-0.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-016-quotepad-1.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-016-uni-0.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-016-uni-1.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-016-urlenc1-0.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-016-urlenc1-1.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-016-urlenc2-0.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-016-urlenc2-1.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-016-wslf-0.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-016-wslf-1.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-016-wstab-0.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-016-wstab-1.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-017-b64-1.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-018-b64-0.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-018-b64-1.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-019-b64-0.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-019-b64-1.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-019-case-0.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-019-case-1.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-019-comment-0.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-019-comment-1.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-019-encall-0.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-019-encall-1.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-019-entity-0.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-019-entity-1.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-019-identity-0.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-019-identity-1.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-019-quotepad-0.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-019-quotepad-1.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-019-uni-0.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-019-uni-1.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-019-urlenc1-0.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-019-urlenc1-1.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-019-urlenc2-0.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-019-urlenc2-1.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-019-wslf-0.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-019-wslf-1.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-019-wstab-0.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/deser/deser-019-wstab-1.txt",
+      "category": "deser",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/expr/expr-000-b64-0.txt",
+      "category": "expr",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/expr/expr-000-b64-1.txt",
+      "category": "expr",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/expr/expr-001-b64-0.txt",
+      "category": "expr",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/expr/expr-001-b64-1.txt",
+      "category": "expr",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/expr/expr-002-b64-1.txt",
+      "category": "expr",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/expr/expr-003-b64-0.txt",
+      "category": "expr",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/expr/expr-003-b64-1.txt",
+      "category": "expr",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/expr/expr-004-b64-0.txt",
+      "category": "expr",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/expr/expr-004-b64-1.txt",
+      "category": "expr",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/expr/expr-005-b64-0.txt",
+      "category": "expr",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/expr/expr-005-b64-1.txt",
+      "category": "expr",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/expr/expr-006-b64-0.txt",
+      "category": "expr",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/expr/expr-006-b64-1.txt",
+      "category": "expr",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/expr/expr-007-b64-1.txt",
+      "category": "expr",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/expr/expr-008-b64-1.txt",
+      "category": "expr",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/expr/expr-009-b64-0.txt",
+      "category": "expr",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/expr/expr-009-b64-1.txt",
+      "category": "expr",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/expr/expr-010-b64-0.txt",
+      "category": "expr",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/expr/expr-010-b64-1.txt",
+      "category": "expr",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/expr/expr-011-b64-0.txt",
+      "category": "expr",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/expr/expr-011-b64-1.txt",
+      "category": "expr",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/expr/expr-012-b64-0.txt",
+      "category": "expr",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/expr/expr-012-b64-1.txt",
+      "category": "expr",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/expr/expr-013-b64-0.txt",
+      "category": "expr",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/expr/expr-013-b64-1.txt",
+      "category": "expr",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/expr/expr-014-b64-1.txt",
+      "category": "expr",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/expr/expr-015-b64-0.txt",
+      "category": "expr",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/expr/expr-015-b64-1.txt",
+      "category": "expr",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/expr/expr-016-b64-1.txt",
+      "category": "expr",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/expr/expr-017-b64-0.txt",
+      "category": "expr",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/expr/expr-017-b64-1.txt",
+      "category": "expr",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/expr/expr-018-b64-0.txt",
+      "category": "expr",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/expr/expr-018-b64-1.txt",
+      "category": "expr",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/expr/expr-018-urlenc2-0.txt",
+      "category": "expr",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/expr/expr-018-urlenc2-1.txt",
+      "category": "expr",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/expr/expr-019-b64-0.txt",
+      "category": "expr",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/expr/expr-019-b64-1.txt",
+      "category": "expr",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/expr/expr-019-entity-1.txt",
+      "category": "expr",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/expr/expr-020-b64-0.txt",
+      "category": "expr",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/expr/expr-020-b64-1.txt",
+      "category": "expr",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/expr/expr-020-urlenc2-0.txt",
+      "category": "expr",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/expr/expr-020-urlenc2-1.txt",
+      "category": "expr",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/expr/expr-021-b64-0.txt",
+      "category": "expr",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/expr/expr-021-b64-1.txt",
+      "category": "expr",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/graphqli/graphqli-000-b64-0.txt",
+      "category": "graphqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/graphqli/graphqli-000-b64-1.txt",
+      "category": "graphqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/graphqli/graphqli-001-b64-0.txt",
+      "category": "graphqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/graphqli/graphqli-001-b64-1.txt",
+      "category": "graphqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/graphqli/graphqli-002-b64-0.txt",
+      "category": "graphqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/graphqli/graphqli-002-b64-1.txt",
+      "category": "graphqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/graphqli/graphqli-003-b64-0.txt",
+      "category": "graphqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/graphqli/graphqli-003-b64-1.txt",
+      "category": "graphqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/graphqli/graphqli-004-b64-0.txt",
+      "category": "graphqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/graphqli/graphqli-004-b64-1.txt",
+      "category": "graphqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/graphqli/graphqli-005-b64-0.txt",
+      "category": "graphqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/graphqli/graphqli-005-b64-1.txt",
+      "category": "graphqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/graphqli/graphqli-006-b64-1.txt",
+      "category": "graphqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/graphqli/graphqli-007-b64-0.txt",
+      "category": "graphqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/graphqli/graphqli-007-b64-1.txt",
+      "category": "graphqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/graphqli/graphqli-008-b64-0.txt",
+      "category": "graphqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/graphqli/graphqli-008-b64-1.txt",
+      "category": "graphqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/graphqli/graphqli-008-case-0.txt",
+      "category": "graphqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/graphqli/graphqli-008-case-1.txt",
+      "category": "graphqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/graphqli/graphqli-008-comment-0.txt",
+      "category": "graphqli",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-920270"
+      ]
+    },
+    {
+      "file": "attacks/graphqli/graphqli-008-comment-1.txt",
+      "category": "graphqli",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-920270"
+      ]
+    },
+    {
+      "file": "attacks/graphqli/graphqli-008-encall-0.txt",
+      "category": "graphqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/graphqli/graphqli-008-encall-1.txt",
+      "category": "graphqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/graphqli/graphqli-008-entity-0.txt",
+      "category": "graphqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/graphqli/graphqli-008-entity-1.txt",
+      "category": "graphqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/graphqli/graphqli-008-identity-0.txt",
+      "category": "graphqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/graphqli/graphqli-008-identity-1.txt",
+      "category": "graphqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/graphqli/graphqli-008-quotepad-0.txt",
+      "category": "graphqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/graphqli/graphqli-008-quotepad-1.txt",
+      "category": "graphqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/graphqli/graphqli-008-uni-0.txt",
+      "category": "graphqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/graphqli/graphqli-008-uni-1.txt",
+      "category": "graphqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/graphqli/graphqli-008-urlenc1-0.txt",
+      "category": "graphqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/graphqli/graphqli-008-urlenc1-1.txt",
+      "category": "graphqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/graphqli/graphqli-008-urlenc2-0.txt",
+      "category": "graphqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/graphqli/graphqli-008-urlenc2-1.txt",
+      "category": "graphqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/graphqli/graphqli-008-wslf-0.txt",
+      "category": "graphqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/graphqli/graphqli-008-wslf-1.txt",
+      "category": "graphqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/graphqli/graphqli-008-wstab-0.txt",
+      "category": "graphqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/graphqli/graphqli-008-wstab-1.txt",
+      "category": "graphqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/graphqli/graphqli-009-b64-0.txt",
+      "category": "graphqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/graphqli/graphqli-009-b64-1.txt",
+      "category": "graphqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/graphqli/graphqli-010-b64-1.txt",
+      "category": "graphqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/graphqli/graphqli-011-b64-1.txt",
+      "category": "graphqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/graphqli/graphqli-012-b64-0.txt",
+      "category": "graphqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/graphqli/graphqli-012-b64-1.txt",
+      "category": "graphqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/graphqli/graphqli-012-entity-0.txt",
+      "category": "graphqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/graphqli/graphqli-012-entity-1.txt",
+      "category": "graphqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/graphqli/graphqli-012-uni-0.txt",
+      "category": "graphqli",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-920540"
+      ]
+    },
+    {
+      "file": "attacks/graphqli/graphqli-012-uni-1.txt",
+      "category": "graphqli",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-920540"
+      ]
+    },
+    {
+      "file": "attacks/graphqli/graphqli-013-b64-1.txt",
+      "category": "graphqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/ldapi/ldapi-000-b64-0.txt",
+      "category": "ldapi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/ldapi/ldapi-000-b64-1.txt",
+      "category": "ldapi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/ldapi/ldapi-001-b64-0.txt",
+      "category": "ldapi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/ldapi/ldapi-001-b64-1.txt",
+      "category": "ldapi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/ldapi/ldapi-002-b64-0.txt",
+      "category": "ldapi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/ldapi/ldapi-002-b64-1.txt",
+      "category": "ldapi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/ldapi/ldapi-003-b64-0.txt",
+      "category": "ldapi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/ldapi/ldapi-003-b64-1.txt",
+      "category": "ldapi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/ldapi/ldapi-003-case-0.txt",
+      "category": "ldapi",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-921200"
+      ]
+    },
+    {
+      "file": "attacks/ldapi/ldapi-003-case-1.txt",
+      "category": "ldapi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/ldapi/ldapi-003-comment-0.txt",
+      "category": "ldapi",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-921200"
+      ]
+    },
+    {
+      "file": "attacks/ldapi/ldapi-003-comment-1.txt",
+      "category": "ldapi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/ldapi/ldapi-003-encall-0.txt",
+      "category": "ldapi",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-921200"
+      ]
+    },
+    {
+      "file": "attacks/ldapi/ldapi-003-encall-1.txt",
+      "category": "ldapi",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-921200"
+      ]
+    },
+    {
+      "file": "attacks/ldapi/ldapi-003-entity-0.txt",
+      "category": "ldapi",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-921200"
+      ]
+    },
+    {
+      "file": "attacks/ldapi/ldapi-003-entity-1.txt",
+      "category": "ldapi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/ldapi/ldapi-003-identity-0.txt",
+      "category": "ldapi",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-921200"
+      ]
+    },
+    {
+      "file": "attacks/ldapi/ldapi-003-identity-1.txt",
+      "category": "ldapi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/ldapi/ldapi-003-quotepad-0.txt",
+      "category": "ldapi",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-921200"
+      ]
+    },
+    {
+      "file": "attacks/ldapi/ldapi-003-quotepad-1.txt",
+      "category": "ldapi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/ldapi/ldapi-003-uni-0.txt",
+      "category": "ldapi",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-920540"
+      ]
+    },
+    {
+      "file": "attacks/ldapi/ldapi-003-uni-1.txt",
+      "category": "ldapi",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-920540"
+      ]
+    },
+    {
+      "file": "attacks/ldapi/ldapi-003-urlenc1-0.txt",
+      "category": "ldapi",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-921200"
+      ]
+    },
+    {
+      "file": "attacks/ldapi/ldapi-003-urlenc1-1.txt",
+      "category": "ldapi",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-921200"
+      ]
+    },
+    {
+      "file": "attacks/ldapi/ldapi-003-urlenc2-0.txt",
+      "category": "ldapi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/ldapi/ldapi-003-urlenc2-1.txt",
+      "category": "ldapi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/ldapi/ldapi-003-wslf-0.txt",
+      "category": "ldapi",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-921200"
+      ]
+    },
+    {
+      "file": "attacks/ldapi/ldapi-003-wslf-1.txt",
+      "category": "ldapi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/ldapi/ldapi-003-wstab-0.txt",
+      "category": "ldapi",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-921200"
+      ]
+    },
+    {
+      "file": "attacks/ldapi/ldapi-003-wstab-1.txt",
+      "category": "ldapi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/ldapi/ldapi-004-b64-0.txt",
+      "category": "ldapi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/ldapi/ldapi-004-b64-1.txt",
+      "category": "ldapi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/ldapi/ldapi-005-b64-0.txt",
+      "category": "ldapi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/ldapi/ldapi-005-b64-1.txt",
+      "category": "ldapi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/ldapi/ldapi-006-b64-0.txt",
+      "category": "ldapi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/ldapi/ldapi-006-b64-1.txt",
+      "category": "ldapi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/ldapi/ldapi-007-b64-1.txt",
+      "category": "ldapi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/ldapi/ldapi-008-b64-0.txt",
+      "category": "ldapi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/ldapi/ldapi-008-b64-1.txt",
+      "category": "ldapi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/ldapi/ldapi-009-b64-0.txt",
+      "category": "ldapi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/ldapi/ldapi-009-b64-1.txt",
+      "category": "ldapi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/ldapi/ldapi-010-b64-1.txt",
+      "category": "ldapi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/ldapi/ldapi-011-b64-0.txt",
+      "category": "ldapi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/ldapi/ldapi-011-b64-1.txt",
+      "category": "ldapi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/ldapi/ldapi-012-b64-0.txt",
+      "category": "ldapi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/ldapi/ldapi-012-b64-1.txt",
+      "category": "ldapi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/ldapi/ldapi-012-case-0.txt",
+      "category": "ldapi",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-921200"
+      ]
+    },
+    {
+      "file": "attacks/ldapi/ldapi-012-case-1.txt",
+      "category": "ldapi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/ldapi/ldapi-012-comment-0.txt",
+      "category": "ldapi",
+      "score": 29,
+      "action": "",
+      "ruleIds": [
+        "crs-920270",
+        "crs-921200"
+      ]
+    },
+    {
+      "file": "attacks/ldapi/ldapi-012-comment-1.txt",
+      "category": "ldapi",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-920270"
+      ]
+    },
+    {
+      "file": "attacks/ldapi/ldapi-012-encall-0.txt",
+      "category": "ldapi",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-921200"
+      ]
+    },
+    {
+      "file": "attacks/ldapi/ldapi-012-encall-1.txt",
+      "category": "ldapi",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-921200"
+      ]
+    },
+    {
+      "file": "attacks/ldapi/ldapi-012-entity-0.txt",
+      "category": "ldapi",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-921200"
+      ]
+    },
+    {
+      "file": "attacks/ldapi/ldapi-012-entity-1.txt",
+      "category": "ldapi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/ldapi/ldapi-012-identity-0.txt",
+      "category": "ldapi",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-921200"
+      ]
+    },
+    {
+      "file": "attacks/ldapi/ldapi-012-identity-1.txt",
+      "category": "ldapi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/ldapi/ldapi-012-quotepad-0.txt",
+      "category": "ldapi",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-921200"
+      ]
+    },
+    {
+      "file": "attacks/ldapi/ldapi-012-quotepad-1.txt",
+      "category": "ldapi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/ldapi/ldapi-012-uni-0.txt",
+      "category": "ldapi",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-920540"
+      ]
+    },
+    {
+      "file": "attacks/ldapi/ldapi-012-uni-1.txt",
+      "category": "ldapi",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-920540"
+      ]
+    },
+    {
+      "file": "attacks/ldapi/ldapi-012-urlenc1-0.txt",
+      "category": "ldapi",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-921200"
+      ]
+    },
+    {
+      "file": "attacks/ldapi/ldapi-012-urlenc1-1.txt",
+      "category": "ldapi",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-921200"
+      ]
+    },
+    {
+      "file": "attacks/ldapi/ldapi-012-urlenc2-0.txt",
+      "category": "ldapi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/ldapi/ldapi-012-urlenc2-1.txt",
+      "category": "ldapi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/ldapi/ldapi-012-wslf-0.txt",
+      "category": "ldapi",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-921200"
+      ]
+    },
+    {
+      "file": "attacks/ldapi/ldapi-012-wslf-1.txt",
+      "category": "ldapi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/ldapi/ldapi-012-wstab-0.txt",
+      "category": "ldapi",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-921200"
+      ]
+    },
+    {
+      "file": "attacks/ldapi/ldapi-012-wstab-1.txt",
+      "category": "ldapi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/ldapi/ldapi-013-b64-0.txt",
+      "category": "ldapi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/ldapi/ldapi-013-b64-1.txt",
+      "category": "ldapi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/ldapi/ldapi-013-case-0.txt",
+      "category": "ldapi",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-921200"
+      ]
+    },
+    {
+      "file": "attacks/ldapi/ldapi-013-case-1.txt",
+      "category": "ldapi",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-921200"
+      ]
+    },
+    {
+      "file": "attacks/ldapi/ldapi-013-comment-0.txt",
+      "category": "ldapi",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-921200"
+      ]
+    },
+    {
+      "file": "attacks/ldapi/ldapi-013-comment-1.txt",
+      "category": "ldapi",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-921200"
+      ]
+    },
+    {
+      "file": "attacks/ldapi/ldapi-013-encall-0.txt",
+      "category": "ldapi",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-921200"
+      ]
+    },
+    {
+      "file": "attacks/ldapi/ldapi-013-encall-1.txt",
+      "category": "ldapi",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-921200"
+      ]
+    },
+    {
+      "file": "attacks/ldapi/ldapi-013-entity-0.txt",
+      "category": "ldapi",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-921200"
+      ]
+    },
+    {
+      "file": "attacks/ldapi/ldapi-013-entity-1.txt",
+      "category": "ldapi",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-921200"
+      ]
+    },
+    {
+      "file": "attacks/ldapi/ldapi-013-identity-0.txt",
+      "category": "ldapi",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-921200"
+      ]
+    },
+    {
+      "file": "attacks/ldapi/ldapi-013-identity-1.txt",
+      "category": "ldapi",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-921200"
+      ]
+    },
+    {
+      "file": "attacks/ldapi/ldapi-013-uni-0.txt",
+      "category": "ldapi",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-921200"
+      ]
+    },
+    {
+      "file": "attacks/ldapi/ldapi-013-uni-1.txt",
+      "category": "ldapi",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-921200"
+      ]
+    },
+    {
+      "file": "attacks/ldapi/ldapi-013-urlenc1-0.txt",
+      "category": "ldapi",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-921200"
+      ]
+    },
+    {
+      "file": "attacks/ldapi/ldapi-013-urlenc1-1.txt",
+      "category": "ldapi",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-921200"
+      ]
+    },
+    {
+      "file": "attacks/ldapi/ldapi-013-urlenc2-0.txt",
+      "category": "ldapi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/ldapi/ldapi-013-urlenc2-1.txt",
+      "category": "ldapi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/ldapi/ldapi-013-wslf-0.txt",
+      "category": "ldapi",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-921200"
+      ]
+    },
+    {
+      "file": "attacks/ldapi/ldapi-013-wslf-1.txt",
+      "category": "ldapi",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-921200"
+      ]
+    },
+    {
+      "file": "attacks/ldapi/ldapi-013-wstab-0.txt",
+      "category": "ldapi",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-921200"
+      ]
+    },
+    {
+      "file": "attacks/ldapi/ldapi-013-wstab-1.txt",
+      "category": "ldapi",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-921200"
+      ]
+    },
+    {
+      "file": "attacks/ldapi/ldapi-014-b64-0.txt",
+      "category": "ldapi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/ldapi/ldapi-014-b64-1.txt",
+      "category": "ldapi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/lfi/lfi-000-b64-0.txt",
+      "category": "lfi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/lfi/lfi-000-b64-1.txt",
+      "category": "lfi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/lfi/lfi-001-b64-0.txt",
+      "category": "lfi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/lfi/lfi-001-b64-1.txt",
+      "category": "lfi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/lfi/lfi-002-b64-0.txt",
+      "category": "lfi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/lfi/lfi-002-b64-1.txt",
+      "category": "lfi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/lfi/lfi-003-b64-1.txt",
+      "category": "lfi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/lfi/lfi-004-b64-0.txt",
+      "category": "lfi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/lfi/lfi-004-b64-1.txt",
+      "category": "lfi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/lfi/lfi-005-b64-0.txt",
+      "category": "lfi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/lfi/lfi-005-b64-1.txt",
+      "category": "lfi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/lfi/lfi-006-b64-0.txt",
+      "category": "lfi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/lfi/lfi-006-b64-1.txt",
+      "category": "lfi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/lfi/lfi-007-b64-0.txt",
+      "category": "lfi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/lfi/lfi-007-b64-1.txt",
+      "category": "lfi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/lfi/lfi-008-b64-0.txt",
+      "category": "lfi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/lfi/lfi-008-b64-1.txt",
+      "category": "lfi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/lfi/lfi-009-b64-0.txt",
+      "category": "lfi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/lfi/lfi-009-b64-1.txt",
+      "category": "lfi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/lfi/lfi-010-b64-0.txt",
+      "category": "lfi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/lfi/lfi-010-b64-1.txt",
+      "category": "lfi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/lfi/lfi-011-b64-0.txt",
+      "category": "lfi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/lfi/lfi-011-b64-1.txt",
+      "category": "lfi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/lfi/lfi-012-b64-0.txt",
+      "category": "lfi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/lfi/lfi-012-b64-1.txt",
+      "category": "lfi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/lfi/lfi-013-b64-0.txt",
+      "category": "lfi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/lfi/lfi-013-b64-1.txt",
+      "category": "lfi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/lfi/lfi-014-b64-0.txt",
+      "category": "lfi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/lfi/lfi-014-b64-1.txt",
+      "category": "lfi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/lfi/lfi-015-b64-0.txt",
+      "category": "lfi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/lfi/lfi-015-b64-1.txt",
+      "category": "lfi",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/nosqli/nosqli-000-b64-1.txt",
+      "category": "nosqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/nosqli/nosqli-001-b64-1.txt",
+      "category": "nosqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/nosqli/nosqli-002-b64-0.txt",
+      "category": "nosqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/nosqli/nosqli-002-b64-1.txt",
+      "category": "nosqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/nosqli/nosqli-003-b64-0.txt",
+      "category": "nosqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/nosqli/nosqli-003-b64-1.txt",
+      "category": "nosqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/nosqli/nosqli-004-b64-0.txt",
+      "category": "nosqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/nosqli/nosqli-004-b64-1.txt",
+      "category": "nosqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/nosqli/nosqli-005-b64-0.txt",
+      "category": "nosqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/nosqli/nosqli-005-b64-1.txt",
+      "category": "nosqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/nosqli/nosqli-006-b64-0.txt",
+      "category": "nosqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/nosqli/nosqli-006-b64-1.txt",
+      "category": "nosqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/nosqli/nosqli-007-b64-0.txt",
+      "category": "nosqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/nosqli/nosqli-007-b64-1.txt",
+      "category": "nosqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/nosqli/nosqli-007-comment-0.txt",
+      "category": "nosqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/nosqli/nosqli-007-comment-1.txt",
+      "category": "nosqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/nosqli/nosqli-008-b64-0.txt",
+      "category": "nosqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/nosqli/nosqli-008-b64-1.txt",
+      "category": "nosqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/nosqli/nosqli-009-b64-1.txt",
+      "category": "nosqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/nosqli/nosqli-010-b64-1.txt",
+      "category": "nosqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/nosqli/nosqli-011-b64-0.txt",
+      "category": "nosqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/nosqli/nosqli-011-b64-1.txt",
+      "category": "nosqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/nosqli/nosqli-012-b64-1.txt",
+      "category": "nosqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/nosqli/nosqli-013-b64-1.txt",
+      "category": "nosqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/nosqli/nosqli-014-b64-1.txt",
+      "category": "nosqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/nosqli/nosqli-015-b64-1.txt",
+      "category": "nosqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/nosqli/nosqli-016-b64-1.txt",
+      "category": "nosqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/nosqli/nosqli-017-b64-1.txt",
+      "category": "nosqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/nosqli/nosqli-019-b64-1.txt",
+      "category": "nosqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/nosqli/nosqli-020-b64-0.txt",
+      "category": "nosqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/nosqli/nosqli-020-b64-1.txt",
+      "category": "nosqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/nosqli/nosqli-020-case-0.txt",
+      "category": "nosqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/nosqli/nosqli-020-case-1.txt",
+      "category": "nosqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/nosqli/nosqli-020-comment-0.txt",
+      "category": "nosqli",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-920270"
+      ]
+    },
+    {
+      "file": "attacks/nosqli/nosqli-020-comment-1.txt",
+      "category": "nosqli",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-920270"
+      ]
+    },
+    {
+      "file": "attacks/nosqli/nosqli-020-encall-0.txt",
+      "category": "nosqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/nosqli/nosqli-020-encall-1.txt",
+      "category": "nosqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/nosqli/nosqli-020-entity-0.txt",
+      "category": "nosqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/nosqli/nosqli-020-entity-1.txt",
+      "category": "nosqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/nosqli/nosqli-020-identity-0.txt",
+      "category": "nosqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/nosqli/nosqli-020-identity-1.txt",
+      "category": "nosqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/nosqli/nosqli-020-quotepad-0.txt",
+      "category": "nosqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/nosqli/nosqli-020-quotepad-1.txt",
+      "category": "nosqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/nosqli/nosqli-020-uni-0.txt",
+      "category": "nosqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/nosqli/nosqli-020-uni-1.txt",
+      "category": "nosqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/nosqli/nosqli-020-urlenc1-0.txt",
+      "category": "nosqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/nosqli/nosqli-020-urlenc1-1.txt",
+      "category": "nosqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/nosqli/nosqli-020-urlenc2-0.txt",
+      "category": "nosqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/nosqli/nosqli-020-urlenc2-1.txt",
+      "category": "nosqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/nosqli/nosqli-020-wslf-0.txt",
+      "category": "nosqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/nosqli/nosqli-020-wslf-1.txt",
+      "category": "nosqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/nosqli/nosqli-020-wstab-0.txt",
+      "category": "nosqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/nosqli/nosqli-020-wstab-1.txt",
+      "category": "nosqli",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/openredirect/openredirect-000-b64-1.txt",
+      "category": "openredirect",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/openredirect/openredirect-001-b64-1.txt",
+      "category": "openredirect",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/openredirect/openredirect-002-b64-0.txt",
+      "category": "openredirect",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/openredirect/openredirect-002-b64-1.txt",
+      "category": "openredirect",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/openredirect/openredirect-003-b64-0.txt",
+      "category": "openredirect",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/openredirect/openredirect-003-b64-1.txt",
+      "category": "openredirect",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/openredirect/openredirect-004-b64-0.txt",
+      "category": "openredirect",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/openredirect/openredirect-004-b64-1.txt",
+      "category": "openredirect",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/openredirect/openredirect-005-b64-0.txt",
+      "category": "openredirect",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/openredirect/openredirect-005-b64-1.txt",
+      "category": "openredirect",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/openredirect/openredirect-006-b64-0.txt",
+      "category": "openredirect",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/openredirect/openredirect-006-b64-1.txt",
+      "category": "openredirect",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/openredirect/openredirect-007-b64-0.txt",
+      "category": "openredirect",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/openredirect/openredirect-007-b64-1.txt",
+      "category": "openredirect",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/openredirect/openredirect-008-b64-0.txt",
+      "category": "openredirect",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/openredirect/openredirect-008-b64-1.txt",
+      "category": "openredirect",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/openredirect/openredirect-009-b64-1.txt",
+      "category": "openredirect",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/openredirect/openredirect-010-b64-0.txt",
+      "category": "openredirect",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/openredirect/openredirect-010-b64-1.txt",
+      "category": "openredirect",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/openredirect/openredirect-011-b64-0.txt",
+      "category": "openredirect",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/openredirect/openredirect-011-b64-1.txt",
+      "category": "openredirect",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/openredirect/openredirect-012-b64-1.txt",
+      "category": "openredirect",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/openredirect/openredirect-013-b64-0.txt",
+      "category": "openredirect",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/openredirect/openredirect-013-b64-1.txt",
+      "category": "openredirect",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/openredirect/openredirect-014-b64-0.txt",
+      "category": "openredirect",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/openredirect/openredirect-014-b64-1.txt",
+      "category": "openredirect",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/openredirect/openredirect-015-b64-0.txt",
+      "category": "openredirect",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/openredirect/openredirect-015-b64-1.txt",
+      "category": "openredirect",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-000-b64-0.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-000-b64-1.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-001-b64-0.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-001-b64-1.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-002-b64-0.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-002-b64-1.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-003-b64-0.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-003-b64-1.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-004-b64-0.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-004-b64-1.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-005-b64-0.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-005-b64-1.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-006-b64-0.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-006-b64-1.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-006-case-0.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-006-case-1.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-006-comment-0.txt",
+      "category": "prompt",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-920270"
+      ]
+    },
+    {
+      "file": "attacks/prompt/prompt-006-comment-1.txt",
+      "category": "prompt",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-920270"
+      ]
+    },
+    {
+      "file": "attacks/prompt/prompt-006-encall-0.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-006-encall-1.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-006-entity-0.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-006-entity-1.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-006-identity-0.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-006-identity-1.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-006-quotepad-0.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-006-quotepad-1.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-006-uni-0.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-006-uni-1.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-006-urlenc1-0.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-006-urlenc1-1.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-006-urlenc2-0.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-006-urlenc2-1.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-006-wslf-0.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-006-wslf-1.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-006-wstab-0.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-006-wstab-1.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-007-b64-1.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-008-b64-0.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-008-b64-1.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-009-b64-0.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-009-b64-1.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-010-b64-0.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-010-b64-1.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-011-b64-0.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-011-b64-1.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-011-case-0.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-011-case-1.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-011-comment-0.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-011-comment-1.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-011-encall-0.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-011-encall-1.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-011-entity-0.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-011-entity-1.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-011-identity-0.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-011-identity-1.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-011-quotepad-0.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-011-quotepad-1.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-011-uni-0.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-011-uni-1.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-011-urlenc1-0.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-011-urlenc1-1.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-011-urlenc2-0.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-011-urlenc2-1.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-011-wslf-0.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-011-wslf-1.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-011-wstab-0.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-011-wstab-1.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-012-b64-0.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-012-b64-1.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-013-b64-0.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-013-b64-1.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-014-b64-0.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-014-b64-1.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-015-b64-0.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prompt/prompt-015-b64-1.txt",
+      "category": "prompt",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prototype/prototype-000-b64-1.txt",
+      "category": "prototype",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prototype/prototype-001-b64-1.txt",
+      "category": "prototype",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prototype/prototype-002-b64-0.txt",
+      "category": "prototype",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prototype/prototype-002-b64-1.txt",
+      "category": "prototype",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prototype/prototype-002-case-0.txt",
+      "category": "prototype",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prototype/prototype-002-case-1.txt",
+      "category": "prototype",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prototype/prototype-003-b64-0.txt",
+      "category": "prototype",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prototype/prototype-003-b64-1.txt",
+      "category": "prototype",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prototype/prototype-004-b64-0.txt",
+      "category": "prototype",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prototype/prototype-004-b64-1.txt",
+      "category": "prototype",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prototype/prototype-004-case-0.txt",
+      "category": "prototype",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prototype/prototype-004-case-1.txt",
+      "category": "prototype",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prototype/prototype-004-comment-0.txt",
+      "category": "prototype",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-920270"
+      ]
+    },
+    {
+      "file": "attacks/prototype/prototype-004-comment-1.txt",
+      "category": "prototype",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-920270"
+      ]
+    },
+    {
+      "file": "attacks/prototype/prototype-004-encall-0.txt",
+      "category": "prototype",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prototype/prototype-004-encall-1.txt",
+      "category": "prototype",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prototype/prototype-004-entity-0.txt",
+      "category": "prototype",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prototype/prototype-004-entity-1.txt",
+      "category": "prototype",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prototype/prototype-004-identity-0.txt",
+      "category": "prototype",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prototype/prototype-004-identity-1.txt",
+      "category": "prototype",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prototype/prototype-004-uni-0.txt",
+      "category": "prototype",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-920540"
+      ]
+    },
+    {
+      "file": "attacks/prototype/prototype-004-uni-1.txt",
+      "category": "prototype",
+      "score": 15,
+      "action": "",
+      "ruleIds": [
+        "crs-920540"
+      ]
+    },
+    {
+      "file": "attacks/prototype/prototype-004-urlenc1-0.txt",
+      "category": "prototype",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prototype/prototype-004-urlenc1-1.txt",
+      "category": "prototype",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prototype/prototype-004-urlenc2-0.txt",
+      "category": "prototype",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prototype/prototype-004-urlenc2-1.txt",
+      "category": "prototype",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prototype/prototype-004-wslf-0.txt",
+      "category": "prototype",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prototype/prototype-004-wslf-1.txt",
+      "category": "prototype",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prototype/prototype-004-wstab-0.txt",
+      "category": "prototype",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prototype/prototype-004-wstab-1.txt",
+      "category": "prototype",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prototype/prototype-005-case-0.txt",
+      "category": "prototype",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prototype/prototype-005-case-1.txt",
+      "category": "prototype",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prototype/prototype-006-b64-0.txt",
+      "category": "prototype",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prototype/prototype-006-b64-1.txt",
+      "category": "prototype",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prototype/prototype-007-b64-0.txt",
+      "category": "prototype",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prototype/prototype-007-b64-1.txt",
+      "category": "prototype",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prototype/prototype-008-b64-0.txt",
+      "category": "prototype",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prototype/prototype-008-b64-1.txt",
+      "category": "prototype",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prototype/prototype-009-b64-0.txt",
+      "category": "prototype",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prototype/prototype-009-b64-1.txt",
+      "category": "prototype",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prototype/prototype-010-b64-0.txt",
+      "category": "prototype",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prototype/prototype-010-b64-1.txt",
+      "category": "prototype",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prototype/prototype-011-b64-0.txt",
+      "category": "prototype",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prototype/prototype-011-b64-1.txt",
+      "category": "prototype",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prototype/prototype-012-b64-0.txt",
+      "category": "prototype",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prototype/prototype-012-b64-1.txt",
+      "category": "prototype",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prototype/prototype-012-case-0.txt",
+      "category": "prototype",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prototype/prototype-012-case-1.txt",
+      "category": "prototype",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prototype/prototype-013-b64-0.txt",
+      "category": "prototype",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prototype/prototype-013-b64-1.txt",
+      "category": "prototype",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prototype/prototype-013-case-0.txt",
+      "category": "prototype",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prototype/prototype-013-case-1.txt",
+      "category": "prototype",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prototype/prototype-014-b64-1.txt",
+      "category": "prototype",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prototype/prototype-015-b64-0.txt",
+      "category": "prototype",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prototype/prototype-015-b64-1.txt",
+      "category": "prototype",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prototype/prototype-015-case-0.txt",
+      "category": "prototype",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prototype/prototype-015-case-1.txt",
+      "category": "prototype",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prototype/prototype-015-comment-0.txt",
+      "category": "prototype",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prototype/prototype-015-comment-1.txt",
+      "category": "prototype",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prototype/prototype-015-encall-0.txt",
+      "category": "prototype",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prototype/prototype-015-encall-1.txt",
+      "category": "prototype",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prototype/prototype-015-entity-0.txt",
+      "category": "prototype",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prototype/prototype-015-entity-1.txt",
+      "category": "prototype",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prototype/prototype-015-identity-0.txt",
+      "category": "prototype",
+      "score": 0,
+      "action": ""
+    },
+    {
+      "file": "attacks/prototype/prototype-015-identity-1.txt",
+      "category": "prototype",
+      "score": 0,
+      "action": ""
+    }
+  ],
+  "fpExamples": [
+    {
+      "file": "benign/benign-jwt-00399.txt",
+      "category": "benign:jwt",
+      "score": 85,
+      "action": "block",
+      "ruleIds": [
+        "rce-struts2"
+      ]
+    },
+    {
+      "file": "benign/benign-jwt-00413.txt",
+      "category": "benign:jwt",
+      "score": 60,
+      "action": "block",
+      "ruleIds": [
+        "sqli-union-hex"
+      ]
+    }
+  ],
+  "fpRuleCounts": {
+    "rce-struts2": 1,
+    "sqli-union-hex": 1
+  },
+  "fpFamilyCounts": {
+    "jwt": 2
+  }
+}

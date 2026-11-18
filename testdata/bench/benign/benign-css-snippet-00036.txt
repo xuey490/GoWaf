@@ -1,0 +1,8 @@
+POST /theme/preview HTTP/1.1
+Host: demo.example.com
+User-Agent: site-builder/3.0
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 68
+Connection: close
+
+css=.card%7Bdisplay%3Aflex%3Bpadding%3A12px%3Bborder-radius%3A8px%7D

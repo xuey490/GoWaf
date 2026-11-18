@@ -1,0 +1,8 @@
+POST /notes HTTP/1.1
+Host: demo.example.com
+User-Agent: note-app/2.1
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 201
+Connection: close
+
+text=%23%23+%E5%AE%89%E8%A3%85%E8%AF%B4%E6%98%8E%5Cn1.+%E4%B8%8B%E8%BD%BD%E5%AE%89%E8%A3%85%E5%8C%85%5Cn2.+%E8%A7%A3%E5%8E%8B%E5%88%B0%E4%BB%BB%E6%84%8F%E7%9B%AE%E5%BD%95%5Cn3.+%E8%BF%90%E8%A1%8C+setup

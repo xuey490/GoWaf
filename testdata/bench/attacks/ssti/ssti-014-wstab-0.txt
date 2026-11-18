@@ -1,0 +1,4 @@
+GET /a?q={{%09[1,2]|map('system')%09}} HTTP/1.1
+Host: demo.example.com
+Connection: close
+

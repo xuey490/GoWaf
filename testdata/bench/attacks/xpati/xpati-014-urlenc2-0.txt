@@ -1,0 +1,4 @@
+GET /a?q=%252F%252A%255Bcontains%2528text%2528%2529%252C%2527secret%2527%2529%255D HTTP/1.1
+Host: demo.example.com
+Connection: close
+

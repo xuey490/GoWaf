@@ -1,0 +1,4 @@
+GET /a?next=https%3A%2F%2Fevil.tld%2F%2Fevil HTTP/1.1
+Host: demo.example.com
+Connection: close
+

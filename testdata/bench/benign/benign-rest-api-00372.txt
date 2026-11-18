@@ -1,0 +1,8 @@
+POST /api/v1/profiles HTTP/1.1
+Host: demo.example.com
+User-Agent: app-client/1.2
+Content-Type: application/json
+Content-Length: 73
+Connection: close
+
+{"name":"user6171","email":"u6171@example.com","age":54,"tags":["a","b"]}

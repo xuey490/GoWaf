@@ -1,0 +1,4 @@
+GET /a?page=z%3DOs.SyStEm('WhOaMi') HTTP/1.1
+Host: demo.example.com
+Connection: close
+

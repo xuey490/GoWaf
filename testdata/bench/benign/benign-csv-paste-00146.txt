@@ -1,0 +1,8 @@
+POST /import HTTP/1.1
+Host: demo.example.com
+User-Agent: data-loader/1.0
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 119
+Connection: close
+
+csv=id%2Cname%2Camount%5Cn1%2Cuser504%2C680.00%5Cn2%2Cuser745%2C132.00%5Cn3%2Cuser797%2C917.00%5Cn4%2Cuser297%2C4880.00

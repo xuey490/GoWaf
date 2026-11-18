@@ -1,0 +1,4 @@
+GET /a?url=x%3D.exec%28req.query.cmd%29 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

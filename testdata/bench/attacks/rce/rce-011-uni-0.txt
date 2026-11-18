@@ -1,0 +1,4 @@
+GET /a?input=j%3Dnew%20ProcessBuilder(\u0022cmd\u0022).start() HTTP/1.1
+Host: demo.example.com
+Connection: close
+

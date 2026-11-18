@@ -1,0 +1,4 @@
+GET /a?name={$wHeRe:%20"NeW%20dAtE()%20%26%26%20tRuE"} HTTP/1.1
+Host: demo.example.com
+Connection: close
+

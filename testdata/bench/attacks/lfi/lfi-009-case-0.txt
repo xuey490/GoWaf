@@ -1,0 +1,4 @@
+GET /a?page=pHp://FiLtEr/ReAd%3DCoNvErT.bAsE64-eNcOdE/rEsOuRcE%3DcOnFiG.pHp HTTP/1.1
+Host: demo.example.com
+Connection: close
+

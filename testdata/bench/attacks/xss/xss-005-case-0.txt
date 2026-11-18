@@ -1,0 +1,4 @@
+GET /a?name=<iFrAmE%20sRc%3D"JaVaScRiPt:AlErT(1)"> HTTP/1.1
+Host: demo.example.com
+Connection: close
+

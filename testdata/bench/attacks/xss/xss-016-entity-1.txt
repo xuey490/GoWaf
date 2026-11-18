@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 65
+Connection: close
+
+file=&#x3C;div style=&#x22;width:expression(alert(1))&#x22;&#x3E;

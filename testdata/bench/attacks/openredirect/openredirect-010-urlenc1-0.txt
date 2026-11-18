@@ -1,0 +1,4 @@
+GET /a?callback=https%3A%2F%2Fevil.tld%252f%252e%252e HTTP/1.1
+Host: demo.example.com
+Connection: close
+

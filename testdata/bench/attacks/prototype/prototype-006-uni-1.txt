@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 70
+Connection: close
+
+redirect=merge({}, JSON.parse(\u0027{\u0022__proto__\u0022:{}}\u0027))

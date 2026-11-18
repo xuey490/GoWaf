@@ -1,0 +1,4 @@
+GET /a?page=db.users.aggregate%2528%255B%257B%2524match%253A%257B%257D%257D%255D%2529 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

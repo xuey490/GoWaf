@@ -1,0 +1,4 @@
+GET /a?cmd=cn%253Dadmin%2529%252Cdc%253Devil%252Cdc%253Dtld HTTP/1.1
+Host: demo.example.com
+Connection: close
+

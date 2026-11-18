@@ -1,0 +1,4 @@
+GET /a?rurl=https%253A%252F%252Fattacker.tld%252F%253Fnext%253Dx HTTP/1.1
+Host: demo.example.com
+Connection: close
+

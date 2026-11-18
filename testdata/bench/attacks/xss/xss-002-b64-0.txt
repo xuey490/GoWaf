@@ -1,0 +1,4 @@
+GET /a?file=PHN2ZyBvbmxvYWQ9YWxlcnQoMSk%2B HTTP/1.1
+Host: demo.example.com
+Connection: close
+

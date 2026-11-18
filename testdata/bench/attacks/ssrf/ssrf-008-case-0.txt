@@ -1,0 +1,4 @@
+GET /a?search=hTtP://169.254.169.254/lAtEsT/mEtA-dAtA/ HTTP/1.1
+Host: demo.example.com
+Connection: close
+

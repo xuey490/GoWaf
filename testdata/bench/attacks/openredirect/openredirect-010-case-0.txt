@@ -1,0 +1,4 @@
+GET /a?callback=hTtPs://EvIl.TlD%2f%2E%2e HTTP/1.1
+Host: demo.example.com
+Connection: close
+

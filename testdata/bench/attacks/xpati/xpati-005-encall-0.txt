@@ -1,0 +1,4 @@
+GET /a?name=%2F%2F%2A%5B%63%6F%6E%74%61%69%6E%73%28%6E%61%6D%65%2C%27%61%64%6D%69%6E%27%29%5D HTTP/1.1
+Host: demo.example.com
+Connection: close
+

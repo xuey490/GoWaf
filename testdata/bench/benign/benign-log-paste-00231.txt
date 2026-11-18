@@ -1,0 +1,8 @@
+POST /ops/logpaste HTTP/1.1
+Host: demo.example.com
+User-Agent: ops-console/0.9
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 349
+Connection: close
+
+paste=gateway\n2024-03-11 02:08:57 INFO gateway request done in 454ms\n2024-06-20 21:18:23 INFO gateway request done in 242ms\n2024-03-14 07:33:12 INFO gateway request done in 290ms\n2024-09-15 00:25:47 INFO gateway request done in 330ms\n2024-11-01 22:09:14 INFO gateway request done in 427ms\n2024-01-15 04:41:35 INFO gateway request done in 376ms

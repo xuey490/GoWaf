@@ -1,0 +1,4 @@
+GET /a?redirect=<a%20HrEf%3D"JaVaScRiPt:AlErT(1)">x</A> HTTP/1.1
+Host: demo.example.com
+Connection: close
+

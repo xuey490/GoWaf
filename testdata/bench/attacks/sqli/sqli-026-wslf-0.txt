@@ -1,0 +1,4 @@
+GET /a?path=1'%0aand%0anot%0aexists(select%0a1)--%0a- HTTP/1.1
+Host: demo.example.com
+Connection: close
+

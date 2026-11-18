@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 170
+Connection: close
+
+page=[{&quot;query&quot;:&quot;query{a}&quot;},{&quot;query&quot;:&quot;query{b}&quot;},{&quot;query&quot;:&quot;query{c}&quot;},{&quot;query&quot;:&quot;query{d}&quot;}]

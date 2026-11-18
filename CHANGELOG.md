@@ -4,6 +4,87 @@
 
 ---
 
+## [v1.6.3] - 2026-11-19 · P1 第二批（语义广度 + 身份体系 + 指纹库）
+
+对标《v1.6.1-与雷池社区版对比》追赶清单 P1 第 1~6 项与全部工程债。
+无数据库迁移（OIDC/用户管理复用既有 sys_users 表），停服替换二进制升级。
+
+### 新增
+
+- **语义通道扩类 7→19 类（P1-1，第四引擎）**：新增路径穿越（traver）、文件包含
+  （lfi）、NoSQL 注入（nosqli）、LDAP 注入（ldapi）、XPath 注入（xpati）、
+  CRLF/头注入（crlf）、开放重定向（openredirect，跨域宿主比对）、原型链污染
+  （prototype）、HTTP 走私（smugg，TE/CL 头组合）、Webshell（webshell）、
+  GraphQL 攻击（graphqli）、LLM 提示注入（prompt）12 类结构判定；加 libi 的
+  SQLi/XSS 共 21 类。类别定义收敛为 semCatTable 单一事实来源，12 个新分值键
+  `engine.sem.<cat>_score` 可控。误报安全设计：弱操作符不收裸 $in（shell 变量）、
+  穿越目标不收 hosts/issue、developer mode 不收等。
+- **万级样本库与跑分器（P1-1）**：testdata/bench 共 20,153 个样本文件
+  （攻击 10,183 = 21 类种子 × 12 变形 × 2 放置；良性 9,970 = 22 个生成器族，
+  覆盖富编码/运维文本/中文/Markdown 等误报高危面），manifest.jsonl 逐条来源
+  与许可（全部 self-curated, MIT）；跑分器 tools/bench 与 edge.go 同构装配
+  四引擎 + CRS 调度闸门，report.json 入库可复现。
+  **结果：召回 86.39%（验收 ≥70%）、误报 0.020%（验收 ≤0.1%）。**
+  弱项如实保留：openredirect/crlf/xpati 对强变形的召回 54~92%。
+- **OIDC 统一认证（P1-2，对标雷池 CE 8.6.0+ 的 OIDC 登录）**：
+  `/api/auth/oidc/{status,start,callback}` 授权码流程 + userinfo，零新依赖；
+  state 一次性 10 分钟；OIDC 用户强制 `oidc:<sub>` 命名空间（不用 email 关联
+  本地账号）；自动建号收敛 viewer（admin 永不自动授予）；设置键
+  `oidc.*` 全套（secret 脱敏）。
+- **用户管理 API（P1-2）**：POST/PUT/DELETE /api/users、reset-password；
+  角色 admin/viewer/demo，按钮权限跟随角色默认（AllButtons 新增 user:write）；
+  守卫：不能停用/删除/降级自己、至少保留一个启用 admin；口令重置吊销全部
+  刷新令牌。新增测试 5 组。
+- **JA4 内置指纹清单 2→50 条（P1-3）**：按 category 分层——script 27（本机
+  tools/ja4probe 真实采集：Go/curl/python/node/.NET 及 TLS 配置变体）、browser 12
+  （FoxIO 公开样例基线）、malware 5（Cobalt Strike beacon ×4 + IcedID ×1）、
+  vpn 2 / iot 3 / system 1；逐条带来源标注。`guard.ja4.block_builtin` 开启时
+  **只拦 malware 类目**（脚本栈双重用途、浏览器基线永不自动拦）。
+  新增采集工具 tools/ja4probe（管理员可复用采集自有栈）。许可纪律：
+  FoxIO mapping.csv（FoxIO License 1.1 / JA4 BSD-3）带标注引用；
+  JA4DB 已转闭源，第三方镜像许可不明不入库。
+- **控制台 TOTP UI（P1-4）**：新增「账号安全」页——修改口令 + TOTP 绑定
+  （qrcode 扫码 + Base32 手录 + 动态码确认）；登录页动态码输入
+  （业务码 40102 触发显隐）。v1.6.1 的「API-first、UI 未跟上」已知局限就此补齐。
+- **登录页 OIDC 按钮（P1-2b）**：`oidc.enabled` 时显示 SSO 登录入口，
+  回调失败 ?oidcError= 提示。
+- **用户管理页（P1-2b）**：账号表格（角色/状态/最近登录）、创建/编辑/
+  重置口令（自动生成仅显示一次）/停用删除；i18n 中英 60+ key。
+- **压测环境与基准（P1-5）**：tools/loadgen（backend/load 双模式，
+  clean/attack/static 三场景）+ scripts/bench 可复现环境 + docs/benchmarks.md
+  （裸后端 45.5k、全引擎干净 5,879 RPS、静态 6,675、C=1 时延增量 0.52ms、
+  攻击拦截 22.3k；与 v1.6.0 历史数字工具不同，绝对值不可互比，详见文档声明）。
+
+### 修复
+
+- **CRS 预筛被 Accept-Encoding: gzip 击穿（跑分归因发现）**：CRS 920280 等规则
+  的字面量 gzip 进入预筛词表，而几乎所有客户端默认发送 gzip——预筛命中
+  率≈0、CRS 全量执行，形同虚设。噪声词表补 gzip/deflate/identity/compress/
+  zstd/encoding；修复后干净流量预筛旁路 100%，同口径吞吐 2,560→5,879 RPS（2.3x）。
+- **CRS 事务双 Content-Type**：Inspect 对带 body 请求无条件补
+  Content-Type，与头串里的客户端原始值重复，CRS 920620 对每个 POST 告警。
+  现仅在头串缺失时补表单类型。
+- **README 措辞失实（P1-6）**：「正则 50ms 超时熔断（RE2 + deadline）」实为
+  预留字段未实现，改为如实描述引擎级 2s 熔断（engine.timeout_ms）+ panic 隔离。
+
+### 工程债清理
+
+- go mod tidy：kafka-go 由 // indirect 修正为直接依赖。
+- .gitignore/.gitattributes：排除调试产物（pr*.json/merge*.json 等）与
+  基准数据目录；testdata/bench 固定为无换行转换（生成器确定性输出）。
+- CI 新增 release 流水线：tag 触发 5 平台交叉编译（linux amd64/arm64、
+  windows amd64、darwin amd64/arm64）+ 组包上传 Release。
+
+### 说明
+
+- 升级路径：v1.6.1/v1.6.2 → v1.6.3 停服替换二进制即可，无迁移、无设置键
+  行为变化（新键全部默认保守：oidc.enabled=false、预筛仍默认关）。
+- 全量验证：go build/vet 全绿；go test ./internal/... 全绿（含新增语义
+  扩类/OIDC/用户管理/JA4 测试）；vue-tsc 零错误；检测跑分
+  `go run ./tools/bench` 86.39%/0.020%。
+
+---
+
 ## [v1.6.2] - 2026-11-18 · 补丁：站点重复修复
 
 修复「部署重装后站点列表出现重复记录」的问题。无数据库迁移、无设置键变更、

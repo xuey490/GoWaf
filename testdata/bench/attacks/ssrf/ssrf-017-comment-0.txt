@@ -1,0 +1,4 @@
+GET /a?url=/*x*/http://0x7f000001/ HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,4 @@
+GET /a?token=%68%74%74%70%3A%2F%2F%30%31%37%37%2E%30%2E%30%2E%31%3A%38%30%2F HTTP/1.1
+Host: demo.example.com
+Connection: close
+

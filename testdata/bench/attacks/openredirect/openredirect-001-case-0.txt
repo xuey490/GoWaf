@@ -1,0 +1,4 @@
+GET /a?redirect=hTtPs://EvIl.TlD/sTeAl%3FToKeN%3Dx HTTP/1.1
+Host: demo.example.com
+Connection: close
+

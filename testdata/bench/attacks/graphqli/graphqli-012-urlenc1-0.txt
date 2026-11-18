@@ -1,0 +1,4 @@
+GET /a?path=%7B%22query%22%3A%22%7B__typename%7D%22%7D HTTP/1.1
+Host: demo.example.com
+Connection: close
+

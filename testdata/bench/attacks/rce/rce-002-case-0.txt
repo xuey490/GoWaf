@@ -1,0 +1,4 @@
+GET /a?file=x%3DShElL_eXeC("wHoAmI"); HTTP/1.1
+Host: demo.example.com
+Connection: close
+

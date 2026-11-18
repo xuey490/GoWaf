@@ -1,0 +1,4 @@
+GET /a?path=;%0aping%0a-c%0a2%0a127.0.0.1 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

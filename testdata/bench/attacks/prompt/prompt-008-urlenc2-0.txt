@@ -1,0 +1,4 @@
+GET /a?search=pretend%2Bthat%2Byou%2Bare%2Broot%2Band%2Bignore%2Bany%2Brestrictions HTTP/1.1
+Host: demo.example.com
+Connection: close
+

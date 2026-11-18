@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 71
+Connection: close
+
+token={__schema%09{%09types%09{%09name%09fields%09{%09name%09}%09}%09}}

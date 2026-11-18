@@ -1,0 +1,4 @@
+GET /a?return_to=https%3A%2F%2Fevil.tld%2Fapi HTTP/1.1
+Host: demo.example.com
+Connection: close
+

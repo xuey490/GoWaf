@@ -1,0 +1,4 @@
+GET /a?url=\u0027%20or%20string-length(name)\u003E0%20or%20\u0027a HTTP/1.1
+Host: demo.example.com
+Connection: close
+

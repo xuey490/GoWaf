@@ -1,0 +1,4 @@
+GET /a?redirect=mutation%257B__schema%257Bx%257D%257D HTTP/1.1
+Host: demo.example.com
+Connection: close
+

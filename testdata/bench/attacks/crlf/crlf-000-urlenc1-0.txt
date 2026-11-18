@@ -1,0 +1,4 @@
+GET /a?q=http%3A%2F%2Fx%250d%250aLocation%3Ahttp%3A%2F%2Fevil.tld HTTP/1.1
+Host: demo.example.com
+Connection: close
+

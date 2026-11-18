@@ -1,0 +1,4 @@
+GET /a?q=s%3D%0A%0dHoSt:EvIl.TlD HTTP/1.1
+Host: demo.example.com
+Connection: close
+

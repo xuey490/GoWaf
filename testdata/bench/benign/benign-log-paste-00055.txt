@@ -1,0 +1,8 @@
+POST /ops/logpaste HTTP/1.1
+Host: demo.example.com
+User-Agent: ops-console/0.9
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 395
+Connection: close
+
+paste=worker\n2024-05-14 13:55:05 INFO worker request done in 275ms\n2024-08-08 17:13:57 INFO worker request done in 17ms\n2024-09-12 01:56:02 INFO worker request done in 96ms\n2024-05-16 23:28:31 INFO worker request done in 128ms\n2024-06-02 22:21:44 INFO worker request done in 484ms\n2024-02-01 18:14:32 INFO worker request done in 160ms\n2024-12-11 18:20:19 INFO worker request done in 325ms

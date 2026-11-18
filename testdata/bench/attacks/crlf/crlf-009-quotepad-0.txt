@@ -1,0 +1,4 @@
+GET /a?page='h%3D%0d%0aLocation:%0d%0aContent-Type:text/html' HTTP/1.1
+Host: demo.example.com
+Connection: close
+

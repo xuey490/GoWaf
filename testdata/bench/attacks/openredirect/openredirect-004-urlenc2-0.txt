@@ -1,0 +1,4 @@
+GET /a?url=https%253A%252F%252Fevil.tld%253A8080%252Fpath HTTP/1.1
+Host: demo.example.com
+Connection: close
+

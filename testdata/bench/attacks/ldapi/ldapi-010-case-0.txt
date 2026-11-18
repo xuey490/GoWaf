@@ -1,0 +1,4 @@
+GET /a?cmd=cN%3DaDmIn),Dc%3DEvIl,Dc%3DTlD HTTP/1.1
+Host: demo.example.com
+Connection: close
+

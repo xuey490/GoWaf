@@ -1,0 +1,8 @@
+POST /api/v1/carts HTTP/1.1
+Host: demo.example.com
+User-Agent: app-client/1.2
+Content-Type: application/json
+Content-Length: 71
+Connection: close
+
+{"name":"user724","email":"u724@example.com","age":40,"tags":["a","b"]}

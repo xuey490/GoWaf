@@ -1,0 +1,4 @@
+GET /a?name=%3Cbase%2Bhref%3D%22javascript%3A%2F%2F%22%3E HTTP/1.1
+Host: demo.example.com
+Connection: close
+

