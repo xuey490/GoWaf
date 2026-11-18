@@ -55,6 +55,8 @@ type Definition struct {
 	Enabled    bool
 	Action     Action
 	Conditions Group
+	// Config 动作附加参数 JSON（auth / rate_limit 需要），其余动作为空。
+	Config string
 }
 
 // Request 是策略求值上下文，由 edge 层按请求构造一次。
@@ -121,6 +123,10 @@ type Match struct {
 	Name     string `json:"name"`
 	Action   Action `json:"action"`
 	Reason   string `json:"reason"`
+	// Auth / RateLimit 是命中策略的动作参数（不可变快照内的指针，只读）：
+	// edge 层据此执行认证门禁与自定义 CC 计数。
+	Auth      *AuthConfig      `json:"-"`
+	RateLimit *RateLimitConfig `json:"-"`
 }
 
 // Set 是编译后的不可变策略快照，可并发读取。
@@ -147,6 +153,9 @@ type compiledPolicy struct {
 	// needsBody 表示条件树引用了 body 字段。这类策略必须在读取请求体之后才能求值，
 	// 因此无法在「缓存查找之前」提前决策。
 	needsBody bool
+	// auth / rateLimit 是门禁类动作的编译参数；其余动作恒为 nil。
+	auth      *AuthConfig
+	rateLimit *RateLimitConfig
 	hits      atomic.Int64 // 累计命中次数，由数据面写入、后台任务定期刷库
 	lastHit   atomic.Int64 // 最近命中时间（Unix 毫秒）
 }
@@ -184,9 +193,16 @@ func Compile(defs []Definition) (*Set, error) {
 			action = ActionBlock
 		}
 		switch action {
-		case ActionAllow, ActionBlock, ActionChallenge, ActionLog, ActionBan:
+		case ActionAllow, ActionBlock, ActionChallenge, ActionLog, ActionBan,
+			ActionAuth, ActionRateLimit:
 		default:
 			return nil, fmt.Errorf("策略 %s 动作非法: %s", d.Name, action)
+		}
+		// 门禁类动作的参数编译与约束：配置必须合法，且条件树不允许依赖 body
+		// ——门禁必须在读 body 之前的早期阶段执行，依赖 body 就失去了提前性。
+		authCfg, rlCfg, err := compileActionConfig(action, d.Config)
+		if err != nil {
+			return nil, fmt.Errorf("策略 %s: %w", d.Name, err)
 		}
 		if d.Name == "" {
 			return nil, fmt.Errorf("策略 ID %d 名称为空", d.ID)
@@ -202,6 +218,10 @@ func Compile(defs []Definition) (*Set, error) {
 			id: d.ID, name: d.Name, site: strings.TrimSpace(d.Site),
 			priority: d.Priority, action: action, root: root,
 			needsBody: root.hasBodyDependency(),
+			auth:      authCfg, rateLimit: rlCfg,
+		}
+		if isGateAction(action) && p.needsBody {
+			return nil, fmt.Errorf("策略 %s: auth/rate_limit 是早期门禁动作，条件不能依赖 body", d.Name)
 		}
 		s.policies = append(s.policies, p)
 	}
@@ -267,12 +287,19 @@ func (s *Set) ResetHits(id uint, delta int64) {
 // Evaluate 按优先级顺序求值，返回第一条命中的策略。
 // 参数 req：策略上下文；site：当前站点名（空策略 site 对所有站点生效）。
 // 返回 (*Match, bool)：命中返回策略结果；未命中返回 nil,false。
+//
+// auth / rate_limit 两个门禁动作在这里被跳过：它们已在「缓存查找之前」的
+// 早期阶段（EvaluateDenyEarly）完成认证与计数，完整求值再触发一次就会
+// 重复计数或重复弹认证页。编译期已保证门禁策略不依赖 body，跳过是安全的。
 func (s *Set) Evaluate(req *Request, site string) (*Match, bool) {
 	if s == nil || req == nil {
 		return nil, false
 	}
 	for _, p := range s.policies {
 		if p.site != "" && !strings.EqualFold(p.site, site) {
+			continue
+		}
+		if isGateAction(p.action) {
 			continue
 		}
 		if p.root.match(req) {
@@ -293,7 +320,8 @@ func (s *Set) Evaluate(req *Request, site string) (*Match, bool) {
 // 对境外 IP 仍返回 200）。
 //
 // 语义上严格保持「优先级第一条命中的策略生效」：按优先级遍历，
-// 只有「第一条命中的策略」同时满足（1）不依赖 body、（2）动作是拒绝类，
+// 只有「第一条命中的策略」同时满足（1）不依赖 body、（2）动作是拒绝类
+// 或门禁类（auth / rate_limit，认证与计数同样必须在缓存之前），
 // 才返回命中。若第一条命中依赖 body，或动作是 allow / log，一律返回
 // 未命中，把决策原样交回第 8 步的完整求值——宁可晚判，也不改变结论。
 //
@@ -315,11 +343,14 @@ func (s *Set) EvaluateDenyEarly(req *Request, site string) (*Match, bool) {
 			return nil, false
 		}
 		switch p.action {
-		case ActionBlock, ActionBan, ActionChallenge:
-			return &Match{
+		case ActionBlock, ActionBan, ActionChallenge, ActionAuth, ActionRateLimit:
+			m := &Match{
 				PolicyID: p.id, Name: p.name, Action: p.action,
 				Reason: "精准访问控制：" + p.name,
-			}, true
+			}
+			// 门禁参数随命中带出，edge 层据此执行认证或 CC 计数。
+			m.Auth, m.RateLimit = p.auth, p.rateLimit
+			return m, true
 		}
 		return nil, false
 	}
