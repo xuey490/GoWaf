@@ -4,6 +4,70 @@
 
 ---
 
+## [v1.6.1] - 2026-11-18 · P1 追赶（对标雷池）第二批
+
+本批完成「v1.6.0 与雷池社区版对比」新 P1 清单中的第 2~8 项共七项能力（第 1 项
+「语义广度 20+ 类 + 万级样本库跑分」另行规划，建设路径见 `docs/P1-样本库建设方案.md`）。
+含一次数据库迁移（`011_p1_features.sql`），升级方式为**停服替换二进制**，迁移在启动时自动执行。
+所有新开关默认保守：防重放、等候室、日志外发默认关闭，JA4 采集默认开启但拦截默认关闭，
+未显式配置时线上拦截行为与 v1.6.0 保持一致。
+
+### 新增
+
+- **JA4/TLS 客户端指纹（`guard.ja4.enabled` / `blocklist` / `block_builtin`）**：包装 TLS
+  Listener 在握手阶段偷看 ClientHello，按 FoxIO 规范计算三段式指纹（`t13d1516h2_xxx_xxx`，
+  GREASE 忽略、扩展按十六进制排序、仅剔除 SNI/ALPN 参与哈希），按连接四元组登记，
+  HTTP/1.1 与 HTTP/2 均适用，连接关闭即清理。指纹写入事件库新增的 `ja4` 列并在事件 API
+  返回；`guard.ja4.blocklist` 精确匹配即 403 拦截。内置清单（`internal/ja4/malicious_ja4.json`）
+  仅收录两条本机真实采集种子，脚本栈指纹亦被正常工具使用，故 `block_builtin` 默认关闭。
+- **日志外发（`logship.*`）**：拦截事件异步推送 SIEM，支持 Syslog RFC5424
+  （STRUCTURED-DATA `SD-ID=gowaf@48577`，udp/tcp/tls，tcp/tls 为长连接失败自动重建）
+  与 Kafka（kafka-go，key 为客户端 IP 保证同 IP 分区有序）双渠道，可同时开启。
+  有界队列（默认 4096）+ 单 worker，满队列 fail-open 丢弃并计数；
+  `logship.min_action` 支持 `all`/`log`/`block` 三档外发门槛。
+- **请求防重放（`guard.replay.enabled` / `window` / `header`）**：携带 nonce 头
+  （默认 `X-WAF-Nonce`）的请求首次放行并登记，窗口内同 nonce 重放直接 403（reason=`replay`）；
+  不带该头的请求不受影响，内存表按窗口自动清理。
+- **等候室（`waitroom.*`）**：上游并发阈值 FIFO 排队，`max_active` 限制同时打到上游的并发数，
+  `timeout_ms` 内拿不到名额返回 429 + `Retry-After` + 自动刷新等候页。只约束真正转发的请求，
+  白名单、缓存命中、Bot 放行与拦截早退不占用名额。
+- **站点级自定义拦截页（`sites.block_page`）**：站点可配置 HTML 模板，支持
+  `{{status}}`/`{{reason}}`/`{{reqid}}`/`{{site}}` 四个占位符（HTML 转义），上限 4096 字节；
+  传入 `null` 回到内置模板，校验失败按 fail-open 退回内置页。
+- **控制台 TOTP 两步验证（`/api/user/totp` 及 `setup`/`enable`/`disable`）**：RFC 6238
+  实现（HMAC-SHA1、30 秒步长、±1 窗口容错），启用后登录需携带 `totpCode`，缺失或错误返回
+  业务码 `40102` 并计入登录限流。API-first，控制台界面尚未提供入口。
+- **人机校验降级链（`guard.challenge.chain` / `guard.captcha.*`）**：环境信号校验失败后的
+  处置序列可配置为 `pow,captcha,ban` 的组合——纯拒绝（原行为）、降级到图形验证码、
+  答错达阈值后封禁。验证码为确定性 SVG 算式，令牌绑定 IP 与过期时间，换 IP/篡改/过期一律拒绝。
+
+### 变更
+
+- 边缘管线插入 JA4 拦截、防重放、等候室与验证码端点；等候室放行期间计入 `waf_waitroom_active`。
+- 新增指标：`waf_ja4_blocked_total`、`waf_replay_blocked_total`、`waf_captcha_fails_total`、
+  `waf_captcha_passed_total`、`waf_waitroom_rejected_total`、`waf_waitroom_active`、
+  `waf_logship_sent_total`、`waf_logship_dropped_total`。
+- 优雅关闭时停止日志外发 worker 并关闭渠道连接。
+- 维护协程按周期清理重放表与验证码失败计数。
+- 文档：新增 `docs/P1-新特性-使用指南.md`（设置键、端点、验收口径对照与已知局限）、
+  `docs/P1-样本库建设方案.md`。
+
+### 升级说明
+
+- 迁移 `011_p1_features.sql` 新增三处列：`events.ja4`、`sys_users.totp_secret`/`totp_enabled`、
+  `sites.block_page`，启动时自动执行，无需手工干预；老数据 `ja4` 为空属正常。
+- 建议升级前备份 `data/waf.db*`（WAL 模式下需一并备份 `-wal`/`-shm`）与当前二进制。
+- 回滚：停止服务 → 还原二进制 → 启动；已执行的迁移对 v1.6.0 为新增列，不影响旧版读取。
+
+### 已知局限
+
+- JA4 内置恶意指纹清单仅 2 条真实采集种子，非完整指纹库，拦截覆盖依赖管理员积累 blocklist。
+- 防重放与等候室为单机内存态，多节点部署不共享状态；等候室无跨节点全局配额。
+- 日志外发不做磁盘缓冲持久化，进程退出或队列满时可能丢事件（已计数）。
+- TOTP 为 API-first，前端登录页尚无动态码输入框。
+
+---
+
 ## [v1.6.0] - 2026-11-18 · P0 追赶（对标雷池）
 
 本批改动完成「v1.5.0 与雷池社区版对比」清单中的全部四项 P0，无数据库迁移，替换二进制升级。
