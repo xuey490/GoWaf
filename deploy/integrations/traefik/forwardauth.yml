@@ -1,0 +1,32 @@
+# forwardauth.yml — Traefik 经 forwardAuth 中间件接入 GoWAF 检测引擎。
+#
+# Traefik 不支持 Lua，但 forwardAuth 与 /check 端点天然匹配：
+# 每个请求先转发到 GoWAF /check，2xx 放行、403 拦截。
+#
+# 前置：gowaf config.yaml 启用
+#   server:
+#     detect_listen: "127.0.0.1:8020"
+#     detect_token: "change-me"
+
+http:
+  middlewares:
+    waf-check:
+      forwardAuth:
+        address: "http://127.0.0.1:8020/check"
+        trustForwardHeader: true
+        authResponseHeaders:
+          - X-WAF-Action
+          - X-WAF-Score
+
+  routers:
+    demo:
+      rule: "Host(`example.com`)"
+      service: my-backend
+      middlewares:
+        - waf-check
+
+  services:
+    my-backend:
+      loadBalancer:
+        servers:
+          - url: "http://127.0.0.1:8080"

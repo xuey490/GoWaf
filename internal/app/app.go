@@ -23,6 +23,7 @@ import (
 	"gowaf/internal/admin/handler"
 	"gowaf/internal/admin/middleware"
 	"gowaf/internal/config"
+	"gowaf/internal/detectapi"
 	"gowaf/internal/edge"
 	"gowaf/internal/metrics"
 	"gowaf/internal/proxy"
@@ -49,6 +50,7 @@ type App struct {
 	adminSrv   *http.Server // 控制面（管理后台）服务
 	httpV6Srv  *http.Server // 数据面 IPv6 HTTP 额外监听：未配置时为 nil
 	httpsV6Srv *http.Server // 数据面 IPv6 HTTPS 额外监听：未配置时为 nil
+	detectSrv  *http.Server // 独立检测引擎服务（server.detect_listen 配置时启用）
 
 	mu       sync.Mutex    // 保护 closed 标志的互斥锁
 	closed   bool          // 应用是否已（开始）关闭
@@ -204,6 +206,19 @@ func New(cfg *config.Config, version string) (*App, error) {
 		IdleTimeout:       120 * time.Second,
 	}
 
+	// 独立检测引擎（可选）：外部网关经 /detect、/check 调用检测能力。
+	if cfg.Server.DetectListen != "" {
+		a.detectSrv = &http.Server{
+			Addr:              cfg.Server.DetectListen,
+			Handler:           detectapi.New(rt, cfg.Server.DetectToken),
+			ReadHeaderTimeout: 5 * time.Second,
+			ReadTimeout:       15 * time.Second,
+			WriteTimeout:      15 * time.Second,
+			IdleTimeout:       60 * time.Second,
+			MaxHeaderBytes:    cfg.Server.MaxHeaderBytes,
+		}
+	}
+
 	return a, nil
 }
 
@@ -307,8 +322,28 @@ func (a *App) Start() error {
 		return fmt.Errorf("控制面: %w", err)
 	}
 
-	// 缓冲 5：与 HTTP/HTTPS/IPv6 HTTP/IPv6 HTTPS/控制面五个服务对应，保证出错 goroutine 发送不阻塞
-	errCh := make(chan error, 5)
+	var detectLn net.Listener
+	if a.detectSrv != nil {
+		detectLn, err = net.Listen("tcp", a.cfg.Server.DetectListen)
+		if err != nil {
+			closeAll()
+			_ = adminLn.Close()
+			if httpsLn != nil {
+				_ = httpsLn.Close()
+			}
+			if httpV6Ln != nil {
+				_ = httpV6Ln.Close()
+			}
+			if httpsV6Ln != nil {
+				_ = httpsV6Ln.Close()
+			}
+			return fmt.Errorf("独立检测引擎: %w", err)
+		}
+	}
+
+	// 缓冲 6：与 HTTP/HTTPS/IPv6 HTTP/IPv6 HTTPS/控制面/检测引擎六个服务对应，
+	// 保证出错 goroutine 发送不阻塞
+	errCh := make(chan error, 6)
 
 	go func() {
 		log.Printf("[app] 数据面 HTTP 监听 %s", httpLn.Addr())
@@ -353,6 +388,15 @@ func (a *App) Start() error {
 			errCh <- fmt.Errorf("控制面: %w", err)
 		}
 	}()
+
+	if detectLn != nil {
+		go func() {
+			log.Printf("[app] 独立检测引擎监听 %s（POST /detect · GET /check · GET /healthz）", detectLn.Addr())
+			if err := a.detectSrv.Serve(detectLn); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				errCh <- fmt.Errorf("独立检测引擎: %w", err)
+			}
+		}()
+	}
 
 	go a.maintenance()
 	go a.streamLoop()
@@ -595,6 +639,11 @@ func (a *App) Shutdown(ctx context.Context) error {
 	}
 	if err := a.adminSrv.Shutdown(ctx); err != nil {
 		errs = append(errs, err)
+	}
+	if a.detectSrv != nil {
+		if err := a.detectSrv.Shutdown(ctx); err != nil {
+			errs = append(errs, err)
+		}
 	}
 	// 先把 channel 里剩余事件写完，再关库
 	if a.events != nil {

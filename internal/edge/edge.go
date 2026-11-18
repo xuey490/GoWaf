@@ -397,12 +397,35 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 		// CRS 第二引擎：覆盖通用攻击特征。两个引擎分数相加后再判动作，
 		// 这样「自研规则 30 分 + CRS 一条 error 45 分」也能累计到拦截阈值。
+		// 调度闸门（engine.crs.skip_static / prescreen / exclude_paths）先行
+		// 判定：命中旁路条件的请求跳过 Coraza 事务——CRS 是实测的吞吐天花板
+		// （全引擎 4.3k → 关闭 17.1k），旁路决策按原因打点，可在监控里看到。
+		// 二进制 body 只做头阶段检测：CRS 的 phase-2 解析不了二进制协议，
+		// 喂进去纯浪费（in.Body 置空后 phase1 协议/头规则照常执行）。
 		if crs := h.rt.CRS(); crs != nil && result.Action != "ban" {
-			cres, d := inspectGuarded("crs", budget, func() detect.Result { return crs.Inspect(&in) })
-			engineDegraded = engineDegraded || d
-			// 例外对第二引擎同样生效，否则「标记误报」之后照样被拦。
-			h.rt.Engine.FilterByException(&cres, route.SiteName, in.Path, in.Params)
-			mergeResult(&result, &cres)
+			runCRS := true
+			if gov := h.rt.CRSGov(); gov != nil {
+				if ok, reason := gov.ShouldInspect(route.SiteName, in.Method, in.Path, in.Query, in.Body, in.Headers); !ok {
+					metrics.CRSSkipped.WithLabelValues(reason).Inc()
+					runCRS = false
+				} else if gov.BodyTextOnly() && in.Body != "" && !isTextContentType(r.Header.Get("Content-Type")) {
+					crsIn := in
+					crsIn.Body = ""
+					crsIn.DecodedBody = nil
+					cres, d := inspectGuarded("crs", budget, func() detect.Result { return crs.Inspect(&crsIn) })
+					engineDegraded = engineDegraded || d
+					h.rt.Engine.FilterByException(&cres, route.SiteName, in.Path, in.Params)
+					mergeResult(&result, &cres)
+					runCRS = false
+				}
+			}
+			if runCRS {
+				cres, d := inspectGuarded("crs", budget, func() detect.Result { return crs.Inspect(&in) })
+				engineDegraded = engineDegraded || d
+				// 例外对第二引擎同样生效，否则「标记误报」之后照样被拦。
+				h.rt.Engine.FilterByException(&cres, route.SiteName, in.Path, in.Params)
+				mergeResult(&result, &cres)
+			}
 		}
 
 		// libinjection 第三引擎：语义级 SQLi/XSS 判定，对变形 payload 的泛化能力
@@ -413,6 +436,16 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			engineDegraded = engineDegraded || d
 			h.rt.Engine.FilterByException(&lres, route.SiteName, in.Path, in.Params)
 			mergeResult(&result, &lres)
+		}
+
+		// 语义检测第四引擎：命令注入/RCE/XXE/SSRF/SSTI/表达式注入/反序列化的
+		// 结构判定，补齐 libinjection（仅 SQLi/XSS）之外的语义覆盖面。
+		// 误报治理与 libi 一致：例外规则按 sem-* 规则 ID 精确豁免。
+		if se := h.rt.Sem(); se.Enabled() && result.Action != "ban" {
+			sres, d := inspectGuarded("sem", budget, func() detect.Result { return se.Inspect(&in) })
+			engineDegraded = engineDegraded || d
+			h.rt.Engine.FilterByException(&sres, route.SiteName, in.Path, in.Params)
+			mergeResult(&result, &sres)
 		}
 
 		// 上传文件与反序列化载荷：解析 multipart/二进制协议标记，补规则正则的盲区。
@@ -488,6 +521,28 @@ func earlyPolicyVerdict(ps *policy.Set, r *http.Request, ip, country, site strin
 
 // maxFieldLog 事件字段（路径、Query 等）落库前的最大保留字节数，防止超长 URL 撑爆事件表。
 const maxFieldLog = 512
+
+// isTextContentType 判断 Content-Type 是否为 CRS phase-2 能解析的文本形态。
+// 参数 ct：请求的 Content-Type 头。返回 bool：表单/JSON/XML/GraphQL 等
+// 文本类型返回 true；二进制（octet-stream、图片、音视频等）返回 false。
+func isTextContentType(ct string) bool {
+	if ct == "" {
+		return true // 无类型声明按文本处理，宁可多检不可漏检
+	}
+	c := strings.ToLower(ct)
+	if i := strings.IndexByte(c, ';'); i >= 0 {
+		c = strings.TrimSpace(c[:i])
+	}
+	switch {
+	case strings.HasPrefix(c, "text/"):
+		return true
+	case strings.Contains(c, "json"), strings.Contains(c, "xml"),
+		strings.Contains(c, "x-www-form-urlencoded"), strings.Contains(c, "graphql"),
+		strings.Contains(c, "javascript"), strings.Contains(c, "soap"):
+		return true
+	}
+	return false
+}
 
 // decideByGuard 用站点级生效阈值重判动作，语义与 detect.Engine.decide 一致。
 // 参数 score：两引擎合并后的总分数；参数 g：站点自定义防护配置；参数 globalMode：
