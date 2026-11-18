@@ -1,12 +1,302 @@
 [
   {
-    "fingerprint": "t13d1312h2_f57a46bbacb6_f50d94e863eb",
-    "label": "Go 标准库 crypto/tls 默认客户端（Go 1.27，SNI=example.com，ALPN=h2）",
-    "source": "本仓库 internal/ja4 真实握手采集（2026-11-18，go1.27.3 windows/amd64）；Go 栈是大量采集脚本与自动化工具的默认实现"
+    "fingerprint": "t13i131000_f57a46bbacb6_f50d94e863eb",
+    "category": "script",
+    "label": "go-std-tls13-no-alpn(自定义 transport 不协商 h2)（脚本/自动化工具栈参考）",
+    "source": "tools/ja4probe 本机真实握手采集（2026-11-19，Windows 11 x64，go1.27/curl8.22/python3/node22）"
+  },
+  {
+    "fingerprint": "t13i1311h1_f57a46bbacb6_f50d94e863eb",
+    "category": "script",
+    "label": "go-http1-only（脚本/自动化工具栈参考）",
+    "source": "tools/ja4probe 本机真实握手采集（2026-11-19，Windows 11 x64，go1.27/curl8.22/python3/node22）"
+  },
+  {
+    "fingerprint": "t12i1010h1_a8cf61a50a39_a92c7c6a82fe",
+    "category": "script",
+    "label": "go-tls12-max（脚本/自动化工具栈参考）",
+    "source": "tools/ja4probe 本机真实握手采集（2026-11-19，Windows 11 x64，go1.27/curl8.22/python3/node22）"
+  },
+  {
+    "fingerprint": "t13i031000_55b375c5d22e_b36ed9cfacdc",
+    "category": "script",
+    "label": "go-tls13-min（脚本/自动化工具栈参考）",
+    "source": "tools/ja4probe 本机真实握手采集（2026-11-19，Windows 11 x64，go1.27/curl8.22/python3/node22）"
+  },
+  {
+    "fingerprint": "t13i0611h1_61f79f7ac0a8_f50d94e863eb",
+    "category": "script",
+    "label": "go-rsa-ciphers-only（脚本/自动化工具栈参考）",
+    "source": "tools/ja4probe 本机真实握手采集（2026-11-19，Windows 11 x64，go1.27/curl8.22/python3/node22）"
+  },
+  {
+    "fingerprint": "t13i0511h1_ab9120688828_f50d94e863eb",
+    "category": "script",
+    "label": "go-ecdsa-ciphers-only（脚本/自动化工具栈参考）",
+    "source": "tools/ja4probe 本机真实握手采集（2026-11-19，Windows 11 x64，go1.27/curl8.22/python3/node22）"
+  },
+  {
+    "fingerprint": "t13i0511h1_063cde1925cf_f50d94e863eb",
+    "category": "script",
+    "label": "go-chacha-only（脚本/自动化工具栈参考）",
+    "source": "tools/ja4probe 本机真实握手采集（2026-11-19，Windows 11 x64，go1.27/curl8.22/python3/node22）"
+  },
+  {
+    "fingerprint": "t13i0511h1_b2647d7ac037_f50d94e863eb",
+    "category": "script",
+    "label": "go-aes256-only（脚本/自动化工具栈参考）",
+    "source": "tools/ja4probe 本机真实握手采集（2026-11-19，Windows 11 x64，go1.27/curl8.22/python3/node22）"
+  },
+  {
+    "fingerprint": "t13d131100_f57a46bbacb6_f50d94e863eb",
+    "category": "script",
+    "label": "go-sni-domain-no-alpn（脚本/自动化工具栈参考）",
+    "source": "tools/ja4probe 本机真实握手采集（2026-11-19，Windows 11 x64，go1.27/curl8.22/python3/node22）"
   },
   {
     "fingerprint": "t13i2011h1_2b729b4bf6f3_36bf25f296df",
-    "label": "curl 8.22 / Windows Schannel 默认客户端（IP 直连无 SNI，ALPN=http/1.1）",
-    "source": "本仓库 internal/ja4 真实握手采集（2026-11-18，curl 8.22.0 Schannel）；无 SNI 的 i 形态常出现在直连 IP 的脚本扫描中"
+    "category": "script",
+    "label": "curl-schannel-default（脚本/自动化工具栈参考）",
+    "source": "tools/ja4probe 本机真实握手采集（2026-11-19，Windows 11 x64，go1.27/curl8.22/python3/node22）"
+  },
+  {
+    "fingerprint": "t13i201000_2b729b4bf6f3_36bf25f296df",
+    "category": "script",
+    "label": "curl-schannel-no-alpn（脚本/自动化工具栈参考）",
+    "source": "tools/ja4probe 本机真实握手采集（2026-11-19，Windows 11 x64，go1.27/curl8.22/python3/node22）"
+  },
+  {
+    "fingerprint": "t13d2012h1_2b729b4bf6f3_36bf25f296df",
+    "category": "script",
+    "label": "curl-schannel-sni（脚本/自动化工具栈参考）",
+    "source": "tools/ja4probe 本机真实握手采集（2026-11-19，Windows 11 x64，go1.27/curl8.22/python3/node22）"
+  },
+  {
+    "fingerprint": "t13i181000_85036bcba153_d41ae481755e",
+    "category": "script",
+    "label": "python-ssl-default（脚本/自动化工具栈参考）；与 FoxIO 样例一致（交叉验证）",
+    "source": "tools/ja4probe 本机真实握手采集（2026-11-19，Windows 11 x64，go1.27/curl8.22/python3/node22）"
+  },
+  {
+    "fingerprint": "t12i150600_d68b136fe8d9_e7e480e5a997",
+    "category": "script",
+    "label": "python-tls12-max（脚本/自动化工具栈参考）",
+    "source": "tools/ja4probe 本机真实握手采集（2026-11-19，Windows 11 x64，go1.27/curl8.22/python3/node22）"
+  },
+  {
+    "fingerprint": "t13i251000_54792d315232_d41ae481755e",
+    "category": "script",
+    "label": "python-aes256-ciphers（脚本/自动化工具栈参考）",
+    "source": "tools/ja4probe 本机真实握手采集（2026-11-19，Windows 11 x64，go1.27/curl8.22/python3/node22）"
+  },
+  {
+    "fingerprint": "t13i590900_a33745022dd6_1f22a2ca17c4",
+    "category": "script",
+    "label": "node-openssl-default（脚本/自动化工具栈参考）",
+    "source": "tools/ja4probe 本机真实握手采集（2026-11-19，Windows 11 x64，go1.27/curl8.22/python3/node22）"
+  },
+  {
+    "fingerprint": "t12i5607h1_99d8c53049f3_e7e480e5a997",
+    "category": "script",
+    "label": "node-tls12-max（脚本/自动化工具栈参考）",
+    "source": "tools/ja4probe 本机真实握手采集（2026-11-19，Windows 11 x64，go1.27/curl8.22/python3/node22）"
+  },
+  {
+    "fingerprint": "t13i070900_224c8cb8631f_1f22a2ca17c4",
+    "category": "script",
+    "label": "node-custom-ciphers（脚本/自动化工具栈参考）",
+    "source": "tools/ja4probe 本机真实握手采集（2026-11-19，Windows 11 x64，go1.27/curl8.22/python3/node22）"
+  },
+  {
+    "fingerprint": "t13i060900_42d8e85a0ea2_1f22a2ca17c4",
+    "category": "script",
+    "label": "node-chacha-ciphers（脚本/自动化工具栈参考）",
+    "source": "tools/ja4probe 本机真实握手采集（2026-11-19，Windows 11 x64，go1.27/curl8.22/python3/node22）"
+  },
+  {
+    "fingerprint": "t13d181000_85036bcba153_d41ae481755e",
+    "category": "script",
+    "label": "Python（FoxIO 公开样例）",
+    "source": "FoxIO-LLC/ja4 仓库 ja4plus-mapping.csv（FoxIO License 1.1，JA4 部分按 BSD-3 发布）"
+  },
+  {
+    "fingerprint": "t13d4312h1_c7886603b240_b26ce05bbdd6",
+    "category": "script",
+    "label": "Python（FoxIO 公开样例）",
+    "source": "FoxIO-LLC/ja4 仓库 ja4plus-mapping.csv（FoxIO License 1.1，JA4 部分按 BSD-3 发布）"
+  },
+  {
+    "fingerprint": "t13d1516h2_8daaf6152771_02713d6af862",
+    "category": "browser",
+    "label": "Chromium Browser（FoxIO 公开样例）",
+    "source": "FoxIO-LLC/ja4 仓库 ja4plus-mapping.csv（FoxIO License 1.1，JA4 部分按 BSD-3 发布）"
+  },
+  {
+    "fingerprint": "q13d0312h3_55b375c5d22e_06cda9e17597",
+    "category": "browser",
+    "label": "Chromium Browser（FoxIO 公开样例）",
+    "source": "FoxIO-LLC/ja4 仓库 ja4plus-mapping.csv（FoxIO License 1.1，JA4 部分按 BSD-3 发布）"
+  },
+  {
+    "fingerprint": "t13d1517h2_8daaf6152771_b0da82dd1658",
+    "category": "browser",
+    "label": "Chromium Browser（FoxIO 公开样例）",
+    "source": "FoxIO-LLC/ja4 仓库 ja4plus-mapping.csv（FoxIO License 1.1，JA4 部分按 BSD-3 发布）"
+  },
+  {
+    "fingerprint": "t13d1517h2_8daaf6152771_b1ff8ab2d16f",
+    "category": "browser",
+    "label": "Chromium Browser（FoxIO 公开样例）",
+    "source": "FoxIO-LLC/ja4 仓库 ja4plus-mapping.csv（FoxIO License 1.1，JA4 部分按 BSD-3 发布）"
+  },
+  {
+    "fingerprint": "t13i1515h2_8daaf6152771_02713d6af862",
+    "category": "browser",
+    "label": "Chromium Browser（FoxIO 公开样例）",
+    "source": "FoxIO-LLC/ja4 仓库 ja4plus-mapping.csv（FoxIO License 1.1，JA4 部分按 BSD-3 发布）"
+  },
+  {
+    "fingerprint": "q13i0311h3_55b375c5d22e_06cda9e17597",
+    "category": "browser",
+    "label": "Chromium Browser（FoxIO 公开样例）",
+    "source": "FoxIO-LLC/ja4 仓库 ja4plus-mapping.csv（FoxIO License 1.1，JA4 部分按 BSD-3 发布）"
+  },
+  {
+    "fingerprint": "t13i1516h2_8daaf6152771_b0da82dd1658",
+    "category": "browser",
+    "label": "Chromium Browser（FoxIO 公开样例）",
+    "source": "FoxIO-LLC/ja4 仓库 ja4plus-mapping.csv（FoxIO License 1.1，JA4 部分按 BSD-3 发布）"
+  },
+  {
+    "fingerprint": "t13i1516h2_8daaf6152771_b1ff8ab2d16f",
+    "category": "browser",
+    "label": "Chromium Browser（FoxIO 公开样例）",
+    "source": "FoxIO-LLC/ja4 仓库 ja4plus-mapping.csv（FoxIO License 1.1，JA4 部分按 BSD-3 发布）"
+  },
+  {
+    "fingerprint": "t13d1715h2_5b57614c22b0_7121afd63204",
+    "category": "browser",
+    "label": "Mozilla Firefox（FoxIO 公开样例）",
+    "source": "FoxIO-LLC/ja4 仓库 ja4plus-mapping.csv（FoxIO License 1.1，JA4 部分按 BSD-3 发布）"
+  },
+  {
+    "fingerprint": "t13i1714h2_5b57614c22b0_7121afd63204",
+    "category": "browser",
+    "label": "Mozilla Firefox（FoxIO 公开样例）",
+    "source": "FoxIO-LLC/ja4 仓库 ja4plus-mapping.csv（FoxIO License 1.1，JA4 部分按 BSD-3 发布）"
+  },
+  {
+    "fingerprint": "t13d2014h2_a09f3c656075_14788d8d241b",
+    "category": "browser",
+    "label": "Safari（FoxIO 公开样例）",
+    "source": "FoxIO-LLC/ja4 仓库 ja4plus-mapping.csv（FoxIO License 1.1，JA4 部分按 BSD-3 发布）"
+  },
+  {
+    "fingerprint": "t13i2013h2_a09f3c656075_14788d8d241b",
+    "category": "browser",
+    "label": "Safari（FoxIO 公开样例）",
+    "source": "FoxIO-LLC/ja4 仓库 ja4plus-mapping.csv（FoxIO License 1.1，JA4 部分按 BSD-3 发布）"
+  },
+  {
+    "fingerprint": "t13d190900_9dc949149365_97f8aa674fd9",
+    "category": "script",
+    "label": "GoLang（FoxIO 公开样例）；与 FoxIO 样例一致（交叉验证）",
+    "source": "FoxIO-LLC/ja4 仓库 ja4plus-mapping.csv（FoxIO License 1.1，JA4 部分按 BSD-3 发布）"
+  },
+  {
+    "fingerprint": "t13i190800_9dc949149365_97f8aa674fd9",
+    "category": "script",
+    "label": "GoLang（FoxIO 公开样例）；与 FoxIO 样例一致（交叉验证）",
+    "source": "FoxIO-LLC/ja4 仓库 ja4plus-mapping.csv（FoxIO License 1.1，JA4 部分按 BSD-3 发布）"
+  },
+  {
+    "fingerprint": "t13d201100_2b729b4bf6f3_9e7b989ebec8",
+    "category": "malware",
+    "label": "IcedID（FoxIO 公开样例）",
+    "source": "FoxIO-LLC/ja4 仓库 ja4plus-mapping.csv（FoxIO License 1.1，JA4 部分按 BSD-3 发布）"
+  },
+  {
+    "fingerprint": "t13d880900_fcb5b95cb75a_b0d3b4ac2a14",
+    "category": "vpn",
+    "label": "SoftEther VPN Client（FoxIO 公开样例）",
+    "source": "FoxIO-LLC/ja4 仓库 ja4plus-mapping.csv（FoxIO License 1.1，JA4 部分按 BSD-3 发布）"
+  },
+  {
+    "fingerprint": "t13i880900_fcb5b95cb75a_b0d3b4ac2a14",
+    "category": "vpn",
+    "label": "SoftEther VPN Client（FoxIO 公开样例）",
+    "source": "FoxIO-LLC/ja4 仓库 ja4plus-mapping.csv（FoxIO License 1.1，JA4 部分按 BSD-3 发布）"
+  },
+  {
+    "fingerprint": "t12i190700_d83cc789557e_16bbda4055b2",
+    "category": "malware",
+    "label": "Cobalt Strike v4.9.1 beacon / Windows 10（FoxIO 公开样例）",
+    "source": "FoxIO-LLC/ja4 仓库 ja4plus-mapping.csv（FoxIO License 1.1，JA4 部分按 BSD-3 发布）"
+  },
+  {
+    "fingerprint": "t12i210700_76e208dd3e22_16bbda4055b2",
+    "category": "malware",
+    "label": "Cobalt Strike v4.9.1 beacon / Windows 10（FoxIO 公开样例）",
+    "source": "FoxIO-LLC/ja4 仓库 ja4plus-mapping.csv（FoxIO License 1.1，JA4 部分按 BSD-3 发布）"
+  },
+  {
+    "fingerprint": "t12d190800_d83cc789557e_16bbda4055b2",
+    "category": "malware",
+    "label": "Cobalt Strike v4.9.1 beacon / Windows 10（FoxIO 公开样例）",
+    "source": "FoxIO-LLC/ja4 仓库 ja4plus-mapping.csv（FoxIO License 1.1，JA4 部分按 BSD-3 发布）"
+  },
+  {
+    "fingerprint": "t12d210800_76e208dd3e22_16bbda4055b2",
+    "category": "malware",
+    "label": "Cobalt Strike v4.9.1 beacon / Windows 10（FoxIO 公开样例）",
+    "source": "FoxIO-LLC/ja4 仓库 ja4plus-mapping.csv（FoxIO License 1.1，JA4 部分按 BSD-3 发布）"
+  },
+  {
+    "fingerprint": "t13d191000_9dc949149365_e7c285222651",
+    "category": "script",
+    "label": "GoLang net package（FoxIO 公开样例）",
+    "source": "FoxIO-LLC/ja4 仓库 ja4plus-mapping.csv（FoxIO License 1.1，JA4 部分按 BSD-3 发布）"
+  },
+  {
+    "fingerprint": "t13d1412h2_e33ad33b3d25_6b314db333b6",
+    "category": "script",
+    "label": "GoLang webhooks（FoxIO 公开样例）",
+    "source": "FoxIO-LLC/ja4 仓库 ja4plus-mapping.csv（FoxIO License 1.1，JA4 部分按 BSD-3 发布）"
+  },
+  {
+    "fingerprint": "t12d160700_8cdfa2d4673b_18dd7303c4a5",
+    "category": "script",
+    "label": "GoLang（FoxIO 公开样例）",
+    "source": "FoxIO-LLC/ja4 仓库 ja4plus-mapping.csv（FoxIO License 1.1，JA4 部分按 BSD-3 发布）"
+  },
+  {
+    "fingerprint": "t13d141000_cbb2034c60b8_e7c285222651",
+    "category": "script",
+    "label": "GoLang（FoxIO 公开样例）",
+    "source": "FoxIO-LLC/ja4 仓库 ja4plus-mapping.csv（FoxIO License 1.1，JA4 部分按 BSD-3 发布）"
+  },
+  {
+    "fingerprint": "t12d520600_b380db6257eb_0a9c83bf8b96",
+    "category": "iot",
+    "label": "LIFX Smart Bulbs（FoxIO 公开样例）",
+    "source": "FoxIO-LLC/ja4 仓库 ja4plus-mapping.csv（FoxIO License 1.1，JA4 部分按 BSD-3 发布）"
+  },
+  {
+    "fingerprint": "t12d8008h1_9cedc1f1428b_046e095b7c4a",
+    "category": "iot",
+    "label": "Nest（FoxIO 公开样例）",
+    "source": "FoxIO-LLC/ja4 仓库 ja4plus-mapping.csv（FoxIO License 1.1，JA4 部分按 BSD-3 发布）"
+  },
+  {
+    "fingerprint": "t12d350600_9d4c96c0953b_0a9c83bf8b96",
+    "category": "iot",
+    "label": "Phillips Hue Bridge（FoxIO 公开样例）",
+    "source": "FoxIO-LLC/ja4 仓库 ja4plus-mapping.csv（FoxIO License 1.1，JA4 部分按 BSD-3 发布）"
+  },
+  {
+    "fingerprint": "t12d190800_d83cc789557e_7af1ed941c26",
+    "category": "system",
+    "label": "WinINET / Windows 10/11（FoxIO 公开样例）；与 FoxIO 样例一致（交叉验证）",
+    "source": "FoxIO-LLC/ja4 仓库 ja4plus-mapping.csv（FoxIO License 1.1，JA4 部分按 BSD-3 发布）"
   }
 ]
