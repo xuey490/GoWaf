@@ -1,0 +1,32 @@
+# nginx.conf.example — GoWAF 检测引擎以「独立 WAF 引擎」形态挂进 Nginx。
+#
+# 前置：gowaf 配置文件启用 server.detect_listen（见下方环境约定）。
+# 依赖：OpenResty 或 nginx + lua-nginx-module + lua-resty-http。
+
+# 环境约定：
+#   gowaf config.yaml:
+#     server:
+#       detect_listen: "127.0.0.1:8020"
+#       detect_token: "change-me"        # 可选；不填则需保证 8020 不对外
+#   Nginx 侧经 lua_shared_dict 复用放行结论（见 waf_detect.lua）。
+
+http {
+    lua_shared_dict waf_cache 10m;
+
+    server {
+        listen 80;
+        server_name example.com;
+
+        # 静态资源直接旁路检测（与 engine.crs.skip_static 同思路）
+        location ~* \.(css|js|png|jpg|jpeg|gif|webp|svg|ico|woff2?|ttf|mp4)$ {
+            proxy_pass http://127.0.0.1:8080;
+        }
+
+        location / {
+            access_by_lua_file /etc/nginx/waf_detect.lua;
+            proxy_pass http://127.0.0.1:8080;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+        }
+    }
+}

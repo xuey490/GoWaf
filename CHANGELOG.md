@@ -4,6 +4,49 @@
 
 ---
 
+## [未发布] - 2026-11-18 · P0 追赶（对标雷池）
+
+本批改动完成「v1.5.0 与雷池社区版对比」清单中的全部四项 P0，无数据库迁移，替换二进制升级。
+新能力除静态旁路外均默认保守：预筛加速默认关、语义通道分数压在拦截阈值之下，
+升级不改变现有拦截行为。
+
+### 新增
+
+- **语义检测通道（第四引擎，`engine.sem.*`）**：在 libinjection（SQLi/XSS）之外补齐
+  命令注入、远程代码执行、XXE、SSRF、SSTI 模板注入、表达式注入（含 Log4Shell JNDI）、
+  反序列化七大类的结构级判定（`internal/detect/semantic.go`）。判定单元是「结构」而非
+  关键词——元字符紧邻系统命令、DOCTYPE+ENTITY 成对、危险 scheme、模板运算/属性链、
+  序列化魔数，配合 Normalize 的多层解码天然抗变形。单类默认 35~50 分（压在 block 60
+  之下、challenge 30 之上），误报治理走例外规则（`sem-*` 规则 ID）。Header 额外扫
+  JNDI/SpEL/OGNL（Log4Shell 经 UA/Referer 注入是经典路径）。
+- **CRS 调度闸门（`engine.crs.prescreen/skip_static/body_text_only/exclude_paths/remove_ranges`）**：
+  实测 CRS 是吞吐天花板（全引擎 4.3k → 关闭 17.1k RPS），闸门提供四个有界旁路：
+  可疑度预筛（AC 自动机关键词取自 CRS 规则文件字面量 + 扫描器 UA + 注入结构词表，
+  零命中跳过 Coraza 事务；默认关，开启后实测 3,998 → **12,836 RPS**，3.2 倍）、
+  无参数静态资源旁路（默认开）、二进制 body 跳过 phase-2（默认开）、
+  路径前缀豁免与编译期号段移除（如 `remove_ranges: "920"`）。旁路按原因打点
+  `waf_crs_skipped_total{reason}`，可监控预筛命中率。
+- **人机验证双层升级（`guard.challenge.env_check` / `min_elapsed_ms`）**：
+  在 PoW 之上增加浏览器环境信号校验（navigator.webdriver、CPU 核数、屏幕、时区、
+  WebGL 厂商/渲染器、页面耗时的结构合理性）与最小耗时校验（真实浏览器算 PoW 约
+  0.3 秒 + 页面加载，脚本微秒级解 PoW 在此暴露）。真实浏览器完全无感；
+  headless 自动化要么 webdriver=true 要么缺字段。
+- **检测引擎独立调用（`server.detect_listen` / `detect_token`）**：WAF 以「检测引擎」
+  形态被外部网关调用的接入面（对标雷池 T1K）：`POST /detect`（完整 JSON 协议）与
+  `GET /check`（nginx auth_request / Traefik forwardAuth 鉴权式，2xx 放行 / 403 拦截 /
+  401 需人机校验）。集成示例与协议说明见 `docs/integrations-detect-api.md`，
+  示例配置在 `deploy/integrations/`（nginx lua-resty、Traefik forwardAuth）。
+
+### 说明
+
+- 预筛加速为「加速模式」：CRS 中少量无字面量的算子（`@detectSQLi` 等）会被旁路，
+  已用高频注入结构词表（`1'='1`、`sleep(`、`<script` 等）覆盖主要盲区；默认关闭，
+  由管理员权衡开启。回归样本：SQLi/命令注入/JNDI/SSTI/SSRF/XSS 在预筛开启时全部 403。
+- 全量测试通过（`go vet` + `go test ./...`），新增语义引擎/闸门/环境信号/检测 API
+  四组测试共 40+ 断言。
+
+---
+
 ## [v1.5.1] - 2026-11-18
 
 本版为控制台体验改进：**防护配置页按参数类别拆分为五个可切换 Tab**，各组独立保存、

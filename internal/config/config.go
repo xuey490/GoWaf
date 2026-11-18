@@ -80,9 +80,15 @@ type Server struct {
 	// ListenV6/TLSListenV6 是可选的 IPv6 额外监听（如 "[::]:80"）。
 	// 不默认与 v4 共用双栈地址：部分系统/Linux 发行版的 v6only 默认值不同，
 	// 强行绑定 "::" 可能与已有 v4 监听冲突，导致老部署升级后启动失败。
-	ListenV6          string   `yaml:"listen_v6"`           // 数据面 IPv6 HTTP 额外监听地址，空=不启用
-	TLSListenV6       string   `yaml:"tls_listen_v6"`       // 数据面 IPv6 HTTPS 额外监听地址，空=不启用
-	AdminListen       string   `yaml:"admin_listen"`        // 控制面监听地址，默认只绑回环 127.0.0.1:8899
+	ListenV6    string `yaml:"listen_v6"`     // 数据面 IPv6 HTTP 额外监听地址，空=不启用
+	TLSListenV6 string `yaml:"tls_listen_v6"` // 数据面 IPv6 HTTPS 额外监听地址，空=不启用
+	AdminListen string `yaml:"admin_listen"`  // 控制面监听地址，默认只绑回环 127.0.0.1:8899
+	// DetectListen 独立检测引擎监听地址（如 "127.0.0.1:8020"），空=不启用。
+	// 启用后外部网关（Nginx/Kong/Traefik/Ingress）可经 /detect、/check 调用
+	// 检测能力而无需把流量交给本进程代理。
+	DetectListen string `yaml:"detect_listen"` // 独立检测引擎监听地址，空=不启用
+	// DetectToken 检测端点的 Bearer 令牌；为空时不认证（仅建议回环/内网使用）。
+	DetectToken       string   `yaml:"detect_token"`        // 检测端点访问令牌，空=不认证
 	ReadHeaderTimeout Duration `yaml:"read_header_timeout"` // 读取请求头的超时，防慢速连接占用资源
 	ReadTimeout       Duration `yaml:"read_timeout"`        // 读取整个请求（含 body）的超时
 	WriteTimeout      Duration `yaml:"write_timeout"`       // 写响应的超时
@@ -404,6 +410,11 @@ func (c *Config) Validate() error {
 	}
 	if _, port, err := net.SplitHostPort(c.Server.AdminListen); err != nil || port == "" {
 		errs = append(errs, fmt.Sprintf("server.admin_listen 非法: %q", c.Server.AdminListen))
+	}
+	if c.Server.DetectListen != "" {
+		if _, port, err := net.SplitHostPort(c.Server.DetectListen); err != nil || port == "" {
+			errs = append(errs, fmt.Sprintf("server.detect_listen 非法: %q", c.Server.DetectListen))
+		}
 	}
 	if c.TLS.Enabled && c.Server.TLSListen == "" {
 		errs = append(errs, "tls.enabled=true 但 server.tls_listen 为空")
