@@ -4,6 +4,20 @@
 
 ---
 
+## [v1.6.5] - 2026-11-19 · 修复：用户管理页列表恒为空
+
+### 修复
+
+- **/waf/users 页创建用户成功但列表看不到**：后端 UserList 走
+  `response.NewPage`（分页键为 `records`，与 events/sites/tasks 一致），
+  前端误按 nodes 页的 `{list}` 惯例读取，`resp.list` 恒为 undefined，
+  列表永远显示为空。创建本身一直是成功的（落库正常）。
+  修复：fetchUsers 返回类型与取值对齐 `records` 约定。
+- 验证：本地端到端（创建 → GET /api/user/list records 含新用户）；
+  vue-tsc 零错误。
+
+---
+
 ## [v1.6.4] - 2026-11-19 · 修复：页面缓存对人机验证访客失效
 
 ### 修复
