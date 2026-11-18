@@ -463,14 +463,18 @@ type AccessPolicy struct {
 	Site       string `gorm:"column:site;size:64;not null;default:''" json:"site"`                                     // 生效站点名，空串=所有站点
 	Priority   int    `gorm:"column:priority;not null;default:100" json:"priority"`                                    // 优先级，数字小的先匹配
 	Enabled    int    `gorm:"column:enabled;not null;default:1" json:"enabled"`                                        // 是否启用：1 启用 / 0 停用
-	Action     string `gorm:"column:action;size:16;not null;default:'block'" json:"action"`                            // allow/block/challenge/log/ban
+	Action     string `gorm:"column:action;size:16;not null;default:'block'" json:"action"`                            // allow/block/challenge/log/ban/auth/rate_limit
 	Conditions string `gorm:"column:conditions;not null;default:'{\"logic\":\"and\",\"items\":[]}'" json:"conditions"` // 条件树 JSON
-	Note       string `gorm:"column:note;size:255;not null;default:''" json:"note"`                                    // 备注
-	HitCount   int64  `gorm:"column:hit_count;not null;default:0" json:"hitCount"`                                     // 累计命中次数
-	LastHitAt  int64  `gorm:"column:last_hit_at;not null;default:0" json:"lastHitAt"`                                  // 最近命中时间（Unix 毫秒）
-	CreatedBy  string `gorm:"column:created_by;size:64;not null;default:''" json:"createdBy"`                          // 创建人
-	CreatedAt  int64  `gorm:"column:created_at;not null;default:0" json:"createdAt"`                                   // 创建时间（Unix 毫秒）
-	UpdatedAt  int64  `gorm:"column:updated_at;not null;default:0" json:"updatedAt"`                                   // 更新时间（Unix 毫秒）
+	// Config 动作附加参数（JSON）：auth 存认证方式与 bcrypt 密码哈希，rate_limit 存
+	// 窗口/阈值/超限动作，其余动作保持空串。语义见 internal/policy/actions.go。
+	// 不带 default tag：清空配置时零值必须能落库（同 Site.BehindCDN 的坑）。
+	Config    string `gorm:"column:config;size:2048;not null" json:"config"`                 // 动作参数 JSON
+	Note      string `gorm:"column:note;size:255;not null;default:''" json:"note"`           // 备注
+	HitCount  int64  `gorm:"column:hit_count;not null;default:0" json:"hitCount"`            // 累计命中次数
+	LastHitAt int64  `gorm:"column:last_hit_at;not null;default:0" json:"lastHitAt"`         // 最近命中时间（Unix 毫秒）
+	CreatedBy string `gorm:"column:created_by;size:64;not null;default:''" json:"createdBy"` // 创建人
+	CreatedAt int64  `gorm:"column:created_at;not null;default:0" json:"createdAt"`          // 创建时间（Unix 毫秒）
+	UpdatedAt int64  `gorm:"column:updated_at;not null;default:0" json:"updatedAt"`          // 更新时间（Unix 毫秒）
 }
 
 // TableName 指定 BotPolicy 模型对应的数据库表名。

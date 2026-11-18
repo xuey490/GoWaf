@@ -64,12 +64,14 @@ func NewLibiEngine(enabled bool, sqliScore, xssScore int) *LibiEngine {
 // 无参数；返回 bool：启用返回 true。
 func (e *LibiEngine) Enabled() bool { return e.enabled.Load() }
 
-// Inspect 对 Query 与 Body 跑 libinjection 语义判定。
+// Inspect 对 Query 与 Body（含解码变体）跑 libinjection 语义判定。
 // 参数 in：已标准化的请求数据（与自研引擎共用同一 Input）。
 // 返回 Result：命中明细与分数；未启用或无命中时返回零分空结果。
 //
 // 只扫 query/body 两个部位：path 的语义结构几乎不可能是 SQL/XSS，header/cookie
 // 的语义判定误报代价高（登录 Cookie 里出现 "or" 一类的词太常见）。
+// 解码变体（base64 解出、unicode 转义还原）一并扫描——语义通道是绕过面
+// 最大的受益者；同一部位命中只记一次（原文命中后变体不再重复计分）。
 func (e *LibiEngine) Inspect(in *Input) Result {
 	start := time.Now()
 	res := Result{Hits: []Hit{}, Categories: []string{}, RuleIDs: []string{}}
@@ -81,25 +83,35 @@ func (e *LibiEngine) Inspect(in *Input) Result {
 		target string
 		text   string
 	}
-	scanList := []scan{
-		{"query", in.Query},
-		{"body", Truncate(in.Body, libiMaxScan)},
+	scanList := make([]scan, 0, 2+len(in.DecodedQuery)+len(in.DecodedBody))
+	scanList = append(scanList, scan{"query", in.Query}, scan{"body", Truncate(in.Body, libiMaxScan)})
+	for _, v := range in.DecodedQuery {
+		scanList = append(scanList, scan{"query", Truncate(v, libiMaxScan)})
 	}
+	for _, v := range in.DecodedBody {
+		scanList = append(scanList, scan{"body", Truncate(v, libiMaxScan)})
+	}
+	sqliSeen := false
+	xssSeen := false
 	for _, s := range scanList {
 		if s.text == "" {
 			continue
 		}
-		if fp, ok := libiSQLi(s.text); ok {
-			res.Score += int(e.sqliScore.Load())
-			res.Hits = append(res.Hits, Hit{
-				RuleID: RuleIDLibiSQLi, Name: "libinjection 语义识别 SQL 注入",
-				Category: CategorySQLi, Score: int(e.sqliScore.Load()),
-				Target: s.target, Evidence: "指纹 " + fp,
-			})
-			res.RuleIDs = append(res.RuleIDs, RuleIDLibiSQLi)
-			res.Categories = appendUnique(res.Categories, CategorySQLi)
+		if !sqliSeen {
+			if fp, ok := libiSQLi(s.text); ok {
+				sqliSeen = true
+				res.Score += int(e.sqliScore.Load())
+				res.Hits = append(res.Hits, Hit{
+					RuleID: RuleIDLibiSQLi, Name: "libinjection 语义识别 SQL 注入",
+					Category: CategorySQLi, Score: int(e.sqliScore.Load()),
+					Target: s.target, Evidence: "指纹 " + fp,
+				})
+				res.RuleIDs = append(res.RuleIDs, RuleIDLibiSQLi)
+				res.Categories = appendUnique(res.Categories, CategorySQLi)
+			}
 		}
-		if libinjection.IsXSS(s.text) {
+		if !xssSeen && libinjection.IsXSS(s.text) {
+			xssSeen = true
 			res.Score += int(e.xssScore.Load())
 			res.Hits = append(res.Hits, Hit{
 				RuleID: RuleIDLibiXSS, Name: "libinjection 语义识别 XSS",

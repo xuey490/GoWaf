@@ -37,6 +37,7 @@ import (
 	"gowaf/internal/metrics"
 	"gowaf/internal/proxy"
 	"gowaf/internal/respfilter"
+	"gowaf/internal/tamper"
 )
 
 // responseStage 一个响应体变换阶段。
@@ -106,6 +107,62 @@ func (st dProtectStage) Apply(_ int, _ http.Header, body []byte) ([]byte, detect
 		return body, detect.Result{}
 	}
 	return out, detect.Result{}
+}
+
+// tamperStage 防篡改比对阶段：与基线比对完整性，不一致按模式记录或替换。
+type tamperStage struct {
+	m    *tamper.Manager
+	s    tamper.Settings
+	site string // 基线按「站点+路径」存储
+	path string // 受保护的精确路径（构建 stage 时已由 Applies 过滤）
+}
+
+// Transformable 只比对 200 且类型在受保护集合内的响应。
+func (st tamperStage) Transformable(status int, h http.Header) bool {
+	return tamper.Transformable(status, h.Get("Content-Type"))
+}
+
+// Limit 取设置中的基线副本上限。
+func (st tamperStage) Limit() int {
+	if st.s.MaxBytes <= 0 {
+		return tamper.DefaultMaxBytes
+	}
+	return st.s.MaxBytes
+}
+
+// Apply 比对响应体与基线：一致放行；不一致时 observe 记录、block 用基线副本替换。
+// 没有基线（管理员尚未生成）时放行——防篡改的语义是「与可信基线比对」，
+// 没有可信基线就没有比对依据，绝不把「第一次见到的内容」当成可信内容。
+func (st tamperStage) Apply(_ int, _ http.Header, body []byte) ([]byte, detect.Result) {
+	res := detect.Result{Hits: []detect.Hit{}, Categories: []string{}, RuleIDs: []string{}}
+	b, ok := st.m.BaselineFor(st.site, st.path)
+	if !ok || len(body) == 0 {
+		return body, res
+	}
+	if st.m.Matches(b, body) {
+		metrics.TamperHits.WithLabelValues(st.site, "match").Inc()
+		return body, res
+	}
+	// 不一致：记录归因（RuleIDs 非空 → 事件必记录，事件页可搜 tamper）
+	res.Hits = append(res.Hits, detect.Hit{
+		RuleID: "tamper", Name: "防篡改基线不一致：" + st.path,
+		Category: "tamper", Score: 0, Target: "response",
+	})
+	res.RuleIDs = append(res.RuleIDs, "tamper")
+	res.Categories = append(res.Categories, "tamper")
+
+	if st.s.Mode == tamper.ModeBlock {
+		if copyBody := st.m.Copy(b); copyBody != nil {
+			metrics.TamperHits.WithLabelValues(st.site, "replaced").Inc()
+			res.Action = "block"
+			return copyBody, res
+		}
+		// 有哈希没副本（超大响应）：只能记录，不能凭空还原
+		metrics.TamperHits.WithLabelValues(st.site, "mismatch").Inc()
+		return body, res
+	}
+	metrics.TamperHits.WithLabelValues(st.site, "mismatch").Inc()
+	return body, res
 }
 
 // transformWriter 响应改写 writer：缓冲明文响应，Close 时依次执行各阶段。
@@ -269,6 +326,9 @@ func (h *Handler) activeStages(route *proxy.Route, r *http.Request) []responseSt
 	}
 	if s := h.rt.DProtect(); dprotect.Applies(s, r.Method, r.URL.Path) {
 		stages = append(stages, dProtectStage{m: h.rt.DProtectMgr(), s: *s})
+	}
+	if ts := h.rt.TamperSettings(); tamper.Applies(ts, r.Method, r.URL.Path) {
+		stages = append(stages, tamperStage{m: h.rt.Tamper, s: *ts, site: route.SiteName, path: r.URL.Path})
 	}
 	return stages
 }

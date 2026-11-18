@@ -152,12 +152,16 @@ Windows 服务模式用 `gowaf svc install|start|stop|uninstall` 实现（单二
 | **TLS 终止** | 443 在 WAF 终止，SNI 多证书 + 通配符匹配，自动读取面板证书目录，`default_cert` 智能兜底；`--http-only` 可只接管 80 |
 | **证书管理与 ACME** | 控制台「证书管理」页：证书列表（到期 <30 天标红）、上传 / 删除 / 手动重载；Let's Encrypt（或任意 ACME v2）自动签发——HTTP-01 由 80 端口自动应答（边缘在站点路由前拦截），DNS-01（泛域名必选）返回 TXT 记录由管理员添加后验证；签发后写入 `tls.cert_dir` 并立即热加载，ACME 账户密钥持久化 `data/acme/`，支持 staging 测试环境 |
 | **规则检测（三引擎）** | ① 181 条自研 YAML 规则：SQLi / XSS / 路径穿越 / RCE / 扫描器 / 敏感文件 / 文件上传 / 协议异常，AC 预筛 + RE2 精匹配，评分制，高危规则可设 `ban`（命中即封）；② 内嵌 OWASP CRS v4（Coraza v3），只加载请求阶段规则，偏执等级 1–4；③ **libinjection 语义通道**：词法/指纹级 SQLi/XSS 判定（规则 ID `libi-*`），对变形 payload 的泛化优于正则——三引擎分数相加后统一判定，误报治理走同一套例外规则 |
+| **网页防篡改** | 指定精确路径的可信基线完整性防护：管理员手动「生成基线」（逐站点逐路径回源抓取 SHA-256 与有界副本），之后每个 200 响应与基线比对——`observe` 记录不一致事件（规则 ID `tamper`）、`block` **用基线副本替换**被篡改的响应；基线只支持手动刷新（定时重抓会把篡改版固化成新基线，刻意设计），基线存内存、重启失效；受保护路径自动跳过页面缓存 |
+| **检测前多层解码** | 补归一化覆盖不到的三类绕过面：base64（按 query 参数值解码，最多 3 层）、压缩请求体（gzip/deflate/zlib 魔数识别）、JSON/JS `\uXXXX` 转义；解码变体作为**附加检测文本**并入自研规则与 libinjection 语义通道（CRS 自带变换链不重复喂）；同一规则跨变体只记一次命中；plausibility 检查 + 64KB 上限防 DoS。默认开启 |
 | **引擎加固** | 三引擎与载荷解析统一套**超时熔断 + panic 隔离**：单引擎超过 `engine.timeout_ms`（默认 2s）熔断、异常 recover，进程不倒；失效按 `engine.fail_mode` 处理——`open`（默认）放行并记录（事件可搜 `engine-degraded` 归因），`closed` 拦截；观察模式下 closed 也不真拦。新增指标 `waf_detect_errors_total` |
 | **响应敏感信息过滤** | 响应链路扫描手机号 / 身份证 / 银联卡 / 云密钥（AWS、OpenAI、GitHub、阿里云、Google、PEM 私钥块）/ JWT：`observe` 只记录、`mask` 就地打码后下发；只处理 ≤1MB 的 2xx 文本类响应，压缩/流式/二进制一律透传；命中永不参与拦截只归因（`resp-*`，事件不存原文） |
 | **动态防护（HTML/JS 动态加密）** | 服务端按请求派生一次性密钥加密 HTML 文本节点，页面尾部注入解密脚本，浏览器执行还原；不跑 JS 的采集器拿到的是乱码。可与 PoW 人机校验联动（未过校验的访客先完成挑战再拿正文）；script/style/textarea 与属性值不动、解析失败原文透传（fail-open）；适用的请求自动跳过页面缓存 |
 | **误报治理** | 例外规则按「站点 / 规则号 / 分类 / 路径前缀 / 参数名」组合放过（已填的维度必须全部命中），同时作用于自研引擎与 CRS；规则运营支持分组统计、命中样例、批量启停、导入导出 |
 | **上传与反序列化检测** | multipart 危险扩展名 / 双扩展名 / 文件名攻击 / 图片魔数不符 / ELF·MZ·Class 可执行头；Java 原生流、.NET BinaryFormatter、pickle、PHP 序列化、`@type` 自动类型、YAML 不安全标签、原型链污染——统一并入 `detect.Result` 按分数处置 |
-| **精准访问控制** | 条件树（AND / OR / 嵌套分组，最深 4 层、单策略 ≤ 64 条件）在 Reload 时编译成不可变快照，热路径无锁无 JSON 解析；字段覆盖 `client_ip` / `country` / `region` / `host` / `method` / `path` / `query` / `ua` / `referer` / `content_type` / `body` 及 `header.*` / `cookie.*` / `arg.*`；操作符 `eq` `ne` `contains` `prefix` `suffix` `regex` `cidr`（裸 IP 自动补 `/32`·`/128`）`in` 数值比较 `exists`；动作 `allow` `block` `challenge` `log` `ban`，**按优先级第一条命中生效**，编译失败整体拒绝并保留旧快照 |
+| **精准访问控制** | 条件树（AND / OR / 嵌套分组，最深 4 层、单策略 ≤ 64 条件）在 Reload 时编译成不可变快照，热路径无锁无 JSON 解析；字段覆盖 `client_ip` / `country` / `region` / `host` / `method` / `path` / `query` / `ua` / `referer` / `content_type` / `body` 及 `header.*` / `cookie.*` / `arg.*`；操作符 `eq` `ne` `contains` `prefix` `suffix` `regex` `cidr`（裸 IP 自动补 `/32`·`/128`）`in` 数值比较 `exists`；动作 `allow` `block` `challenge` `log` `ban` **`auth`** **`rate_limit`**，**按优先级第一条命中生效**，编译失败整体拒绝并保留旧快照 |
+| **页面密码 / 访问认证** | 访问策略 `auth` 动作把任意条件树变成门禁：`page` 模式（密码页 + HMAC 通行证 Cookie，默认 8 小时、绑定 IP、按策略独立 `waf_auth_<id>`）或 `basic`（HTTP Basic，API 客户端天然可用）；密码只存 bcrypt 哈希（明文仅提交时经过内存，回显掩码）；门禁在**页面缓存之前**执行，缓存命中同样要过认证；解锁端点 `/.waf-auth/<策略ID>` 先于所有闸门处理 |
+| **自定义 CC 规则** | 访问策略 `rate_limit` 动作按条件树圈定限流范围（路径 / UA / 来路 / 地域…）：按「策略 + IP」固定窗口计数（10 秒 ~ 1 天窗口），超限处置可选 429 或转 PoW 人机校验（通过后 30 分钟免检）；计数桶与自动封禁隔离；与其他门禁一样在缓存之前执行 |
 | **Bot 管理** | UA / Path / IP / rDNS 四类策略 + 蜜罐路径（正常用户不会访问，命中即 ban）+ 行为评分（窗口频率 + 可疑 UA）；搜索引擎 Bot 走正向-反向 DNS 双重验证：真 Googlebot 放行且不占限流额度，伪造 UA 按可疑处置；DNS 结果带 TTL 缓存，不在热路径阻塞 |
 | **页面缓存与加速** | 六类规则（后缀 / 精确 / 前缀 / 正则 / 目录 / 匿名访客全站）；LRU + TTL，总容量与单对象上限可配，超限立即转流式透传不读进内存；只缓存匿名 GET/HEAD，`Set-Cookie` / `private` / `no-store` 一律不缓存，SSE / WebSocket 绕过；回源响应先解码（gzip / br / deflate）再按客户端 `Accept-Encoding` 重新压缩，JPEG/PNG 转 WebP——全部纯 Go，`CGO_ENABLED=0` 可编译；控制台可查缓存列表与命中次数 |
 | **站点多上游** | 单站点可配多上游，按健康度与优先级加权随机，连接失败自动切换（仅可重放请求重试，流式上传不换目标）；健康探测周期可配；全部目标不健康时 fail-open 退回全部目标防误判 502；连接池按上游组合复用 |
@@ -232,6 +236,8 @@ Windows 服务模式用 `gowaf svc install|start|stop|uninstall` 实现（单二
 > 先用 `log` 观察一周、确认无误杀再改 `block`，是这套引擎推荐的用法。
 
 详细字段/操作符表、等价 SQL 与排障看 [docs/精准访问控制-设置.md](docs/精准访问控制-设置.md)。
+
+其他功能的设置指南：[页面密码/访问认证](docs/页面密码-访问认证-设置.md) · [自定义 CC 规则](docs/自定义CC规则-设置.md) · [防篡改](docs/防篡改-设置.md) · [多层解码检测](docs/多层解码检测-设置.md)。
 
 ---
 

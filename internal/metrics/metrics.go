@@ -87,4 +87,18 @@ var (
 		Name: "waf_dprotect_pages_total",
 		Help: "动态防护加密的 HTML 页面数",
 	})
+
+	// TamperHits 防篡改比对结果（Counter）。
+	// 标签 site：站点名；outcome：match 一致 / mismatch 不一致（observe） /
+	// replaced 不一致且已用基线副本替换（block）。
+	TamperHits = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "waf_tamper_hits_total",
+		Help: "防篡改完整性比对结果",
+	}, []string{"site", "outcome"})
+
+	// PolicyCCBlocks 自定义 CC 规则触发限流次数（Counter），无标签。
+	PolicyCCBlocks = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "waf_policy_cc_blocks_total",
+		Help: "自定义 CC 规则（rate_limit 动作）触发限流的次数",
+	})
 )
