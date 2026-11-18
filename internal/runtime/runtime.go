@@ -103,6 +103,20 @@ const (
 	KeySemSSTIScore  = "engine.sem.ssti_score"  // 模板注入命中加分
 	KeySemExprScore  = "engine.sem.expr_score"  // 表达式注入命中加分
 	KeySemDeserScore = "engine.sem.deser_score" // 反序列化命中加分
+	// v1.6.3 扩类：路径穿越/文件包含/NoSQL/LDAP/XPath/CRLF/开放重定向/
+	// 原型链污染/HTTP 走私/Webshell/GraphQL/LLM 提示注入。
+	KeySemTraverScore       = "engine.sem.traver_score"       // 路径穿越命中加分
+	KeySemLFIScore          = "engine.sem.lfi_score"          // 文件包含命中加分
+	KeySemNoSQLiScore       = "engine.sem.nosqli_score"       // NoSQL 注入命中加分
+	KeySemLDAPiScore        = "engine.sem.ldapi_score"        // LDAP 注入命中加分
+	KeySemXPathScore        = "engine.sem.xpati_score"        // XPath 注入命中加分
+	KeySemCRLFScore         = "engine.sem.crlf_score"         // CRLF/头注入命中加分
+	KeySemOpenRedirectScore = "engine.sem.openredirect_score" // 开放重定向命中加分
+	KeySemPrototypeScore    = "engine.sem.prototype_score"    // 原型链污染命中加分
+	KeySemSmuggScore        = "engine.sem.smugg_score"        // HTTP 走私命中加分
+	KeySemWebshellScore     = "engine.sem.webshell_score"     // Webshell 命中加分
+	KeySemGraphQLiScore     = "engine.sem.graphqli_score"     // GraphQL 攻击命中加分
+	KeySemPromptScore       = "engine.sem.prompt_score"       // LLM 提示注入命中加分
 
 	// 响应体敏感信息过滤。
 	KeyRespFilterEnabled  = "respfilter.enabled"       // 总开关
@@ -820,6 +834,18 @@ func (r *Runtime) Reload(ctx context.Context) error {
 			detect.CategorySSTI:  r.settingFromInt(sm, KeySemSSTIScore, detect.DefaultSemSSTIScore),
 			detect.CategoryExpr:  r.settingFromInt(sm, KeySemExprScore, detect.DefaultSemExprScore),
 			detect.CategoryDeser: r.settingFromInt(sm, KeySemDeserScore, detect.DefaultSemDeserScore),
+			detect.CategoryTraver:       r.settingFromInt(sm, KeySemTraverScore, detect.DefaultSemTraverScore),
+			detect.CategoryLFI:          r.settingFromInt(sm, KeySemLFIScore, detect.DefaultSemLFIScore),
+			detect.CategoryNoSQLi:       r.settingFromInt(sm, KeySemNoSQLiScore, detect.DefaultSemNoSQLiScore),
+			detect.CategoryLDAPi:        r.settingFromInt(sm, KeySemLDAPiScore, detect.DefaultSemLDAPiScore),
+			detect.CategoryXPath:        r.settingFromInt(sm, KeySemXPathScore, detect.DefaultSemXPathScore),
+			detect.CategoryCRLF:         r.settingFromInt(sm, KeySemCRLFScore, detect.DefaultSemCRLFScore),
+			detect.CategoryOpenRedirect: r.settingFromInt(sm, KeySemOpenRedirectScore, detect.DefaultSemOpenRedirectScore),
+			detect.CategoryPrototype:    r.settingFromInt(sm, KeySemPrototypeScore, detect.DefaultSemPrototypeScore),
+			detect.CategorySmugg:        r.settingFromInt(sm, KeySemSmuggScore, detect.DefaultSemSmuggScore),
+			detect.CategoryWebshell:     r.settingFromInt(sm, KeySemWebshellScore, detect.DefaultSemWebshellScore),
+			detect.CategoryGraphQLi:     r.settingFromInt(sm, KeySemGraphQLiScore, detect.DefaultSemGraphQLiScore),
+			detect.CategoryPrompt:       r.settingFromInt(sm, KeySemPromptScore, detect.DefaultSemPromptScore),
 		},
 	))
 
@@ -1341,6 +1367,18 @@ func DefaultSettings(cfg *config.Config) map[string]string {
 		KeySemSSTIScore:  strconv.Itoa(detect.DefaultSemSSTIScore),
 		KeySemExprScore:  strconv.Itoa(detect.DefaultSemExprScore),
 		KeySemDeserScore: strconv.Itoa(detect.DefaultSemDeserScore),
+		KeySemTraverScore:       strconv.Itoa(detect.DefaultSemTraverScore),
+		KeySemLFIScore:          strconv.Itoa(detect.DefaultSemLFIScore),
+		KeySemNoSQLiScore:       strconv.Itoa(detect.DefaultSemNoSQLiScore),
+		KeySemLDAPiScore:        strconv.Itoa(detect.DefaultSemLDAPiScore),
+		KeySemXPathScore:        strconv.Itoa(detect.DefaultSemXPathScore),
+		KeySemCRLFScore:         strconv.Itoa(detect.DefaultSemCRLFScore),
+		KeySemOpenRedirectScore: strconv.Itoa(detect.DefaultSemOpenRedirectScore),
+		KeySemPrototypeScore:    strconv.Itoa(detect.DefaultSemPrototypeScore),
+		KeySemSmuggScore:        strconv.Itoa(detect.DefaultSemSmuggScore),
+		KeySemWebshellScore:     strconv.Itoa(detect.DefaultSemWebshellScore),
+		KeySemGraphQLiScore:     strconv.Itoa(detect.DefaultSemGraphQLiScore),
+		KeySemPromptScore:       strconv.Itoa(detect.DefaultSemPromptScore),
 
 		// 检测前多层解码：默认开启（URL 多层解码本就由 Normalize 覆盖，
 		// 这里补 base64/压缩体/unicode 转义三类绕过面，成本有界）。

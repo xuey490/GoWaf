@@ -68,6 +68,20 @@ var allowedSettingKeys = map[string]struct{}{
 	runtime.KeySemExprScore:  {},
 	runtime.KeySemDeserScore: {},
 
+	// 语义通道 v1.6.3 扩类（穿越/包含/NoSQL/LDAP/XPath/CRLF/重定向/原型链/走私/Webshell/GraphQL/提示注入）
+	runtime.KeySemTraverScore:       {},
+	runtime.KeySemLFIScore:          {},
+	runtime.KeySemNoSQLiScore:       {},
+	runtime.KeySemLDAPiScore:        {},
+	runtime.KeySemXPathScore:        {},
+	runtime.KeySemCRLFScore:         {},
+	runtime.KeySemOpenRedirectScore: {},
+	runtime.KeySemPrototypeScore:    {},
+	runtime.KeySemSmuggScore:        {},
+	runtime.KeySemWebshellScore:     {},
+	runtime.KeySemGraphQLiScore:     {},
+	runtime.KeySemPromptScore:       {},
+
 	// 响应体敏感信息过滤
 	runtime.KeyRespFilterEnabled:  {},
 	runtime.KeyRespFilterMode:     {},
@@ -454,7 +468,10 @@ func validateSetting(key, value string) string {
 			return key + " 只能是 true 或 false"
 		}
 	case runtime.KeySemCmdiScore, runtime.KeySemRCEScore, runtime.KeySemSSRFScore,
-		runtime.KeySemXXEScore, runtime.KeySemSSTIScore, runtime.KeySemExprScore, runtime.KeySemDeserScore:
+		runtime.KeySemXXEScore, runtime.KeySemSSTIScore, runtime.KeySemExprScore, runtime.KeySemDeserScore,
+		runtime.KeySemTraverScore, runtime.KeySemLFIScore, runtime.KeySemNoSQLiScore, runtime.KeySemLDAPiScore,
+		runtime.KeySemXPathScore, runtime.KeySemCRLFScore, runtime.KeySemOpenRedirectScore, runtime.KeySemPrototypeScore,
+		runtime.KeySemSmuggScore, runtime.KeySemWebshellScore, runtime.KeySemGraphQLiScore, runtime.KeySemPromptScore:
 		n, err := strconv.Atoi(value)
 		if err != nil || n < 0 || n > 1000 {
 			return key + " 必须是 0~1000 的整数（0=禁用该类别）"
