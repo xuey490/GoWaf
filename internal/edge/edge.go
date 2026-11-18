@@ -336,7 +336,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		r.Header.Get("Range") == "" &&
 		!dprotect.Applies(h.rt.DProtect(), r.Method, r.URL.Path) &&
 		!tamper.Applies(h.rt.TamperSettings(), r.Method, r.URL.Path) {
-		guest := r.Header.Get("Cookie") == "" && r.Header.Get("Authorization") == ""
+		guest := anonymousGuest(r.Header.Get("Cookie"), r.Header.Get("Authorization"))
 		if rule, ok := h.rt.Cache.Match(route.SiteName, r.URL.Path, guest); ok {
 			cr := rule
 			cacheKey = cache.Key(route.SiteName, r.Host, r.URL.Path, r.URL.RawQuery)
@@ -552,6 +552,62 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// 10) 转发
 	h.forward(w, r, route, clientIP, reqID, start, &result, cacheRule, cacheKey)
+}
+
+// WAF 自管 Cookie 名单：这些是 WAF 自己发给访客的通行证/状态 Cookie，
+// 不是业务会话。缓存匿名判定时剥离，避免把「通过人机验证」误判成
+// 「业务登录态」。
+const (
+	cookiePass = "waf_pass"  // PoW/验证码人机校验通行证（挑战通过后 30 分钟）
+	cookieCons = "waf_token" // 控制台会话（host 重叠时会漏进数据面请求）
+	cookieCSRF = "waf_csrf"  // 控制台 CSRF 双提交
+	authPrefix = "waf_auth_" // 页面密码/访问认证通行证（按策略命名 waf_auth_<id>）
+)
+
+// isWAFManagedCookieName 判断 Cookie 名是否属于 WAF 自管集合。
+// 参数 name：Cookie 名（大小写不敏感，RFC 6265 名字按 case-sensitive 但
+// 这里统一小写比较，WAF 自发名字全小写）。
+// 返回 bool：属于 WAF 自管 Cookie 返回 true。
+func isWAFManagedCookieName(name string) bool {
+	ln := strings.ToLower(name)
+	if ln == cookiePass || ln == cookieCons || ln == cookieCSRF {
+		return true
+	}
+	return strings.HasPrefix(ln, authPrefix)
+}
+
+// anonymousGuest 缓存匿名判定：剥离 WAF 自管 Cookie 后无任何剩余 Cookie
+// 且无 Authorization 头，才算访客（guest）。
+//
+// 为什么不能直接判 Cookie==""：人机验证通行证（waf_pass）在挑战通过后
+// 30 分钟内始终存在，而 guard.challenge.referer 默认开启——从搜索引擎/
+// 社交链接跳转进来的访客几乎人人带这张 Cookie。若把它们当成非匿名，
+// guestOnly 缓存规则对绝大多数真实访客永不命中，缓存形同失效
+// （v1.6.3 跑分实测发现）。业务会话 Cookie（登录态）照旧不缓存。
+// 参数 cookieHdr：Cookie 请求头原文；参数 authHdr：Authorization 头。
+// 返回 bool：匿名访客返回 true。
+func anonymousGuest(cookieHdr, authHdr string) bool {
+	if authHdr != "" {
+		return false
+	}
+	if cookieHdr == "" {
+		return true
+	}
+	for _, part := range strings.Split(cookieHdr, ";") {
+		kv := strings.TrimSpace(part)
+		if kv == "" {
+			continue
+		}
+		name := kv
+		if i := strings.IndexByte(kv, '='); i >= 0 {
+			name = kv[:i]
+		}
+		if isWAFManagedCookieName(strings.TrimSpace(name)) {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 // ja4Blocked 判断 JA4 指纹是否应被拦截：先查管理员黑名单（精确匹配），
