@@ -125,6 +125,7 @@ func NewRouter(o Options) *gin.Engine {
 			// 证书管理（本地证书 + ACME 签发订单）
 			authed.GET("/certs", h.CertList)
 			authed.GET("/certs/acme/orders", h.AcmeOrders)
+			authed.GET("/tamper/status", h.TamperStatus)
 
 			// 规则测试是纯计算，不进写组（演示模式下也要能用）
 			authed.POST("/rules/test", h.RuleTest)
@@ -151,6 +152,9 @@ func NewRouter(o Options) *gin.Engine {
 				w.POST("/certs/acme/order", middleware.RequirePerm(o.Store, "settings:write"), h.AcmeCreateOrder)
 				w.POST("/certs/acme/order/:id/validate", middleware.RequirePerm(o.Store, "settings:write"), h.AcmeValidateOrder)
 				w.DELETE("/certs/acme/order/:id", middleware.RequirePerm(o.Store, "settings:write"), h.AcmeCancelOrder)
+
+				// 防篡改基线
+				w.POST("/tamper/refresh", middleware.RequirePerm(o.Store, "settings:write"), h.TamperRefresh)
 
 				w.POST("/ips", middleware.RequirePerm(o.Store, "ip:ban"), h.IPCreate)
 				w.PUT("/ips/:id", middleware.RequirePerm(o.Store, "ip:ban"), h.IPUpdate)

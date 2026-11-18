@@ -283,6 +283,35 @@ func (r *Router) Count() int {
 	return len(seen)
 }
 
+// Sites 返回全部站点路由，按 SiteID 去重（同一站点的多个域名指向同一个
+// *Route，只返回一份）。遍历场景（防篡改基线刷新等）使用，顺序不保证稳定。
+// 无参数；返回 []*Route：去重后的站点路由；nil 接收者返回 nil。
+func (r *Router) Sites() []*Route {
+	if r == nil {
+		return nil
+	}
+	seen := map[uint]struct{}{}
+	out := make([]*Route, 0, len(r.exact))
+	collect := func(rt *Route) {
+		if rt == nil {
+			return
+		}
+		if _, ok := seen[rt.SiteID]; ok {
+			return
+		}
+		seen[rt.SiteID] = struct{}{}
+		out = append(out, rt)
+	}
+	for _, rt := range r.exact {
+		collect(rt)
+	}
+	for _, rt := range r.wildcard {
+		collect(rt)
+	}
+	collect(r.fallback)
+	return out
+}
+
 // CDNSites 返回标记了 CDN 回源的站点名，按站点去重并排序。
 //
 // 一个站点可能命中多个域名（exact / wildcard / fallback 指向同一个 *Route），

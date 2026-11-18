@@ -10,8 +10,11 @@ package runtime
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -34,6 +37,7 @@ import (
 	"gowaf/internal/respfilter"
 	"gowaf/internal/store"
 	"gowaf/internal/store/model"
+	"gowaf/internal/tamper"
 )
 
 // 设置键名。settings 表以 key/value 字符串存储：控制面写入，数据面经 Settings
@@ -101,6 +105,17 @@ const (
 	KeyNotifyDingSecret     = "notify.webhook.dingtalk_secret" // 钉钉签名密钥（可选）
 	KeyNotifyWecomURL       = "notify.webhook.wecom_url"       // 企业微信群机器人 webhook 地址
 	KeyNotifyGenericURL     = "notify.webhook.generic_url"     // 通用 JSON POST 地址
+
+	// 检测前多层解码（base64 / 压缩请求体 / unicode 转义的绕过面）。
+	KeyDecodeEnabled = "engine.decode.enabled"   // 总开关，默认开启
+	KeyDecodeDepth   = "engine.decode.max_depth" // base64 最大解层层深（1~3）
+	KeyDecodeBytes   = "engine.decode.max_bytes" // 单变体字节上限
+
+	// 网页防篡改（基线比对）。
+	KeyTamperEnabled  = "tamper.enabled"   // 总开关，默认关闭
+	KeyTamperMode     = "tamper.mode"      // observe 只记录 / block 替换为基线副本
+	KeyTamperPaths    = "tamper.paths"     // 受保护的精确路径列表（逗号分隔）
+	KeyTamperMaxBytes = "tamper.max_bytes" // 单个基线副本的字节上限
 
 	// 威胁情报命中后的处置。
 	// ban_on_hit=true 时把命中 IP 写进封禁表（source=intel），
@@ -174,11 +189,21 @@ type Runtime struct {
 	crs    atomic.Pointer[detect.CRSEngine] // CRS 第二引擎（OWASP CRS/Coraza）；未启用或未构建时为 nil
 
 	// libi 第三检测通道（libinjection 语义识别 SQLi/XSS）；
-	// respFilter/dprot 响应侧能力设置（敏感信息过滤 / 动态防护），Reload 时整体替换。
+	// respFilter/dprot/tamper/decode 响应侧与检测增强设置，Reload 时整体替换。
 	libi       atomic.Pointer[detect.LibiEngine]
 	respFilter atomic.Pointer[respfilter.Settings]
 	dprot      atomic.Pointer[dprotect.Settings]
 	dprotMgr   *dprotect.Manager // 动态防护页面加密器（密钥在进程启动时从 JWT 密钥文件派生）
+	tamper     atomic.Pointer[tamper.Settings]
+	decode     atomic.Pointer[detect.DecodeConfig]
+	// Tamper 防篡改基线仓库（管理员手动刷新基线，进程内有效）。
+	Tamper *tamper.Manager
+	// PolicyHits 自定义 CC 规则（rate_limit 动作）的窗口计数器，与自动封禁
+	// 计数器隔离：窗口上限不同（CC 可到 1 天），共用会被清理策略误逐。
+	PolicyHits *guard.HitTracker
+	// policyAuthSecret 策略认证通行证的 HMAC 签名密钥（从 JWT 密钥文件内容派生，
+	// 与挑战/动态防护密钥同源不同值，一路泄漏不影响另一路）。
+	policyAuthSecret []byte
 
 	// ACME 证书自动签发管理器（Let's Encrypt HTTP-01/DNS-01），进程启动时装配。
 	ACME *acme.Manager
@@ -229,6 +254,8 @@ func New(cfg *config.Config, st *store.Store, certs *proxy.CertManager, version 
 	r.libi.Store(detect.NewLibiEngine(false, 0, 0))
 	r.respFilter.Store(&respfilter.Settings{})
 	r.dprot.Store(&dprotect.Settings{})
+	r.tamper.Store(&tamper.Settings{})
+	r.decode.Store(&detect.DecodeConfig{})
 
 	// 挑战通行证的签名密钥取自 JWT 密钥文件内容（不是文件路径字符串）：
 	// 拿路径当密钥等于用一个公开常量签名，知道默认路径的人就能伪造通行证。
@@ -244,6 +271,12 @@ func New(cfg *config.Config, st *store.Store, certs *proxy.CertManager, version 
 		return nil, err
 	}
 	r.dprotMgr = dprotMgr
+	// 策略认证通行证密钥：同样从 JWT 密钥文件内容派生，前缀区分用途。
+	paSecret := sha256.Sum256(append([]byte("gowaf-policy-auth|"), secret...))
+	r.policyAuthSecret = paSecret[:]
+	// 防篡改基线仓库与自定义 CC 计数器。
+	r.Tamper = tamper.New()
+	r.PolicyHits = guard.NewHitTracker()
 
 	// ACME 管理器：状态（账户密钥、订单）落盘 data/acme/，签出的证书写入
 	// tls.cert_dir 后回调 CertManager.Reload 热生效；未启用 TLS 时回调为空操作。
@@ -342,6 +375,109 @@ func (r *Runtime) DProtect() *dprotect.Settings {
 // DProtectMgr 返回动态防护页面加密器。
 // 返回 *dprotect.Manager：进程启动时装配，恒非 nil。
 func (r *Runtime) DProtectMgr() *dprotect.Manager { return r.dprotMgr }
+
+// TamperSettings 返回当前防篡改设置（原子读取）。
+// 返回 *tamper.Settings：未初始化时返回零值（即关闭），调用方无需判空。
+func (r *Runtime) TamperSettings() *tamper.Settings {
+	if s := r.tamper.Load(); s != nil {
+		return s
+	}
+	return &tamper.Settings{}
+}
+
+// DecodeCfg 返回当前多层解码配置（原子读取）。
+// 返回 *detect.DecodeConfig：未初始化时返回零值（即关闭）。
+func (r *Runtime) DecodeCfg() *detect.DecodeConfig {
+	if c := r.decode.Load(); c != nil {
+		return c
+	}
+	return &detect.DecodeConfig{}
+}
+
+// PolicyAuthSecret 返回策略认证通行证的 HMAC 签名密钥。
+// 返回 []byte：进程启动时从 JWT 密钥文件内容派生，恒非空。
+func (r *Runtime) PolicyAuthSecret() []byte { return r.policyAuthSecret }
+
+// TamperRefresh 重新生成防篡改基线：对每个启用站点 × 每个受保护路径回源抓取
+// 响应并记录哈希与副本。
+// 参数 ctx：抓取请求共用的上下文（当前未做单请求级取消，整体走 20 秒超时）。
+// 返回 []tamper.FetchResult：逐「站点×路径」的抓取结果；防篡改未启用或未配置
+// 受保护路径时返回错误说明。
+//
+// 只抓 200 且体积 ≤ max_bytes 的响应；上游不可达/非 200 的路径保留旧基线
+// （宁可用旧基线也不清空保护）。
+func (r *Runtime) TamperRefresh() ([]tamper.FetchResult, error) {
+	s := r.TamperSettings()
+	if !s.Enabled {
+		return nil, fmt.Errorf("防篡改未启用，请先在设置中开启 tamper.enabled")
+	}
+	if len(s.Paths) == 0 {
+		return nil, fmt.Errorf("未配置受保护路径（tamper.paths）")
+	}
+	router := r.Router()
+	sites := router.Sites()
+	if len(sites) == 0 {
+		return nil, fmt.Errorf("没有启用的站点")
+	}
+
+	client := &http.Client{Timeout: 15 * time.Second}
+	results := make([]tamper.FetchResult, 0, len(sites)*len(s.Paths))
+	for _, route := range sites {
+		if route.Upstream == nil {
+			continue
+		}
+		// 用站点第一个非泛域名做 Host 头（回源时上游按 Host 路由虚拟站点）
+		host := ""
+		for _, h := range route.Hosts {
+			if !strings.HasPrefix(h, "*") {
+				host = h
+				break
+			}
+		}
+		for _, path := range s.Paths {
+			res := tamper.FetchResult{Site: route.SiteName, Path: path}
+			target := route.Upstream.String()
+			target = strings.TrimSuffix(target, "/") + path
+			req, err := http.NewRequest(http.MethodGet, target, nil)
+			if err != nil {
+				res.Error = err.Error()
+				results = append(results, res)
+				continue
+			}
+			if host != "" {
+				req.Host = host
+			}
+			resp, err := client.Do(req)
+			if err != nil {
+				res.Error = "回源失败: " + err.Error()
+				results = append(results, res)
+				continue
+			}
+			body, _ := io.ReadAll(io.LimitReader(resp.Body, int64(s.MaxBytes)+1))
+			_ = resp.Body.Close()
+			ct := resp.Header.Get("Content-Type")
+			status := resp.StatusCode
+			switch {
+			case status != http.StatusOK:
+				res.Error = fmt.Sprintf("上游返回 %d，保留旧基线", status)
+			case len(body) == 0:
+				res.Error = "响应体为空"
+			case len(body) > s.MaxBytes:
+				res.Error = fmt.Sprintf("响应 %d 字节超过 max_bytes %d，保留旧基线", len(body), s.MaxBytes)
+			default:
+				if err := r.Tamper.Store(route.SiteName, path, body, ct); err != nil {
+					res.Error = err.Error()
+				} else {
+					sum := sha256.Sum256(body)
+					res.OK, res.SHA256, res.Size = true, hex.EncodeToString(sum[:]), len(body)
+				}
+			}
+			results = append(results, res)
+		}
+	}
+	log.Printf("[tamper] 基线刷新完成: %d 项", len(results))
+	return results, nil
+}
 
 // splitList 拆分逗号/分号/空白（含全角逗号）分隔的列表字符串，用于收件人等多值输入。
 // 参数 s：原始字符串。
@@ -478,6 +614,7 @@ func (r *Runtime) Reload(ctx context.Context) error {
 	}
 
 	// 精准访问控制：条件树 JSON 在 Reload 时解析并编译成不可变快照。
+	// auth / rate_limit 动作的 config 列随定义一起传入，编译期强校验。
 	var apRows []model.AccessPolicy
 	if err := r.Store.Gorm().WithContext(ctx).Where("enabled = 1").Find(&apRows).Error; err != nil {
 		return err
@@ -490,7 +627,8 @@ func (r *Runtime) Reload(ctx context.Context) error {
 		}
 		apDefs = append(apDefs, policy.Definition{
 			ID: row.ID, Name: row.Name, Site: row.Site, Priority: row.Priority,
-			Enabled: row.Enabled == 1, Action: policy.Action(row.Action), Conditions: g,
+			Enabled: row.Enabled == 1, Action: policy.Action(row.Action),
+			Conditions: g, Config: row.Config,
 		})
 	}
 	pol, err := policy.Compile(apDefs)
@@ -585,6 +723,32 @@ func (r *Runtime) Reload(ctx context.Context) error {
 		r.settingFromInt(sm, KeyLibiSQLiScore, detect.DefaultLibiSQLiScore),
 		r.settingFromInt(sm, KeyLibiXSSScore, detect.DefaultLibiXSSScore),
 	))
+
+	// 检测前多层解码：开关与上限热生效。
+	dc := &detect.DecodeConfig{
+		Enabled:  r.settingFromBool(sm, KeyDecodeEnabled, true),
+		MaxDepth: r.settingFromInt(sm, KeyDecodeDepth, detect.DefaultDecodeDepth),
+		MaxBytes: r.settingFromInt(sm, KeyDecodeBytes, detect.DefaultDecodeBytes),
+	}
+	r.decode.Store(dc)
+
+	// 网页防篡改：开关/模式/受保护路径/副本上限。
+	tp := &tamper.Settings{
+		Enabled:  r.settingFromBool(sm, KeyTamperEnabled, false),
+		Mode:     r.settingFrom(sm, KeyTamperMode, tamper.ModeObserve),
+		Paths:    splitList(r.settingFrom(sm, KeyTamperPaths, "")),
+		MaxBytes: r.settingFromInt(sm, KeyTamperMaxBytes, tamper.DefaultMaxBytes),
+	}
+	if tp.Mode != tamper.ModeBlock {
+		tp.Mode = tamper.ModeObserve
+	}
+	if tp.MaxBytes <= 0 {
+		tp.MaxBytes = tamper.DefaultMaxBytes
+	}
+	if len(tp.Paths) > tamper.MaxPaths {
+		tp.Paths = tp.Paths[:tamper.MaxPaths]
+	}
+	r.tamper.Store(tp)
 
 	// 站点多上游（双链路）：按站点分组，BuildRouter 把主上游与额外目标合并。
 	var upRows []model.SiteUpstream
@@ -959,6 +1123,17 @@ func DefaultSettings(cfg *config.Config) map[string]string {
 		KeyLibiEnabled:     "true",
 		KeyLibiSQLiScore:   strconv.Itoa(detect.DefaultLibiSQLiScore),
 		KeyLibiXSSScore:    strconv.Itoa(detect.DefaultLibiXSSScore),
+
+		// 检测前多层解码：默认开启（URL 多层解码本就由 Normalize 覆盖，
+		// 这里补 base64/压缩体/unicode 转义三类绕过面，成本有界）。
+		KeyDecodeEnabled: "true",
+		KeyDecodeDepth:   strconv.Itoa(detect.DefaultDecodeDepth),
+		KeyDecodeBytes:   strconv.Itoa(detect.DefaultDecodeBytes),
+
+		// 防篡改默认关闭：基线由管理员显式生成，开启后也先跑 observe。
+		KeyTamperEnabled:  "false",
+		KeyTamperMode:     tamper.ModeObserve,
+		KeyTamperMaxBytes: strconv.Itoa(tamper.DefaultMaxBytes),
 
 		// 响应敏感信息过滤与动态防护默认关闭：两者都会改动响应内容，
 		// 先观察（respfilter.observe / 手动开启）确认无误伤再放量。

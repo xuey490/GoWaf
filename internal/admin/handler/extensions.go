@@ -15,6 +15,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"golang.org/x/crypto/bcrypt"
 	"net/http"
 	"net/netip"
 	"net/url"
@@ -68,11 +69,29 @@ type policyInput struct {
 	Enabled    *int   `json:"enabled"`
 	Action     string `json:"action"`
 	Conditions string `json:"conditions"`
-	Note       string `json:"note"`
+	// Config 动作附加参数（JSON 对象）：auth（mode/users/title/realm/ttlHours/password）
+	// 与 rate_limit（windowSec/threshold/onExceed）。auth 的密码以明文传入，
+	// 服务端 bcrypt 哈希后落库；列表回显时哈希一律掩码。
+	Config json.RawMessage `json:"config"`
+	Note   string          `json:"note"`
+}
+
+// policyConfigHashPattern 匹配 config JSON 里的 bcrypt 哈希字段值（回显掩码用）。
+var policyConfigHashPattern = regexp.MustCompile(`"(?:passwordHash|hash)":\s*"\$2[aby]\$[^"]*"`)
+
+// maskConfigHashes 把 config JSON 中的 bcrypt 哈希替换为掩码。
+// 参数 cfg：config 列原文。
+// 返回 string：掩码后的 JSON；原文为空原样返回。
+func maskConfigHashes(cfg string) string {
+	if cfg == "" {
+		return ""
+	}
+	return policyConfigHashPattern.ReplaceAllString(cfg, `"passwordHash":"******"`)
 }
 
 // PolicyList 查询精准访问控制策略。
 // 路由：GET /api/policies（仅需登录）。
+// config 列中的密码哈希以 ****** 掩码回显（bcrypt 虽难逆，仍不外露）。
 func (s *Server) PolicyList(c *gin.Context) {
 	q := s.Store.Gorm().Model(&model.AccessPolicy{})
 	if site := strings.TrimSpace(c.Query("site")); site != "" {
@@ -85,6 +104,9 @@ func (s *Server) PolicyList(c *gin.Context) {
 	if err := q.Order("priority ASC, id ASC").Limit(500).Find(&rows).Error; err != nil {
 		s.failDB(c, err)
 		return
+	}
+	for i := range rows {
+		rows[i].Config = maskConfigHashes(rows[i].Config)
 	}
 	response.OK(c, gin.H{"list": rows, "total": len(rows)})
 }
@@ -166,9 +188,141 @@ func (s *Server) PolicyDelete(c *gin.Context) {
 	s.deleteRow(c, &model.AccessPolicy{}, "策略", "policy")
 }
 
+// policyAuthCfgIn 是 auth 动作 config 的输入形态：密码为明文，服务端哈希。
+type policyAuthCfgIn struct {
+	Mode  string `json:"mode"`            // basic / page
+	Realm string `json:"realm,omitempty"` // Basic realm
+	Title string `json:"title,omitempty"` // 密码页标题
+	Users []struct {
+		User     string `json:"user"`     // 用户名
+		Password string `json:"password"` // 明文密码；修改时留空 = 沿用原哈希
+	} `json:"users,omitempty"`
+	Password string `json:"password,omitempty"` // page 模式明文密码；修改时留空 = 沿用原哈希
+	TTLHours int    `json:"ttlHours,omitempty"` // 通行证有效期（小时），默认 8
+}
+
+// normalizePolicyConfig 把前端传来的动作参数归一化成落库 JSON。
+// 参数 action：策略动作；参数 old：原记录（修改时沿用旧哈希）；参数 raw：config 原文。
+// 返回 (string, string)：落库 JSON 与错误提示（空串表示合法）。
+// 非 auth / rate_limit 动作一律返回空串（清空无参动作的残留 config）。
+func normalizePolicyConfig(action string, old *model.AccessPolicy, raw json.RawMessage) (string, string) {
+	switch action {
+	case "auth":
+		if len(raw) == 0 {
+			// 修改时未传 config：沿用原配置（原记录也是 auth 才成立）
+			return "", "auth 策略缺少 config（认证方式与密码）"
+		}
+		var in policyAuthCfgIn
+		if err := json.Unmarshal(raw, &in); err != nil {
+			return "", "auth config 解析失败: " + err.Error()
+		}
+		in.Mode = strings.ToLower(strings.TrimSpace(in.Mode))
+		if in.Mode != "basic" && in.Mode != "page" {
+			return "", "auth mode 只能是 basic 或 page"
+		}
+		// 修改时从原 config 提取旧哈希，明文留空的账号沿用
+		var oldCfg policy.AuthConfig
+		if old != nil && old.Config != "" {
+			_ = json.Unmarshal([]byte(old.Config), &oldCfg)
+		}
+		out := map[string]any{
+			"mode":   in.Mode,
+			"ttlSec": 0,
+		}
+		switch in.Mode {
+		case "basic":
+			if len(in.Users) == 0 {
+				return "", "basic 认证至少需要一个账号"
+			}
+			users := make([]policy.AuthUser, 0, len(in.Users))
+			oldUsers := map[string]string{}
+			for _, u := range oldCfg.Users {
+				oldUsers[u.User] = u.PasswordHash
+			}
+			for _, u := range in.Users {
+				user := strings.TrimSpace(u.User)
+				if user == "" {
+					return "", "账号用户名不能为空"
+				}
+				hash := ""
+				if u.Password == "" || u.Password == "******" {
+					// 明文留空：沿用同名账号的旧哈希
+					hash = oldUsers[user]
+					if hash == "" {
+						return "", "账号 " + user + " 未填写密码（新账号必须设置密码）"
+					}
+				} else {
+					h, err := bcrypt.GenerateFromPassword([]byte(u.Password), bcrypt.DefaultCost)
+					if err != nil {
+						return "", "密码哈希失败: " + err.Error()
+					}
+					hash = string(h)
+				}
+				users = append(users, policy.AuthUser{User: user, PasswordHash: hash})
+			}
+			out["users"] = users
+			if strings.TrimSpace(in.Realm) != "" {
+				out["realm"] = strings.TrimSpace(in.Realm)
+			}
+		case "page":
+			hash := ""
+			switch {
+			case in.Password != "" && in.Password != "******":
+				h, err := bcrypt.GenerateFromPassword([]byte(in.Password), bcrypt.DefaultCost)
+				if err != nil {
+					return "", "密码哈希失败: " + err.Error()
+				}
+				hash = string(h)
+			case oldCfg.PasswordHash != "":
+				hash = oldCfg.PasswordHash // 留空 = 沿用旧哈希
+			default:
+				return "", "page 认证必须设置访问密码"
+			}
+			out["passwordHash"] = hash
+			if strings.TrimSpace(in.Title) != "" {
+				out["title"] = strings.TrimSpace(in.Title)
+			}
+		}
+		if in.TTLHours > 0 {
+			out["ttlSec"] = in.TTLHours * 3600
+		} else if oldCfg.TTLSec > 0 {
+			out["ttlSec"] = oldCfg.TTLSec
+		}
+		b, err := json.Marshal(out)
+		if err != nil {
+			return "", "auth config 序列化失败"
+		}
+		return string(b), ""
+
+	case "rate_limit":
+		if len(raw) == 0 {
+			return "", "rate_limit 策略缺少 config（窗口与阈值）"
+		}
+		// 原样透传给 policy.Compile 校验（窗口/阈值/动作的边界在那里）
+		var v map[string]any
+		if err := json.Unmarshal(raw, &v); err != nil {
+			return "", "rate_limit config 解析失败: " + err.Error()
+		}
+		b, err := json.Marshal(v)
+		if err != nil {
+			return "", "rate_limit config 序列化失败"
+		}
+		return string(b), ""
+
+	default:
+		// 无参动作：清空残留 config
+		return "", ""
+	}
+}
+
 // buildPolicy 把请求体合并进模型并做完整校验。
 // 参数 old：修改时的原记录，新增传 nil；in：请求体。
 // 返回 (*model.AccessPolicy, string)：模型与错误提示（空串表示合法）。
+//
+// auth / rate_limit 两个动作的 config 在这里归一化：
+//   - auth：前端传明文密码（users[].password / password），服务端 bcrypt 哈希；
+//     修改时密码留空 = 沿用原哈希（掩码 ****** 表示未改动）；
+//   - rate_limit：窗口/阈值/超限动作原样落库，合法性由 policy.Compile 校验。
 func buildPolicy(old *model.AccessPolicy, in *policyInput) (*model.AccessPolicy, string) {
 	name := strings.TrimSpace(in.Name)
 	if name == "" {
@@ -176,9 +330,9 @@ func buildPolicy(old *model.AccessPolicy, in *policyInput) (*model.AccessPolicy,
 	}
 	action := strings.ToLower(strings.TrimSpace(in.Action))
 	switch action {
-	case "", "allow", "block", "challenge", "log", "ban":
+	case "", "allow", "block", "challenge", "log", "ban", "auth", "rate_limit":
 	default:
-		return nil, "动作只能是 allow/block/challenge/log/ban"
+		return nil, "动作只能是 allow/block/challenge/log/ban/auth/rate_limit"
 	}
 	if action == "" {
 		action = "block"
@@ -191,9 +345,14 @@ func buildPolicy(old *model.AccessPolicy, in *policyInput) (*model.AccessPolicy,
 	if err != nil {
 		return nil, "条件 JSON 解析失败: " + err.Error()
 	}
+	// 门禁类动作的 config 归一化：明文密码换 bcrypt 哈希后再做编译校验。
+	configJSON, cfgMsg := normalizePolicyConfig(action, old, in.Config)
+	if cfgMsg != "" {
+		return nil, cfgMsg
+	}
 	if _, err := policy.Compile([]policy.Definition{{
 		ID: 1, Name: name, Site: strings.TrimSpace(in.Site), Priority: 100,
-		Enabled: true, Action: policy.Action(action), Conditions: group,
+		Enabled: true, Action: policy.Action(action), Conditions: group, Config: configJSON,
 	}}); err != nil {
 		return nil, err.Error()
 	}
@@ -206,6 +365,7 @@ func buildPolicy(old *model.AccessPolicy, in *policyInput) (*model.AccessPolicy,
 	row.Site = strings.TrimSpace(in.Site)
 	row.Action = action
 	row.Conditions = raw
+	row.Config = configJSON
 	row.Note = strings.TrimSpace(in.Note)
 	if in.Priority != nil {
 		row.Priority = *in.Priority

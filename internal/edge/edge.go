@@ -34,6 +34,7 @@ import (
 	"gowaf/internal/runtime"
 	"gowaf/internal/store"
 	"gowaf/internal/store/model"
+	"gowaf/internal/tamper"
 )
 
 // Handler 数据面主处理器：按「识别 → 名单 → 限流 → 检测 → 转发」的顺序处理每个请求。
@@ -89,6 +90,16 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	clientIP := h.clientIP(r)
+
+	// 0.5) 策略认证的密码提交端点（POST /.waf-auth/<policyID>）：这是认证门禁
+	//      的解锁通道，必须在所有闸门（黑名单/限流/挑战/策略）之前放行——
+	//      被门禁挡住的访客靠它换通行证。仅在匹配到站点时处理（策略按站点生效）。
+	if strings.HasPrefix(r.URL.Path, policyAuthPassPrefix) {
+		if route := h.rt.Router().Match(r.Host); route != nil {
+			h.handlePolicyAuthPass(w, r, route, clientIP)
+			return
+		}
+	}
 	// 按请求头 Host 匹配站点路由；未配置的域名不属于任何站点，直接 404
 	route := h.rt.Router().Match(r.Host)
 	if route == nil {
@@ -237,28 +248,44 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// 缓存命中会直接 return，而完整策略求值在第 8 步（必须等 body 读完），
 	// 不先判一次的话，命中缓存的静态资源就会绕过 block / ban / challenge 策略
 	// ——「拦截某地域全站访问」会漏掉所有已被缓存的 js/css。
-	// 只处理不依赖 body 且动作为拒绝类的策略；第一条命中的策略若依赖 body、
-	// 或是 allow/log，则保持原样交给第 8 步，绝不改变「优先级第一条生效」的语义。
+	// 只处理不依赖 body 且动作为拒绝类/门禁类（auth / rate_limit）的策略；
+	// 第一条命中的策略若依赖 body、或是 allow/log，则保持原样交给第 8 步，
+	// 绝不改变「优先级第一条生效」的语义。
 	// 观察模式不在此拦截，避免把「只记录」变成真拦。
 	country := h.countryOf(clientIP)
 	if m, ok := earlyPolicyVerdict(h.rt.PolicySet(), r, clientIP.String(), country, route.SiteName, observe); ok {
 		h.rt.PolicySet().RecordHit(m.PolicyID, store.NowMS())
-		res := policyResult(m)
-		if m.Action == policy.ActionChallenge {
-			if !h.challengePassed(w, r, clientIP) {
-				h.serveChallenge(w, r, clientIP)
-				h.recordEvent(route, clientIP, reqID, start, r, http.StatusForbidden, "challenge", &res, 0, "", true)
+		// 门禁类动作：认证没过先补票，CC 没超限继续走（完整求值对门禁免疫，
+		// 见 policy.Evaluate 的注释——这里就是它们唯一的执行点）。
+		if m.Action == policy.ActionAuth {
+			if !h.policyAuthGate(m, r, clientIP) {
+				h.servePolicyAuth(w, r, route, clientIP, reqID, start, m)
 				return
 			}
-			// 已持通行证：不重复校验，继续走缓存与完整求值（第 8 步会记 log）。
-		} else {
-			action := "block"
-			if m.Action == policy.ActionBan {
-				action = "ban"
-				h.recordDirectBan(clientIP.String(), &res, route.SiteName, r.Method, r.URL.Path)
+			// 已认证：继续后续管线（缓存、检测、转发）
+		} else if m.Action == policy.ActionRateLimit {
+			if h.policyRateLimit(w, r, route, clientIP, reqID, start, m) {
+				return
 			}
-			h.reject(w, r, route, clientIP, reqID, start, action, "policy", http.StatusForbidden, &res)
-			return
+			// 未超限：继续后续管线
+		} else {
+			res := policyResult(m)
+			if m.Action == policy.ActionChallenge {
+				if !h.challengePassed(w, r, clientIP) {
+					h.serveChallenge(w, r, clientIP)
+					h.recordEvent(route, clientIP, reqID, start, r, http.StatusForbidden, "challenge", &res, 0, "", true)
+					return
+				}
+				// 已持通行证：不重复校验，继续走缓存与完整求值（第 8 步会记 log）。
+			} else {
+				action := "block"
+				if m.Action == policy.ActionBan {
+					action = "ban"
+					h.recordDirectBan(clientIP.String(), &res, route.SiteName, r.Method, r.URL.Path)
+				}
+				h.reject(w, r, route, clientIP, reqID, start, action, "policy", http.StatusForbidden, &res)
+				return
+			}
 		}
 	}
 
@@ -268,8 +295,12 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// 缓存一份密文页会让后面所有访客解密失败，宁可不缓存。
 	var cacheRule *cache.Rule
 	cacheKey := ""
+	// 受防篡改保护的路径同样整段跳过缓存：缓存 HIT 会绕过比对阶段，
+	// 每个响应都必须与基线比对（宁可放弃加速）。
 	if h.rt.Cache.Enabled() && (r.Method == http.MethodGet || r.Method == http.MethodHead) &&
-		r.Header.Get("Range") == "" && !dprotect.Applies(h.rt.DProtect(), r.Method, r.URL.Path) {
+		r.Header.Get("Range") == "" &&
+		!dprotect.Applies(h.rt.DProtect(), r.Method, r.URL.Path) &&
+		!tamper.Applies(h.rt.TamperSettings(), r.Method, r.URL.Path) {
 		guest := r.Header.Get("Cookie") == "" && r.Header.Get("Authorization") == ""
 		if rule, ok := h.rt.Cache.Match(route.SiteName, r.URL.Path, guest); ok {
 			cr := rule
@@ -349,6 +380,13 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if !skipDetect && !skipBody && route.DetectBody {
 		in := buildInput(r, body)
 		in.Site = route.SiteName
+		// 多层解码变体（base64 / 压缩体 / unicode 转义）：原文照检，变体作为
+		// 附加检测文本并入自研引擎与 libi 的扫描（CRS 自带变换链，不喂变体）。
+		// 开关与上限热生效（engine.decode.*）。
+		if dc := h.rt.DecodeCfg(); dc.Enabled {
+			qv, bv := detect.DecodeVariants(in.Query, in.Body, *dc)
+			in.DecodedQuery, in.DecodedBody = qv, bv
+		}
 		// 加固参数每次现读：控制台改完设置立即生效，无需重启。
 		budget := engineBudget(h.rt.SettingInt(runtime.KeyEngineTimeoutMS, 2000))
 		failMode := h.rt.Setting(runtime.KeyEngineFailMode, "open")

@@ -517,6 +517,9 @@ func (a *App) maintenance() {
 			a.rt.Cache.Cleanup(time.Now())
 			a.login.Cleanup()
 			metrics.BannedGauge.Set(float64(a.rt.Bans.Size()))
+			// 自定义 CC 规则的窗口计数：窗口上限 1 天，按 2 倍窗口清理
+			//（48 小时内没有新命中的计数桶才会被逐出）。
+			a.rt.PolicyHits.Cleanup(now, 48*3600*1000)
 
 			// Dropped 是累计值，这里换算成增量再喂给 Counter
 			if dropped := a.events.Dropped(); dropped > a.lastDropped {

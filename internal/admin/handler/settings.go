@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -13,6 +14,7 @@ import (
 	"gowaf/internal/runtime"
 	"gowaf/internal/store"
 	"gowaf/internal/store/model"
+	"gowaf/internal/tamper"
 )
 
 // allowedSettingKeys 允许通过 HTTP 修改的设置键白名单，防止写入任意键污染配置。
@@ -58,6 +60,17 @@ var allowedSettingKeys = map[string]struct{}{
 	runtime.KeyDProtMaxBytes:  {},
 	runtime.KeyDProtExclude:   {},
 	runtime.KeyDProtChallenge: {},
+
+	// 检测前多层解码
+	runtime.KeyDecodeEnabled: {},
+	runtime.KeyDecodeDepth:   {},
+	runtime.KeyDecodeBytes:   {},
+
+	// 网页防篡改
+	runtime.KeyTamperEnabled:  {},
+	runtime.KeyTamperMode:     {},
+	runtime.KeyTamperPaths:    {},
+	runtime.KeyTamperMaxBytes: {},
 
 	runtime.KeyIntelBanOnHit: {},
 	runtime.KeyIntelBanTTL:   {},
@@ -254,9 +267,32 @@ func validateSetting(key, value string) string {
 			return "guard.challenge_referer_allow 过长（上限 2000 字符）"
 		}
 	case runtime.KeyIntelBanOnHit, runtime.KeyNotifyEnabled, runtime.KeyNotifyWebhookEnabled,
-		runtime.KeyLibiEnabled, runtime.KeyRespFilterEnabled, runtime.KeyDProtEnabled, runtime.KeyDProtChallenge:
+		runtime.KeyLibiEnabled, runtime.KeyRespFilterEnabled, runtime.KeyDProtEnabled, runtime.KeyDProtChallenge,
+		runtime.KeyDecodeEnabled, runtime.KeyTamperEnabled:
 		if value != "true" && value != "false" {
 			return key + " 只能是 true 或 false"
+		}
+	case runtime.KeyTamperMode:
+		if value != "observe" && value != "block" {
+			return "tamper.mode 只能是 observe 或 block"
+		}
+	case runtime.KeyTamperPaths:
+		count := 0
+		for _, e := range strings.Split(value, ",") {
+			e = strings.TrimSpace(e)
+			if e == "" {
+				continue
+			}
+			if !strings.HasPrefix(e, "/") {
+				return "tamper.paths 的路径必须以 / 开头: " + e
+			}
+			if len(e) > 255 {
+				return "tamper.paths 单条路径过长（上限 255 字符）"
+			}
+			count++
+		}
+		if count > tamper.MaxPaths {
+			return fmt.Sprintf("tamper.paths 最多 %d 条路径", tamper.MaxPaths)
 		}
 	case runtime.KeyIntelBanTTL:
 		n, err := strconv.Atoi(value)
@@ -291,7 +327,8 @@ func validateSetting(key, value string) string {
 	case runtime.KeyBotScoreThreshold, runtime.KeyBotWindow, runtime.KeyBotCacheTTL,
 		runtime.KeyCacheMaxBytes, runtime.KeyCacheMaxObject, runtime.KeyCacheDefaultTTL,
 		runtime.KeyCacheCompressMin, runtime.KeyUpstreamHealth, runtime.KeyNodeHeartbeatTTL,
-		runtime.KeyRespFilterMaxBytes, runtime.KeyDProtMaxBytes:
+		runtime.KeyRespFilterMaxBytes, runtime.KeyDProtMaxBytes,
+		runtime.KeyDecodeBytes, runtime.KeyTamperMaxBytes:
 		n, err := strconv.ParseInt(value, 10, 64)
 		if err != nil || n < 0 {
 			return key + " 必须是非负整数"
@@ -310,6 +347,11 @@ func validateSetting(key, value string) string {
 	case runtime.KeyEngineFailMode:
 		if value != "open" && value != "closed" {
 			return "engine.fail_mode 只能是 open 或 closed"
+		}
+	case runtime.KeyDecodeDepth:
+		n, err := strconv.Atoi(value)
+		if err != nil || n < 1 || n > 3 {
+			return "engine.decode.max_depth 必须是 1~3"
 		}
 	case runtime.KeyLibiSQLiScore, runtime.KeyLibiXSSScore:
 		n, err := strconv.Atoi(value)
