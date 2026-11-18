@@ -1,0 +1,83 @@
+# Go-WAF 容器配置（Dockerfile 默认加载）
+#
+# 与主机部署的差异：
+#   - 控制面绑定 0.0.0.0（容器内没有"本机回环可信任"语义），必须显式知情；
+#   - 全部持久化状态收敛到 /data 卷：数据库、证书、JWT 密钥、ACME 账户；
+#   - 内置规则从镜像内 /app/rules 读取，无需挂载。
+#
+# 站点种子留空：容器部署后一律在控制台添加站点（Host → 上游按容器网络填）。
+
+server:
+  listen: "0.0.0.0:80"
+  tls_listen: "0.0.0.0:443"
+  admin_listen: "0.0.0.0:8899"
+  read_header_timeout: 5s
+  read_timeout: 30s
+  write_timeout: 0s
+  idle_timeout: 90s
+  max_header_bytes: 32768
+  shutdown_timeout: 15s
+  trusted_proxies:
+    - "127.0.0.1/32"
+    - "::1/128"
+
+tls:
+  enabled: true
+  cert_dir: "/data/certs"          # <domain>/fullchain.pem + privkey.pem；ACME 签发也写到这里
+  default_cert: ""
+  min_version: "1.2"
+  hsts: true
+
+storage:
+  dsn: "/data/waf.db"
+  retain_days: 30
+  sample_rate: 0.01
+
+engine:
+  mode: "observe"                  # 先观察 3~7 天再切 protect
+  block_score: 60
+  challenge_score: 30
+  max_body_inspect: 262144
+  rules_file: "/app/rules/builtin.yaml"
+
+guard:
+  ip_rps: 30
+  ip_burst: 60
+  ip_per_minute: 600
+  challenge_per_minute: 300
+  challenge_rps: 10
+  ban_ttl: 1h
+  ban_max_ttl: 24h
+  ban_window: 10m
+  ban_threshold: 5
+  ban_max_strikes: 3
+  ban_strike_reset: 24h
+  auto_ban: true
+
+admin:
+  allowed_ips: []                  # 容器场景交给防火墙/端口映射控制；务必不要裸暴露 8899
+  jwt_secret_file: "/data/jwt.key"
+  access_ttl: 2h
+  refresh_ttl: 168h
+  login_max_fail: 5
+  login_lock: 15m
+  cookie_secure: false             # 经 HTTPS 反代访问控制台时改为 true
+  cors:
+    enabled: true
+    allow_origins: []
+    allow_methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    allow_headers: ["Authorization", "Content-Type", "X-CSRF-Token", "X-Request-ID"]
+    expose_headers: ["X-Request-ID", "X-CSRF-Token"]
+    allow_credentials: true
+    max_age: 12h
+  csrf:
+    enabled: true
+    header: "X-CSRF-Token"
+    cookie_name: "waf_csrf"
+  i_know_what_i_am_doing: true     # 控制面绑定非回环地址的知情开关（容器必须）
+
+demo:
+  enabled: false
+
+log:
+  level: "info"
