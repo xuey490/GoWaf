@@ -67,4 +67,24 @@ var (
 		Name: "waf_upstream_errors_total",
 		Help: "上游 5xx 与不可达次数",
 	}, []string{"site"})
+
+	// DetectErrors 检测引擎降级次数（超时 / panic 被隔离）（Counter）。
+	// 标签 engine：引擎名（rules / crs / libi / payload）；reason：timeout / panic。
+	DetectErrors = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "waf_detect_errors_total",
+		Help: "检测引擎降级（超时或 panic 被隔离）次数",
+	}, []string{"engine", "reason"})
+
+	// RespFilterHits 响应敏感信息命中次数（Counter）。
+	// 标签 rule_id：响应规则 ID（如 resp-phone）；mode：当前过滤模式（observe/mask）。
+	RespFilterHits = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "waf_respfilter_hits_total",
+		Help: "响应敏感信息命中次数",
+	}, []string{"rule_id", "mode"})
+
+	// DProtectPages 动态防护页面加密次数（Counter），无标签。
+	DProtectPages = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "waf_dprotect_pages_total",
+		Help: "动态防护加密的 HTML 页面数",
+	})
 )
