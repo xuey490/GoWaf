@@ -108,4 +108,54 @@ var (
 		Name: "waf_crs_skipped_total",
 		Help: "CRS 第二引擎被调度闸门旁路的次数（按原因）",
 	}, []string{"reason"})
+
+	// ===== v1.7.0 P1 新特性 =====
+
+	// JA4Blocked JA4 恶意指纹拦截次数（Counter），无标签。
+	JA4Blocked = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "waf_ja4_blocked_total",
+		Help: "JA4 指纹命中黑名单被拦截的次数",
+	})
+
+	// ReplayBlocked 请求防重放拦截次数（Counter），无标签。
+	ReplayBlocked = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "waf_replay_blocked_total",
+		Help: "同 nonce 重放被拦截的次数",
+	})
+
+	// CaptchaFailsTotal 验证码答错次数（Counter），无标签。
+	CaptchaFailsTotal = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "waf_captcha_fails_total",
+		Help: "图形验证码答错次数",
+	})
+
+	// CaptchaPassedTotal 验证码通过次数（Counter），无标签。
+	CaptchaPassedTotal = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "waf_captcha_passed_total",
+		Help: "图形验证码通过次数",
+	})
+
+	// WaitRoomRejected 等候室满员拒绝次数（Counter），无标签。
+	WaitRoomRejected = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "waf_waitroom_rejected_total",
+		Help: "等候室排队超时被拒绝（返回 429 等候页）的次数",
+	})
+
+	// WaitRoomActive 等候室当前放行中的并发请求数（Gauge），无标签。
+	WaitRoomActive = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "waf_waitroom_active",
+		Help: "等候室当前放行到上游的并发请求数",
+	})
+
+	// LogShipSent 日志外发成功条数（Counter），无标签。
+	LogShipSent = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "waf_logship_sent_total",
+		Help: "外发（Syslog/Kafka）成功的事件条数",
+	})
+
+	// LogShipDropped 日志外发丢弃条数（Counter），无标签。
+	LogShipDropped = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "waf_logship_dropped_total",
+		Help: "外发队列满或发送失败丢弃的事件条数",
+	})
 )

@@ -27,6 +27,8 @@ type siteDTO struct {
 	Whitelist    []string `json:"whitelistPaths"` // 不做检测的路径前缀白名单
 	// ProtectCfg 站点级防护覆盖：null=跟随全局。enabled=1 时按字段覆盖全局。
 	ProtectCfg *model.SiteProtect `json:"protectCfg"`
+	// BlockPage 站点级自定义拦截页：null=内置模板。enabled=1 时使用 html 模板。
+	BlockPage *model.BlockPage `json:"blockPage"`
 	// BehindCDN 空字符串表示直连；'cloudflare' 表示站点在 CF 橙云后面。
 	BehindCDN string `json:"behindCdn"`
 	CreatedAt int64  `json:"createdAt"` // 创建时间（毫秒时间戳）
@@ -51,10 +53,14 @@ func toSiteDTO(s model.Site) siteDTO {
 	if p, err := model.ParseSiteProtect(s.ProtectCfg); err == nil {
 		protect = p
 	}
+	var bp *model.BlockPage
+	if p, err := model.ParseBlockPage(s.BlockPage); err == nil {
+		bp = p
+	}
 	return siteDTO{
 		ID: s.ID, Name: s.Name, Hosts: hosts, Upstream: s.Upstream,
 		Enabled: s.Enabled, DetectBody: s.DetectBody, MaxBodyBytes: s.MaxBodyBytes,
-		Whitelist: wl, ProtectCfg: protect, BehindCDN: s.BehindCDN,
+		Whitelist: wl, ProtectCfg: protect, BlockPage: bp, BehindCDN: s.BehindCDN,
 		CreatedAt: s.CreatedAt, UpdatedAt: s.UpdatedAt,
 	}
 }
@@ -87,6 +93,8 @@ type siteInput struct {
 	Whitelist    []string `json:"whitelistPaths"`              // 不做检测的路径前缀白名单
 	// ProtectCfg 指针类型：不传时保持原值；传 null 或 {enabled:0} 表示改回跟随全局。
 	ProtectCfg *model.SiteProtect `json:"protectCfg"`
+	// BlockPage 指针类型：不传时保持原值；传 null 表示改回内置模板。
+	BlockPage *model.BlockPage `json:"blockPage"`
 	// 指针类型：不传时保持原值，兼容旧版前端；传空串表示改回直连。
 	BehindCDN *string `json:"behindCdn"`
 }
@@ -116,6 +124,23 @@ func protectCfgStr(p *model.SiteProtect) (string, error) {
 // 返回：'cloudflare' 或 ”。规则见 model.NormalizeBehindCDN，这里只是缩短调用点。
 func normalizeBehindCDN(v string) string { return model.NormalizeBehindCDN(v) }
 
+// blockPageStr 把自定义拦截页入参序列化成 block_page 列存储值。
+// 参数 in：入参中的拦截页配置（nil 表示改回内置模板）。
+// 返回：nil 时 ("", nil)；配置合法时返回 JSON 文本；非法返回错误。
+func blockPageStr(in *model.BlockPage) (string, error) {
+	if in == nil {
+		return "", nil // 内置模板
+	}
+	b, err := json.Marshal(in)
+	if err != nil {
+		return "", err
+	}
+	if _, err := model.ParseBlockPage(string(b)); err != nil {
+		return "", err
+	}
+	return string(b), nil
+}
+
 // SiteCreate 新增站点，保存成功后触发配置热加载，使新站点立即生效。
 // 路由：POST /api/sites（写操作组：CSRF 校验、演示只读拦截、审计、site:write 权限）。
 // 参数 c：Gin 上下文，JSON 请求体为 siteInput。
@@ -142,10 +167,19 @@ func (s *Server) SiteCreate(c *gin.Context) {
 			return
 		}
 	}
+	bpStr := ""
+	if in.BlockPage != nil {
+		var err error
+		if bpStr, err = blockPageStr(in.BlockPage); err != nil {
+			response.BadRequest(c, "拦截页配置非法: "+err.Error())
+			return
+		}
+	}
 	row := model.Site{
 		Name: in.Name, Hosts: string(hosts), Upstream: in.Upstream,
 		Enabled: 1, DetectBody: 1, MaxBodyBytes: in.MaxBodyBytes,
 		WhitelistPath: string(wl), RateLimit: "{}", ProtectCfg: protectStr,
+		BlockPage: bpStr,
 		CreatedAt: now, UpdatedAt: now,
 	}
 	if in.Enabled != nil {
@@ -227,6 +261,14 @@ func (s *Server) SiteUpdate(c *gin.Context) {
 			return
 		}
 		row.ProtectCfg = ps
+	}
+	if in.BlockPage != nil {
+		bps, err := blockPageStr(in.BlockPage)
+		if err != nil {
+			response.BadRequest(c, "拦截页配置非法: "+err.Error())
+			return
+		}
+		row.BlockPage = bps
 	}
 	row.UpdatedAt = store.NowMS()
 

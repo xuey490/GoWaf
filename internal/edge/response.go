@@ -219,14 +219,18 @@ border-radius:50%;margin:0 auto 18px;animation:s .8s linear infinite}
   }
 
   // 算出答案后换取通行证：服务端校验令牌 + 答案 + 环境信号，通过则
-  // Set-Cookie 并可跳回原地址。
+  // Set-Cookie 并可跳回原地址。返回 204 表示通过；返回 200 HTML 表示
+  // 环境校验失败且配置了验证码降级——整体替换文档展示验证表单。
   function finish(c){
     tip.textContent="校验通过，正在跳转…";
     fetch(pass+"?t="+encodeURIComponent(tok)+"&c="+c+"&e="+encodeURIComponent(envReport())+"&to="+encodeURIComponent(to),{
       headers:{"X-WAF-JS":"1"},credentials:"same-origin",cache:"no-store"
     }).then(function(r){
       if(!r.ok) throw new Error("pass failed");
-      location.replace(to);
+      if(r.status===204){ location.replace(to); return; }
+      return r.text().then(function(html){
+        document.open();document.write(html);document.close();
+      });
     }).catch(function(){
       setTimeout(function(){location.reload();},1200);
     });
@@ -287,17 +291,20 @@ func (h *Handler) issuePass(w http.ResponseWriter, r *http.Request, ip netip.Add
 		h.rejectPass(w, "人机校验未通过（校验令牌缺失、过期或答案不正确），请刷新页面重试。")
 		return
 	}
-	// 环境信号 + 最小耗时校验：环境校验失败或耗时过短即脚本特征
+	// 环境信号 + 最小耗时校验：环境校验失败或耗时过短即脚本特征。
+	// 处置走降级链（guard.challenge.chain）：链含 captcha 时把验证码页
+	// 返回给挑战页 JS（JS 收到 HTML 内容会整体替换文档，真人看到表单，
+	// 无 JS 环境拿不到）；否则按原行为直接拒绝。
 	if h.rt.SettingBool(runtime.KeyChallEnvCheck, true) {
 		if !guard.CheckEnvSignal(r.URL.Query().Get("e")) {
-			h.rejectPass(w, "人机校验未通过（浏览器环境校验失败），请使用常规浏览器访问。")
+			h.chainFallback(w, r, ip, "人机校验未通过（浏览器环境校验失败），请完成下方验证后继续。")
 			return
 		}
 	}
 	if minMs := h.rt.SettingInt(runtime.KeyChallMinElapsed, 500); minMs > 0 {
 		issuedAt, ok := guard.PowIssuedAt(challenge)
 		if !ok || time.Now().UnixMilli()-issuedAt < int64(minMs) {
-			h.rejectPass(w, "人机校验未通过（校验耗时异常），请刷新页面重试。")
+			h.chainFallback(w, r, ip, "人机校验未通过（校验耗时异常），请完成下方验证后继续。")
 			return
 		}
 	}
@@ -332,4 +339,17 @@ func (h *Handler) rejectPass(w http.ResponseWriter, msg string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusForbidden)
 	_, _ = io.WriteString(w, blockPage(http.StatusForbidden, msg, newRequestID()))
+}
+
+// chainFallback 环境校验失败后的降级链处置。
+// 链含 captcha：直接返回验证码挑战页（200，供挑战页 JS 整体替换文档）；
+// 否则维持原行为返回 403 拦截页。
+// 参数 w：响应写出器；参数 r：客户端请求（取 ?to= 跳回地址）；
+// 参数 ip：客户端 IP；参数 msg：链未含验证码时的拒绝文案。
+func (h *Handler) chainFallback(w http.ResponseWriter, r *http.Request, ip netip.Addr, msg string) {
+	if hasCaptcha, _ := challengeChain(h.rt.Setting(runtime.KeyChallChain, "pow")); hasCaptcha {
+		h.serveCaptchaPage(w, r, ip, "请完成下方验证后继续访问。")
+		return
+	}
+	h.rejectPass(w, msg)
 }

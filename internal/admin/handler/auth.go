@@ -24,6 +24,8 @@ type loginRequest struct {
 	UserName string `json:"userName" binding:"required,min=2,max=64"`
 	// 口令明文：必填，长度 4~128 字符。
 	Password string `json:"password" binding:"required,min=4,max=128"`
+	// TOTP 动态码：账号开启两步验证时必填（6 位）。
+	TOTPCode string `json:"totpCode"`
 }
 
 // Login 处理登录请求：校验用户名口令，签发访问/刷新令牌并写入会话 Cookie。
@@ -57,6 +59,13 @@ func (s *Server) Login(c *gin.Context) {
 			Action: "login", Object: "auth", Result: "deny", After: "密码错误",
 		})
 		response.BadRequest(c, "用户名或密码错误")
+		return
+	}
+
+	// 两步验证：账号开启 TOTP 时必须携带正确动态码（RFC 6238，±1 步容差）
+	if !s.verifyLoginTotp(c, &u, req.TOTPCode) {
+		// 动态码错误与口令错误同等计入失败，防爆破动态码
+		s.LoginLimiter.Fail(ip, req.UserName)
 		return
 	}
 
