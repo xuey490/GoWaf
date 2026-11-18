@@ -1,1 +1,0 @@
-export{a as markdown}from"./demo-CzXu4nVr.js";
