@@ -31,6 +31,8 @@ var allowedSettingKeys = map[string]struct{}{
 	runtime.KeyChallengePerMinute:    {},
 	runtime.KeyChallengeReferer:      {},
 	runtime.KeyChallengeRefererAllow: {},
+	runtime.KeyChallEnvCheck:         {},
+	runtime.KeyChallMinElapsed:       {},
 	runtime.KeyAutoBan:               {},
 	runtime.KeyBanThreshold:          {},
 	runtime.KeyBanWindow:             {},
@@ -40,6 +42,14 @@ var allowedSettingKeys = map[string]struct{}{
 	runtime.KeyCRSEnabled:            {},
 	runtime.KeyCRSMode:               {},
 	runtime.KeyCRSParanoia:           {},
+	runtime.KeyCRSMethods:            {},
+
+	// CRS 性能治理（调度闸门）
+	runtime.KeyCRSPrescreen:    {},
+	runtime.KeyCRSSkipStatic:   {},
+	runtime.KeyCRSBodyTextOnly: {},
+	runtime.KeyCRSExcludePaths: {},
+	runtime.KeyCRSRemoveRanges: {},
 
 	// 引擎加固与 libinjection 语义检测通道
 	runtime.KeyEngineTimeoutMS: {},
@@ -47,6 +57,16 @@ var allowedSettingKeys = map[string]struct{}{
 	runtime.KeyLibiEnabled:     {},
 	runtime.KeyLibiSQLiScore:   {},
 	runtime.KeyLibiXSSScore:    {},
+
+	// 语义检测通道（命令注入/RCE/XXE/SSRF/SSTI/表达式/反序列化）
+	runtime.KeySemEnabled:    {},
+	runtime.KeySemCmdiScore:  {},
+	runtime.KeySemRCEScore:   {},
+	runtime.KeySemSSRFScore:  {},
+	runtime.KeySemXXEScore:   {},
+	runtime.KeySemSSTIScore:  {},
+	runtime.KeySemExprScore:  {},
+	runtime.KeySemDeserScore: {},
 
 	// 响应体敏感信息过滤
 	runtime.KeyRespFilterEnabled:  {},
@@ -254,6 +274,34 @@ func validateSetting(key, value string) string {
 		if err != nil || n < 1 || n > 4 {
 			return "engine.crs.paranoia 只能是 1~4"
 		}
+	case runtime.KeyCRSPrescreen, runtime.KeyCRSSkipStatic, runtime.KeyCRSBodyTextOnly:
+		if value != "true" && value != "false" {
+			return key + " 只能是 true 或 false"
+		}
+	case runtime.KeyCRSExcludePaths:
+		if len(value) > 2000 {
+			return key + " 过长（上限 2000 字符）"
+		}
+		for _, p := range strings.Split(value, ",") {
+			p = strings.TrimSpace(p)
+			if p != "" && !strings.HasPrefix(p, "/") {
+				return key + " 的路径必须以 / 开头: " + p
+			}
+		}
+	case runtime.KeyCRSRemoveRanges:
+		for _, p := range strings.Split(value, ",") {
+			p = strings.TrimSpace(p)
+			if p == "" {
+				continue
+			}
+			if len(p) != 3 {
+				return key + " 只支持 3 位号段前缀（如 920）: " + p
+			}
+			n, err := strconv.Atoi(p)
+			if err != nil || n < 910 || n > 949 {
+				return key + " 只接受 910~949 号段: " + p
+			}
+		}
 	case runtime.KeyAutoBan:
 		if value != "true" && value != "false" {
 			return "guard.auto_ban 只能是 true/false"
@@ -261,6 +309,15 @@ func validateSetting(key, value string) string {
 	case runtime.KeyChallengeReferer:
 		if value != "true" && value != "false" {
 			return "guard.challenge_referer 只能是 true/false"
+		}
+	case runtime.KeyChallEnvCheck:
+		if value != "true" && value != "false" {
+			return key + " 只能是 true/false"
+		}
+	case runtime.KeyChallMinElapsed:
+		n, err := strconv.Atoi(value)
+		if err != nil || n < 0 || n > 30000 {
+			return key + " 必须是 0~30000 毫秒（0=关闭耗时校验）"
 		}
 	case runtime.KeyChallengeRefererAllow:
 		if len(value) > 2000 {
@@ -357,6 +414,16 @@ func validateSetting(key, value string) string {
 		n, err := strconv.Atoi(value)
 		if err != nil || n <= 0 || n > 1000 {
 			return key + " 必须是 1~1000 的整数"
+		}
+	case runtime.KeySemEnabled:
+		if value != "true" && value != "false" {
+			return key + " 只能是 true 或 false"
+		}
+	case runtime.KeySemCmdiScore, runtime.KeySemRCEScore, runtime.KeySemSSRFScore,
+		runtime.KeySemXXEScore, runtime.KeySemSSTIScore, runtime.KeySemExprScore, runtime.KeySemDeserScore:
+		n, err := strconv.Atoi(value)
+		if err != nil || n < 0 || n > 1000 {
+			return key + " 必须是 0~1000 的整数（0=禁用该类别）"
 		}
 
 	// ---- 响应敏感信息过滤 ----

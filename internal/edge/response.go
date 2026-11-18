@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"gowaf/internal/guard"
+	"gowaf/internal/runtime"
 )
 
 // newRequestID 生成 16 位十六进制请求 ID，用于日志/响应头/面板串联。
@@ -217,10 +218,11 @@ border-radius:50%;margin:0 auto 18px;animation:s .8s linear infinite}
     setTimeout(work,0);
   }
 
-  // 算出答案后换取通行证：服务端校验令牌 + 答案，通过则 Set-Cookie 并可跳回原地址。
+  // 算出答案后换取通行证：服务端校验令牌 + 答案 + 环境信号，通过则
+  // Set-Cookie 并可跳回原地址。
   function finish(c){
     tip.textContent="校验通过，正在跳转…";
-    fetch(pass+"?t="+encodeURIComponent(tok)+"&c="+c+"&to="+encodeURIComponent(to),{
+    fetch(pass+"?t="+encodeURIComponent(tok)+"&c="+c+"&e="+encodeURIComponent(envReport())+"&to="+encodeURIComponent(to),{
       headers:{"X-WAF-JS":"1"},credentials:"same-origin",cache:"no-store"
     }).then(function(r){
       if(!r.ok) throw new Error("pass failed");
@@ -231,6 +233,24 @@ border-radius:50%;margin:0 auto 18px;animation:s .8s linear infinite}
   }
 
   work();
+
+  // 收集浏览器环境信号：navigator/WebGL/屏幕/时区/页面耗时，换证时随请求
+  // 上报，服务端做结构合理性校验（guard.CheckEnvSignal）+ 最小耗时校验。
+  // 真实浏览器无感填全；headless 自动化要么 webdriver=true 要么缺字段。
+  function envReport(){
+    var w={wd:(navigator.webdriver===true),hc:navigator.hardwareConcurrency||0,
+      sc:(screen.width||0)+"x"+(screen.height||0),tz:"",ln:"",
+      pl:navigator.plugins?navigator.plugins.length:-1,
+      wgl:"",pt:Math.round(performance.now()||0)};
+    try{w.ln=(navigator.languages||[navigator.language||""]).join(",");}catch(e){}
+    try{w.tz=Intl.DateTimeFormat().resolvedOptions().timeZone||"unk";}catch(e){w.tz="unk";}
+    try{var c=document.createElement("canvas");var x=c.getContext("webgl")||c.getContext("experimental-webgl");
+      if(x){var db=x.getExtension("WEBGL_debug_renderer_info");
+        w.wgl=db?(String(x.getParameter(db.UNMASKED_VENDOR_WEBGL))+"/"+String(x.getParameter(db.UNMASKED_RENDERER_WEBGL))).slice(0,150)
+               :String(x.getParameter(x.VENDOR)).slice(0,150);
+      }else{w.wgl="disabled";}}catch(e){w.wgl="blocked";}
+    try{return btoa(unescape(encodeURIComponent(JSON.stringify(w))));}catch(e){return "";}
+  }
 })();
 </script></body></html>`)
 }
@@ -250,6 +270,13 @@ func scriptString(v string) string {
 // 令牌 t 与答案 c 都来自挑战页：t 是服务端签名的挑战令牌，c 是客户端算出的计数器。
 // 只带 X-WAF-JS 头、没有合法令牌与答案的请求一律拒绝——原实现正是在这里
 // 无条件签发通行证，等于「加一行请求头就过校验」。
+//
+// v1.6.0 起校验分三层：
+//  1. PoW：令牌签名 + 计数器前导零（既有逻辑）；
+//  2. 环境信号：navigator/WebGL/屏幕/时区的结构合理性（guard.CheckEnvSignal）；
+//  3. 最小耗时：令牌签发到换证的真实耗时，脚本微秒级解 PoW 在此暴露。
+//
+// 2、3 可经 guard.challenge.env_check / min_elapsed_ms 关闭或调整。
 // 参数 w：响应写出器；参数 r：客户端请求；参数 ip：客户端 IP（签发时绑定，校验时比对）。
 // 返回值无：校验通过则签发通行证 Cookie（HttpOnly，30 分钟有效），JS 请求返回 204；
 // 普通请求 302 跳回 ?to= 指定的站内路径；校验失败返回 403 提示页。
@@ -257,12 +284,22 @@ func (h *Handler) issuePass(w http.ResponseWriter, r *http.Request, ip netip.Add
 	challenge := r.URL.Query().Get("t")
 	counter, err := strconv.ParseUint(r.URL.Query().Get("c"), 10, 64)
 	if challenge == "" || err != nil || !h.rt.Chall.VerifyPoW(challenge, ip.String(), counter, time.Now()) {
-		noStore(w)
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.WriteHeader(http.StatusForbidden)
-		_, _ = io.WriteString(w, blockPage(http.StatusForbidden,
-			"人机校验未通过（校验令牌缺失、过期或答案不正确），请刷新页面重试。", newRequestID()))
+		h.rejectPass(w, "人机校验未通过（校验令牌缺失、过期或答案不正确），请刷新页面重试。")
 		return
+	}
+	// 环境信号 + 最小耗时校验：环境校验失败或耗时过短即脚本特征
+	if h.rt.SettingBool(runtime.KeyChallEnvCheck, true) {
+		if !guard.CheckEnvSignal(r.URL.Query().Get("e")) {
+			h.rejectPass(w, "人机校验未通过（浏览器环境校验失败），请使用常规浏览器访问。")
+			return
+		}
+	}
+	if minMs := h.rt.SettingInt(runtime.KeyChallMinElapsed, 500); minMs > 0 {
+		issuedAt, ok := guard.PowIssuedAt(challenge)
+		if !ok || time.Now().UnixMilli()-issuedAt < int64(minMs) {
+			h.rejectPass(w, "人机校验未通过（校验耗时异常），请刷新页面重试。")
+			return
+		}
 	}
 	token := h.rt.Chall.Sign(ip.String(), time.Now())
 	// 下发通行证的响应必须不缓存：缓存住了别人就能复用这张 Cookie。
@@ -285,4 +322,14 @@ func (h *Handler) issuePass(w http.ResponseWriter, r *http.Request, ip netip.Add
 		to = "/"
 	}
 	http.Redirect(w, r, to, http.StatusFound)
+}
+
+// rejectPass 换证失败的统一 403 响应。
+// 参数 w：响应写出器；msg：可直接展示给访客的原因说明。
+// 返回值无。
+func (h *Handler) rejectPass(w http.ResponseWriter, msg string) {
+	noStore(w)
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusForbidden)
+	_, _ = io.WriteString(w, blockPage(http.StatusForbidden, msg, newRequestID()))
 }

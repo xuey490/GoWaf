@@ -58,12 +58,18 @@ const (
 	// KeyChallengeRefererAllow 允许的跨站来路（逗号分隔），命中的 Referer 域名不挑战，
 	// 用于放行搜索引擎等正常导流来源。
 	KeyChallengeRefererAllow = "guard.challenge_referer_allow"
-	KeyAutoBan               = "guard.auto_ban"         // 是否启用自动封禁
-	KeyBanThreshold          = "guard.ban_threshold"    // 自动封禁触发分数
-	KeyBanWindow             = "guard.ban_window"       // 分数累计窗口（秒）
-	KeyBanTTL                = "guard.ban_ttl"          // 封禁时长（秒）
-	KeyBanMaxStrikes         = "guard.ban_max_strikes"  // 累计 strike 上限，达到即封禁
-	KeyBanStrikeReset        = "guard.ban_strike_reset" // strike 计数重置窗口（秒）
+	// KeyChallEnvCheck 换证时是否校验浏览器环境信号（navigator/WebGL/屏幕/时区），
+	// 与 PoW 组成双层人机校验；关闭则退回纯 PoW。
+	KeyChallEnvCheck = "guard.challenge.env_check" // 环境信号校验开关，默认开
+	// KeyChallMinElapsed 挑战令牌签发到换证请求的最小耗时（毫秒）。
+	// 真实浏览器算 PoW 约 0.3 秒 + 页面加载；脚本解 PoW 是微秒级。
+	KeyChallMinElapsed = "guard.challenge.min_elapsed_ms"
+	KeyAutoBan         = "guard.auto_ban"         // 是否启用自动封禁
+	KeyBanThreshold    = "guard.ban_threshold"    // 自动封禁触发分数
+	KeyBanWindow       = "guard.ban_window"       // 分数累计窗口（秒）
+	KeyBanTTL          = "guard.ban_ttl"          // 封禁时长（秒）
+	KeyBanMaxStrikes   = "guard.ban_max_strikes"  // 累计 strike 上限，达到即封禁
+	KeyBanStrikeReset  = "guard.ban_strike_reset" // strike 计数重置窗口（秒）
 
 	// CRS 第二引擎（OWASP CRS / Coraza）。
 	KeyCRSEnabled  = "engine.crs.enabled"  // 是否启用 CRS 第二引擎
@@ -73,12 +79,29 @@ const (
 	// 纯表单业务可收紧为 "GET HEAD POST OPTIONS"。
 	KeyCRSMethods = "engine.crs.methods" // CRS 允许的 HTTP 方法白名单
 
+	// CRS 性能治理（调度闸门，见 internal/detect/crsgov.go）。
+	KeyCRSPrescreen    = "engine.crs.prescreen"      // 可疑度预筛（加速模式，默认关）
+	KeyCRSSkipStatic   = "engine.crs.skip_static"    // 无参数静态资源旁路（默认开）
+	KeyCRSBodyTextOnly = "engine.crs.body_text_only" // 非 text 请求体跳过 CRS body 解析（默认开）
+	KeyCRSExcludePaths = "engine.crs.exclude_paths"  // 路径前缀豁免清单（逗号分隔）
+	KeyCRSRemoveRanges = "engine.crs.remove_ranges"  // 编译期整体移除的规则号段（如 "920,921"）
+
 	// 引擎加固与第三检测通道。
 	KeyEngineTimeoutMS = "engine.timeout_ms"      // 单引擎检测超时（毫秒），超时按 fail_mode 处理
 	KeyEngineFailMode  = "engine.fail_mode"       // 引擎失效策略：open 放行 / closed 拦截
 	KeyLibiEnabled     = "engine.libi.enabled"    // 是否启用 libinjection 语义检测通道
 	KeyLibiSQLiScore   = "engine.libi.sqli_score" // libinjection SQLi 命中加分
 	KeyLibiXSSScore    = "engine.libi.xss_score"  // libinjection XSS 命中加分
+
+	// 语义检测通道（第四引擎：命令注入/RCE/XXE/SSRF/SSTI/表达式/反序列化）。
+	KeySemEnabled    = "engine.sem.enabled"     // 总开关，默认开启
+	KeySemCmdiScore  = "engine.sem.cmdi_score"  // 命令注入命中加分
+	KeySemRCEScore   = "engine.sem.rce_score"   // 远程代码执行命中加分
+	KeySemSSRFScore  = "engine.sem.ssrf_score"  // SSRF 命中加分
+	KeySemXXEScore   = "engine.sem.xxe_score"   // XXE 命中加分
+	KeySemSSTIScore  = "engine.sem.ssti_score"  // 模板注入命中加分
+	KeySemExprScore  = "engine.sem.expr_score"  // 表达式注入命中加分
+	KeySemDeserScore = "engine.sem.deser_score" // 反序列化命中加分
 
 	// 响应体敏感信息过滤。
 	KeyRespFilterEnabled  = "respfilter.enabled"       // 总开关
@@ -187,10 +210,13 @@ type Runtime struct {
 	Bot    *bot.Manager
 	Cache  *cache.Manager
 	crs    atomic.Pointer[detect.CRSEngine] // CRS 第二引擎（OWASP CRS/Coraza）；未启用或未构建时为 nil
+	crsGov atomic.Pointer[detect.CRSGov]    // CRS 调度闸门：预筛/静态旁路/路径豁免/号段移除
 
 	// libi 第三检测通道（libinjection 语义识别 SQLi/XSS）；
+	// sem 第四检测通道（命令注入/RCE/XXE/SSRF/SSTI/表达式/反序列化）；
 	// respFilter/dprot/tamper/decode 响应侧与检测增强设置，Reload 时整体替换。
 	libi       atomic.Pointer[detect.LibiEngine]
+	sem        atomic.Pointer[detect.SemanticEngine]
 	respFilter atomic.Pointer[respfilter.Settings]
 	dprot      atomic.Pointer[dprotect.Settings]
 	dprotMgr   *dprotect.Manager // 动态防护页面加密器（密钥在进程启动时从 JWT 密钥文件派生）
@@ -352,6 +378,15 @@ func (r *Runtime) Libi() *detect.LibiEngine {
 		return e
 	}
 	return detect.NewLibiEngine(false, 0, 0)
+}
+
+// Sem 返回当前语义检测通道（第四引擎）快照（原子读取）。
+// 返回 *detect.SemanticEngine：未初始化时返回禁用状态的引擎，调用方无需判空。
+func (r *Runtime) Sem() *detect.SemanticEngine {
+	if e := r.sem.Load(); e != nil {
+		return e
+	}
+	return detect.NewSemanticEngine(false, nil)
 }
 
 // RespFilter 返回当前响应敏感信息过滤设置（原子读取）。
@@ -724,6 +759,20 @@ func (r *Runtime) Reload(ctx context.Context) error {
 		r.settingFromInt(sm, KeyLibiXSSScore, detect.DefaultLibiXSSScore),
 	))
 
+	// 语义检测通道（第四引擎）：开关与各类分值热生效。
+	r.sem.Store(detect.NewSemanticEngine(
+		r.settingFromBool(sm, KeySemEnabled, true),
+		map[string]int{
+			detect.CategoryCmdi:  r.settingFromInt(sm, KeySemCmdiScore, detect.DefaultSemCmdiScore),
+			detect.CategoryRCE:   r.settingFromInt(sm, KeySemRCEScore, detect.DefaultSemRCEScore),
+			detect.CategorySSRF:  r.settingFromInt(sm, KeySemSSRFScore, detect.DefaultSemSSRFScore),
+			detect.CategoryXXE:   r.settingFromInt(sm, KeySemXXEScore, detect.DefaultSemXXEScore),
+			detect.CategorySSTI:  r.settingFromInt(sm, KeySemSSTIScore, detect.DefaultSemSSTIScore),
+			detect.CategoryExpr:  r.settingFromInt(sm, KeySemExprScore, detect.DefaultSemExprScore),
+			detect.CategoryDeser: r.settingFromInt(sm, KeySemDeserScore, detect.DefaultSemDeserScore),
+		},
+	))
+
 	// 检测前多层解码：开关与上限热生效。
 	dc := &detect.DecodeConfig{
 		Enabled:  r.settingFromBool(sm, KeyDecodeEnabled, true),
@@ -821,6 +870,14 @@ func (r *Runtime) Reload(ctx context.Context) error {
 		r.settingFromInt(sm, KeyChallengePerMinute, r.Cfg.Guard.ChallengePerMinute)))
 	r.reloadCRS(sm)
 
+	// CRS 调度闸门：每次 Reload 重建（AC 构建毫秒级，代价可忽略）。
+	r.crsGov.Store(detect.NewCRSGov(detect.CRSGovOptions{
+		Prescreen:    r.settingFromBool(sm, KeyCRSPrescreen, false),
+		SkipStatic:   r.settingFromBool(sm, KeyCRSSkipStatic, true),
+		BodyTextOnly: r.settingFromBool(sm, KeyCRSBodyTextOnly, true),
+		ExcludePaths: splitList(r.settingFrom(sm, KeyCRSExcludePaths, "")),
+	}))
+
 	log.Printf("[runtime] 重载完成: 站点 %d, 规则 %d, 例外 %d, IP 名单 %d, 封禁 %d, 模式 %s, CRS %s, 策略 %d, Bot %d/%d, 缓存规则 %d, 额外上游 %d",
 		router.Count(), r.Engine.Info().Rules, len(exList), countIPs(ipRules), len(bans),
 		r.Engine.Mode(), r.crsLabel(), pol.Count(), len(botDefs), len(hpDefs), len(cacheDefs), len(upRows))
@@ -857,6 +914,10 @@ func (r *Runtime) NodeAgentToken() string {
 // 返回 *detect.CRSEngine：未启用、尚未构建或刚被 InvalidateCRS 置空时为 nil。
 func (r *Runtime) CRS() *detect.CRSEngine { return r.crs.Load() }
 
+// CRSGov 返回当前 CRS 调度闸门快照（原子读取）。
+// 返回 *detect.CRSGov：进程尚未 Reload 时为 nil（视为「不旁路」）。
+func (r *Runtime) CRSGov() *detect.CRSGov { return r.crsGov.Load() }
+
 // InvalidateCRS 置空 CRS 引擎，强制下次 Reload 重建（无参数、无返回值）。
 // SecLang 规则包增删改后必须调用：reloadCRS 只比对 mode/paranoia/methods，
 // 包内容变化不会触发重建，不置空会导致新规则包一直不生效。
@@ -889,15 +950,17 @@ func (r *Runtime) reloadCRS(sm map[string]string) {
 		}
 	}
 	methods := r.settingFrom(sm, KeyCRSMethods, detect.DefaultCRSMethods)
+	removeRanges := validateRangeList(r.settingFrom(sm, KeyCRSRemoveRanges, ""))
 	if !enabled {
 		r.crs.Store(nil)
 		return
 	}
-	if cur := r.crs.Load(); cur != nil && cur.Mode() == mode && cur.Paranoia() == pl && cur.Methods() == methods {
+	if cur := r.crs.Load(); cur != nil && cur.Mode() == mode && cur.Paranoia() == pl &&
+		cur.Methods() == methods && cur.RemoveRanges() == strings.Join(removeRanges, ",") {
 		return
 	}
 	pkgs := r.loadSeclangPackages()
-	opts := detect.CRSOptions{Mode: mode, Paranoia: pl, AllowedMethods: methods, Packages: pkgs}
+	opts := detect.CRSOptions{Mode: mode, Paranoia: pl, AllowedMethods: methods, Packages: pkgs, RemoveRanges: removeRanges}
 	eng, err := detect.NewCRSEngine(opts)
 	if err != nil && len(pkgs) > 0 {
 		// 规则包组合编译失败（如包间 rule id 冲突）：退回纯 CRS，绝不能让
@@ -912,6 +975,9 @@ func (r *Runtime) reloadCRS(sm map[string]string) {
 	}
 	r.crs.Store(eng)
 }
+
+// validateRangeList 清洗 CRS 号段移除配置（转发给 detect 层校验）。
+func validateRangeList(v string) []string { return detect.ValidateRemoveRanges(v) }
 
 // loadSeclangPackages 读取启用的 SecLang 规则包文件并逐包校验，供 CRS 引擎编译。
 // 逐包隔离：单包读文件失败或编译失败只跳过该包，并把错误写入 last_error 字段，
@@ -1073,6 +1139,8 @@ func DefaultSettings(cfg *config.Config) map[string]string {
 		KeyChallengePerMinute:    strconv.Itoa(cfg.Guard.ChallengePerMinute),
 		KeyChallengeReferer:      strconv.FormatBool(cfg.Guard.RefererChallengeEnabled()),
 		KeyChallengeRefererAllow: cfg.Guard.ChallengeRefererAllow,
+		KeyChallEnvCheck:         "true",
+		KeyChallMinElapsed:       "500",
 		KeyAutoBan:               strconv.FormatBool(cfg.Guard.AutoBan),
 		KeyBanThreshold:          strconv.Itoa(cfg.Guard.BanThreshold),
 		KeyBanWindow:             strconv.Itoa(int(cfg.Guard.BanWindow.Duration() / time.Second)),
@@ -1083,6 +1151,11 @@ func DefaultSettings(cfg *config.Config) map[string]string {
 		KeyCRSMode:               "block",
 		KeyCRSParanoia:           "1",
 		KeyCRSMethods:            detect.DefaultCRSMethods,
+		KeyCRSPrescreen:          "false",
+		KeyCRSSkipStatic:         "true",
+		KeyCRSBodyTextOnly:       "true",
+		KeyCRSExcludePaths:       "",
+		KeyCRSRemoveRanges:       "",
 
 		KeyIntelBanOnHit: "true",
 		KeyIntelBanTTL:   "3600",
@@ -1123,6 +1196,16 @@ func DefaultSettings(cfg *config.Config) map[string]string {
 		KeyLibiEnabled:     "true",
 		KeyLibiSQLiScore:   strconv.Itoa(detect.DefaultLibiSQLiScore),
 		KeyLibiXSSScore:    strconv.Itoa(detect.DefaultLibiXSSScore),
+
+		// 语义检测通道默认开启：单类命中分数压在拦截阈值之下，叠加才拦截。
+		KeySemEnabled:    "true",
+		KeySemCmdiScore:  strconv.Itoa(detect.DefaultSemCmdiScore),
+		KeySemRCEScore:   strconv.Itoa(detect.DefaultSemRCEScore),
+		KeySemSSRFScore:  strconv.Itoa(detect.DefaultSemSSRFScore),
+		KeySemXXEScore:   strconv.Itoa(detect.DefaultSemXXEScore),
+		KeySemSSTIScore:  strconv.Itoa(detect.DefaultSemSSTIScore),
+		KeySemExprScore:  strconv.Itoa(detect.DefaultSemExprScore),
+		KeySemDeserScore: strconv.Itoa(detect.DefaultSemDeserScore),
 
 		// 检测前多层解码：默认开启（URL 多层解码本就由 Normalize 覆盖，
 		// 这里补 base64/压缩体/unicode 转义三类绕过面，成本有界）。

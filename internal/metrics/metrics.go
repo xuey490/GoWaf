@@ -101,4 +101,11 @@ var (
 		Name: "waf_policy_cc_blocks_total",
 		Help: "自定义 CC 规则（rate_limit 动作）触发限流的次数",
 	})
+
+	// CRSSkipped CRS 调度闸门旁路次数（Counter）。
+	// 标签 reason：static_asset 静态资源 / prescreen 预筛零命中 / excluded_path 路径豁免。
+	CRSSkipped = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "waf_crs_skipped_total",
+		Help: "CRS 第二引擎被调度闸门旁路的次数（按原因）",
+	}, []string{"reason"})
 )

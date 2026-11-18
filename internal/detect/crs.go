@@ -33,6 +33,7 @@ type CRSEngine struct {
 	mode     string           // block / log
 	paranoia int              // 偏执等级 1-4
 	methods  string           // 911100 方法白名单
+	removed  string           // 已移除号段（逗号串，供 reload 变更比对）
 	version  string           // 规则集版本，形如 "crs-4.30.0"
 	packages int              // 编译进来的 SecLang 规则包数量
 	pkgIDs   map[int]struct{} // 规则包自定义 rule id 集合，供命中过滤放行
@@ -51,6 +52,11 @@ type CRSOptions struct {
 	// Packages 追加编译进引擎的 SecLang 规则包（按导入顺序 Include）。
 	// 调用方负责先逐包 ValidateSecLang，编译失败的包不要传进来。
 	Packages []CRSPackage
+	// RemoveRanges 整体移除的 CRS 检测号段（3 位前缀，如 "920"）。
+	// 用于性能治理：管理员确认某号段（如协议合规 920xxx）在自己的环境里
+	// 只有噪声时，把整段规则从编译期移除，省掉逐请求的执行成本。
+	// 与降权不同：降权只影响计分，规则仍会执行；移除是彻底不执行。
+	RemoveRanges []string
 }
 
 // DefaultCRSMethods 默认方法白名单：REST API 常规方法集。
@@ -111,6 +117,9 @@ func NewCRSEngine(opt CRSOptions) (*CRSEngine, error) {
 	// （GET HEAD POST OPTIONS），先写才能覆盖；不然前后端分离的
 	// PUT/DELETE/PATCH 会被 911100 判 CRITICAL 直接拦掉。
 	methods := sanitizeMethods(opt.AllowedMethods)
+	// 号段移除指令必须排在 Include 之后（对已编译规则生效），编译期一次性
+	// 生成，逐请求零成本。
+	removed := removalDirectives(ValidateRemoveRanges(strings.Join(opt.RemoveRanges, ",")))
 	var sb strings.Builder
 	fmt.Fprintf(&sb, `
 SecRuleEngine %s
@@ -119,6 +128,10 @@ Include @coraza.conf-recommended
 Include @crs-setup.conf.example
 Include @owasp_crs/*.conf
 `, engineMode, pl, pl, methods)
+	if removed != "" {
+		sb.WriteString("\n# 性能治理：按 engine.crs.remove_ranges 移除的号段\n")
+		sb.WriteString(removed)
+	}
 	// SecLang 规则包排在 CRS 之后：CRS 的 901/949/959 评分框架先就位，
 	// 包里的排除规则（RemoveById）和自定义检测才能按预期叠加。
 	// 注意：内容直接内联而非 Include——Coraza 对相对路径 Include 读的是
@@ -145,8 +158,17 @@ Include @owasp_crs/*.conf
 	if err != nil {
 		return nil, fmt.Errorf("加载 CRS 失败: %w", err)
 	}
-	return &CRSEngine{waf: waf, mode: mode, paranoia: pl, methods: methods, version: "crs-" + crsv4.Version,
+	return &CRSEngine{waf: waf, mode: mode, paranoia: pl, methods: methods,
+		removed: strings.Join(opt.RemoveRanges, ","), version: "crs-" + crsv4.Version,
 		packages: len(opt.Packages), pkgIDs: pkgIDs}, nil
+}
+
+// RemoveRanges 返回已移除的号段串（供 reload 变更比对）。
+func (c *CRSEngine) RemoveRanges() string {
+	if c == nil {
+		return ""
+	}
+	return c.removed
 }
 
 // sanitizeMethods 清洗方法白名单：只留大写字母与空格，防止注入破坏指令串。
