@@ -33,11 +33,15 @@ type User struct {
 	Role         string `gorm:"column:role;size:32;not null;default:admin" json:"role"`        // 角色标识（如 admin 管理员 / demo 演示），默认 admin
 	Buttons      string `gorm:"column:buttons;size:512" json:"-"`                              // 按钮级权限标识集合（JSON 数组，见 store.AllButtons），不出现在 JSON 中
 	Status       int    `gorm:"column:status;not null;default:1" json:"status"`                // 账号状态：1 启用（可登录），非 1 拒绝登录；默认 1
-	LastLoginAt  int64  `gorm:"column:last_login_at" json:"lastLoginAt"`                       // 上次登录时间（Unix 毫秒）
-	LastLoginIP  string `gorm:"column:last_login_ip;size:64" json:"lastLoginIp"`               // 上次登录 IP
-	CreatedAt    int64  `gorm:"column:created_at" json:"createdAt"`                            // 创建时间（Unix 毫秒）
-	UpdatedAt    int64  `gorm:"column:updated_at" json:"updatedAt"`                            // 更新时间（Unix 毫秒）
-	DeletedAt    int64  `gorm:"column:deleted_at;index" json:"-"`                              // 软删除标记（0=未删除），带索引；不出现在 JSON 中
+	// TOTP 两步验证（RFC 6238）：secret 为 Base32 密钥；enabled=1 时登录必须附验证码。
+	// secret 不出 JSON（敏感）；enabled 不带 default tag，保证关闭时零值能落库。
+	TOTPSecret  string `gorm:"column:totp_secret;size:64;not null;default:''" json:"-"`
+	TOTPEnabled int    `gorm:"column:totp_enabled;not null" json:"-"`
+	LastLoginAt int64  `gorm:"column:last_login_at" json:"lastLoginAt"`         // 上次登录时间（Unix 毫秒）
+	LastLoginIP string `gorm:"column:last_login_ip;size:64" json:"lastLoginIp"` // 上次登录 IP
+	CreatedAt   int64  `gorm:"column:created_at" json:"createdAt"`              // 创建时间（Unix 毫秒）
+	UpdatedAt   int64  `gorm:"column:updated_at" json:"updatedAt"`              // 更新时间（Unix 毫秒）
+	DeletedAt   int64  `gorm:"column:deleted_at;index" json:"-"`                // 软删除标记（0=未删除），带索引；不出现在 JSON 中
 }
 
 // TableName 指定 RefreshToken 模型对应的数据库表名。
@@ -92,8 +96,41 @@ type Site struct {
 	// ProtectCfg 站点级防护覆盖配置：'' 跟随全局；否则 JSON（SiteProtect）。
 	// 同样不带 default tag，理由同上——把自定义改回"跟随全局"时零值必须能落库。
 	ProtectCfg string `gorm:"column:protect_cfg;size:1024;not null" json:"-"` // 防护覆盖配置：'' 跟随全局 / JSON（SiteProtect）；不出现在 JSON 中
-	CreatedAt  int64  `gorm:"column:created_at" json:"createdAt"`             // 创建时间（Unix 毫秒）
-	UpdatedAt  int64  `gorm:"column:updated_at" json:"updatedAt"`             // 更新时间（Unix 毫秒）
+	// BlockPage 自定义拦截页：'' 使用内置模板；否则 JSON（BlockPage）。
+	BlockPage string `gorm:"column:block_page;size:4096;not null;default:''" json:"-"` // 自定义拦截页配置：'' 内置模板 / JSON（BlockPage）；不出现在 JSON 中
+	CreatedAt int64  `gorm:"column:created_at" json:"createdAt"`                       // 创建时间（Unix 毫秒）
+	UpdatedAt int64  `gorm:"column:updated_at" json:"updatedAt"`                       // 更新时间（Unix 毫秒）
+}
+
+// BlockPage 站点级自定义拦截页配置（以 JSON 形式存于 Site.BlockPage 列）。
+//
+// HTML 是完整模板文本，支持占位符：{{status}} 状态码、{{reason}} 拦截原因、
+// {{reqid}} 请求 ID、{{site}} 站点名。占位符在渲染时做 HTML 转义（模板本身
+// 为管理员受控内容，占位值一律转义防二次注入）。
+type BlockPage struct {
+	Enabled int    `json:"enabled"` // 1 启用自定义模板 / 0 使用内置模板
+	HTML    string `json:"html"`    // 拦截页 HTML 模板
+}
+
+// ParseBlockPage 解析并校验 block_page 列。
+// 参数 raw：库中存储的原始字符串（” 或 "null" 视为使用内置模板）。
+// 返回：使用内置模板时 (nil, nil)；配置合法时返回解析结果；JSON 非法返回错误。
+func ParseBlockPage(raw string) (*BlockPage, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" || raw == "null" {
+		return nil, nil
+	}
+	var p BlockPage
+	if err := json.Unmarshal([]byte(raw), &p); err != nil {
+		return nil, fmt.Errorf("block_page JSON 非法: %w", err)
+	}
+	if p.HTML != "" && len(p.HTML) > 4096 {
+		return nil, fmt.Errorf("拦截页模板过长（上限 4096 字节）")
+	}
+	if p.Enabled == 1 && strings.TrimSpace(p.HTML) == "" {
+		return nil, fmt.Errorf("启用自定义拦截页时模板不能为空")
+	}
+	return &p, nil
 }
 
 // SiteProtect 站点级防护覆盖配置（以 JSON 形式存于 Site.ProtectCfg 列）。
@@ -332,6 +369,7 @@ type Event struct {
 	Upstream   string `gorm:"column:upstream;size:255" json:"upstream"`  // 实际转发的上游地址
 	Country    string `gorm:"column:country;size:64" json:"country"`     // 客户端 IP 属地（ISO 国家代码）
 	Bytes      int64  `gorm:"column:bytes" json:"bytes"`                 // 响应字节数
+	JA4        string `gorm:"column:ja4;size:64" json:"ja4"`             // TLS 客户端指纹（JA4，非 TLS 连接为空）
 }
 
 // TableName 指定 Stats1m 模型对应的数据库表名。

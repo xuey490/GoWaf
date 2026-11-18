@@ -36,6 +36,7 @@ type eventDTO struct {
 	ReqID      string   `json:"reqId"`      // 请求 ID，用于去重与追踪
 	LatencyUS  int64    `json:"latencyUs"`  // 请求耗时（微秒）
 	Upstream   string   `json:"upstream"`   // 命中的上游（回源目标）
+	JA4        string   `json:"ja4"`        // TLS 客户端指纹（JA4，非 TLS 连接为空串）
 }
 
 // toDTO 把事件模型转换为返回 DTO，并处理演示模式的 IP 打码。
@@ -61,7 +62,7 @@ func (s *Server) toDTO(e model.Event) eventDTO {
 		ID: e.ID, TS: e.TS, Site: e.Site, ClientIP: ip, Country: e.Country, Method: e.Method, Host: e.Host,
 		Path: e.Path, Query: e.Query, Status: e.Status, Action: e.Action, Score: e.Score,
 		Categories: cats, RuleIDs: rules, UA: e.UA, Referer: e.Referer, ReqID: e.ReqID,
-		LatencyUS: e.LatencyUS, Upstream: e.Upstream,
+		LatencyUS: e.LatencyUS, Upstream: e.Upstream, JA4: e.JA4,
 	}
 }
 

@@ -143,6 +143,40 @@ var allowedSettingKeys = map[string]struct{}{
 	runtime.KeyUpstreamHealth:   {},
 	runtime.KeyNodeHeartbeatTTL: {},
 	runtime.KeyNodeAgentToken:   {},
+
+	// JA4 TLS 客户端指纹
+	runtime.KeyJA4Enabled:      {},
+	runtime.KeyJA4Blocklist:    {},
+	runtime.KeyJA4BlockBuiltin: {},
+
+	// 请求防重放
+	runtime.KeyReplayEnabled: {},
+	runtime.KeyReplayWindow:  {},
+	runtime.KeyReplayHeader:  {},
+
+	// 等候室（并发阈值排队）
+	runtime.KeyWaitEnabled:  {},
+	runtime.KeyWaitMax:      {},
+	runtime.KeyWaitTimeout:  {},
+	runtime.KeyWaitInterval: {},
+
+	// 日志外发（Syslog RFC5424 / Kafka）
+	runtime.KeyLogShipEnabled:        {},
+	runtime.KeyLogShipMinAction:      {},
+	runtime.KeyLogShipSyslogEnabled:  {},
+	runtime.KeyLogShipSyslogAddr:     {},
+	runtime.KeyLogShipSyslogProto:    {},
+	runtime.KeyLogShipSyslogFacility: {},
+	runtime.KeyLogShipSyslogHostname: {},
+	runtime.KeyLogShipKafkaEnabled:   {},
+	runtime.KeyLogShipKafkaBrokers:   {},
+	runtime.KeyLogShipKafkaTopic:     {},
+	runtime.KeyLogShipQueueSize:      {},
+
+	// 人机校验挑战降级链与验证码
+	runtime.KeyChallChain:           {},
+	runtime.KeyCaptchaFailThreshold: {},
+	runtime.KeyCaptchaFailWindow:    {},
 }
 
 // SettingsGet 返回全部设置与引擎概要。
@@ -474,6 +508,130 @@ func validateSetting(key, value string) string {
 	case runtime.KeyNotifyFeishuSecret, runtime.KeyNotifyDingSecret:
 		if len(value) > 128 {
 			return key + " 长度不能超过 128 字符"
+		}
+
+	// ---- JA4 指纹 ----
+	case runtime.KeyJA4Enabled, runtime.KeyJA4BlockBuiltin:
+		if value != "true" && value != "false" {
+			return key + " 只能是 true 或 false"
+		}
+	case runtime.KeyJA4Blocklist:
+		for _, fp := range strings.Split(value, ",") {
+			fp = strings.TrimSpace(fp)
+			if fp == "" {
+				continue
+			}
+			// 指纹形如 t13d1516h2_8daaf6152771_e5627efa2ab1
+			parts := strings.Split(fp, "_")
+			if len(parts) != 3 || len(parts[0]) != 10 || len(parts[1]) != 12 || len(parts[2]) != 12 {
+				return "指纹格式应为 t13d1516h2_8daaf6152771_e5627efa2ab1: " + fp
+			}
+		}
+		if len(value) > 2000 {
+			return key + " 过长（上限 2000 字符）"
+		}
+
+	// ---- 请求防重放 ----
+	case runtime.KeyReplayEnabled:
+		if value != "true" && value != "false" {
+			return key + " 只能是 true 或 false"
+		}
+	case runtime.KeyReplayWindow:
+		n, err := strconv.Atoi(value)
+		if err != nil || n < 10 || n > 86400 {
+			return key + " 必须是 10~86400 秒"
+		}
+	case runtime.KeyReplayHeader:
+		if len(value) > 64 || strings.ContainsAny(value, " \t\r\n") {
+			return key + " 必须是不含空白的合法请求头名（≤64 字符）"
+		}
+
+	// ---- 等候室 ----
+	case runtime.KeyWaitEnabled:
+		if value != "true" && value != "false" {
+			return key + " 只能是 true 或 false"
+		}
+	case runtime.KeyWaitMax:
+		n, err := strconv.Atoi(value)
+		if err != nil || n < 1 || n > 1000000 {
+			return key + " 必须是 1~1000000"
+		}
+	case runtime.KeyWaitTimeout, runtime.KeyWaitInterval:
+		n, err := strconv.Atoi(value)
+		if err != nil || n < 0 || n > 120000 {
+			return key + " 必须是 0~120000"
+		}
+
+	// ---- 日志外发 ----
+	case runtime.KeyLogShipEnabled, runtime.KeyLogShipSyslogEnabled, runtime.KeyLogShipKafkaEnabled:
+		if value != "true" && value != "false" {
+			return key + " 只能是 true 或 false"
+		}
+	case runtime.KeyLogShipMinAction:
+		if value != "all" && value != "log" && value != "block" {
+			return key + " 只能是 all / log / block"
+		}
+	case runtime.KeyLogShipSyslogAddr:
+		if value != "" && !strings.Contains(value, ":") {
+			return key + " 必须是 host:port 形式"
+		}
+		if len(value) > 255 {
+			return key + " 过长（上限 255 字符）"
+		}
+	case runtime.KeyLogShipSyslogProto:
+		if value != "udp" && value != "tcp" && value != "tls" {
+			return key + " 只能是 udp / tcp / tls"
+		}
+	case runtime.KeyLogShipSyslogFacility:
+		n, err := strconv.Atoi(value)
+		if err != nil || n < 0 || n > 23 {
+			return key + " 必须是 0~23"
+		}
+	case runtime.KeyLogShipSyslogHostname:
+		if len(value) > 255 {
+			return key + " 过长（上限 255 字符）"
+		}
+	case runtime.KeyLogShipKafkaBrokers:
+		for _, b := range strings.Split(value, ",") {
+			b = strings.TrimSpace(b)
+			if b != "" && !strings.Contains(b, ":") {
+				return key + " 每项必须是 host:port: " + b
+			}
+		}
+		if len(value) > 2000 {
+			return key + " 过长（上限 2000 字符）"
+		}
+	case runtime.KeyLogShipKafkaTopic:
+		if len(value) > 255 {
+			return key + " 过长（上限 255 字符）"
+		}
+	case runtime.KeyLogShipQueueSize:
+		n, err := strconv.Atoi(value)
+		if err != nil || n < 16 || n > 1000000 {
+			return key + " 必须是 16~1000000"
+		}
+
+	// ---- 挑战降级链与验证码 ----
+	case runtime.KeyChallChain:
+		for _, p := range strings.Split(value, ",") {
+			switch strings.TrimSpace(strings.ToLower(p)) {
+			case "pow", "captcha", "ban", "":
+			default:
+				return key + " 只支持 pow/captcha/ban 的组合: " + p
+			}
+		}
+		if len(value) > 64 {
+			return key + " 过长（上限 64 字符）"
+		}
+	case runtime.KeyCaptchaFailThreshold:
+		n, err := strconv.Atoi(value)
+		if err != nil || n < 1 || n > 100 {
+			return key + " 必须是 1~100"
+		}
+	case runtime.KeyCaptchaFailWindow:
+		n, err := strconv.Atoi(value)
+		if err != nil || n < 60 || n > 86400 {
+			return key + " 必须是 60~86400 秒"
 		}
 	}
 	return ""

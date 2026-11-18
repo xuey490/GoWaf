@@ -25,6 +25,7 @@ import (
 	"gowaf/internal/config"
 	"gowaf/internal/detectapi"
 	"gowaf/internal/edge"
+	"gowaf/internal/ja4"
 	"gowaf/internal/metrics"
 	"gowaf/internal/proxy"
 	"gowaf/internal/runtime"
@@ -357,7 +358,9 @@ func (a *App) Start() error {
 			log.Printf("[app] 数据面 HTTPS 监听 %s（已加载 %d 张证书）",
 				httpsLn.Addr(), a.certs.Count())
 			a.httpsSrv.TLSConfig = a.certs.TLSConfig()
-			if err := a.httpsSrv.ServeTLS(httpsLn, "", ""); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			// ja4.Wrap 在 ClientHello 进入 crypto/tls 前解析并登记指纹，
+			// 数据面经 ja4.Lookup(r.RemoteAddr) 取回（事件库记录/黑名单拦截）。
+			if err := a.httpsSrv.ServeTLS(ja4.Wrap(httpsLn), "", ""); err != nil && !errors.Is(err, http.ErrServerClosed) {
 				errCh <- fmt.Errorf("数据面 HTTPS: %w", err)
 			}
 		}()
@@ -376,7 +379,7 @@ func (a *App) Start() error {
 			log.Printf("[app] 数据面 IPv6 HTTPS 监听 %s（已加载 %d 张证书）",
 				httpsV6Ln.Addr(), a.certs.Count())
 			a.httpsV6Srv.TLSConfig = a.certs.TLSConfig()
-			if err := a.httpsV6Srv.ServeTLS(httpsV6Ln, "", ""); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			if err := a.httpsV6Srv.ServeTLS(ja4.Wrap(httpsV6Ln), "", ""); err != nil && !errors.Is(err, http.ErrServerClosed) {
 				errCh <- fmt.Errorf("数据面 IPv6 HTTPS: %w", err)
 			}
 		}()
@@ -564,11 +567,19 @@ func (a *App) maintenance() {
 			// 自定义 CC 规则的窗口计数：窗口上限 1 天，按 2 倍窗口清理
 			//（48 小时内没有新命中的计数桶才会被逐出）。
 			a.rt.PolicyHits.Cleanup(now, 48*3600*1000)
+			// 防重放 nonce 表与验证码答错计数：固定短窗口，清理阈值放宽一倍
+			a.rt.Replay.Cleanup(now)
+			a.rt.CaptchaCleanup(now)
 
 			// Dropped 是累计值，这里换算成增量再喂给 Counter
 			if dropped := a.events.Dropped(); dropped > a.lastDropped {
 				metrics.EventDropped.Add(float64(dropped - a.lastDropped))
 				a.lastDropped = dropped
+			}
+			// 日志外发的发送/丢弃计数同步进指标
+			if ship := a.rt.Shipper.Load(); ship != nil {
+				metrics.LogShipSent.Add(float64(ship.Sent()))
+				metrics.LogShipDropped.Add(float64(ship.Dropped()))
 			}
 
 		case <-certTicker.C:
@@ -648,6 +659,10 @@ func (a *App) Shutdown(ctx context.Context) error {
 	// 先把 channel 里剩余事件写完，再关库
 	if a.events != nil {
 		a.events.Close()
+	}
+	// 日志外发器：耗尽队列剩余事件再退出（最多等 3 秒）
+	if s := a.rt.Shipper.Swap(nil); s != nil {
+		s.Close()
 	}
 	if err := a.store.Close(); err != nil {
 		errs = append(errs, err)
