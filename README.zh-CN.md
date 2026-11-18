@@ -345,7 +345,7 @@ Windows 服务模式用 `gowaf svc install|start|stop|uninstall` 实现（单二
 | HTTP 服务 | `net/http` + `httputil.ReverseProxy` | 数据面，Rewrite 保留 RawPath，Host 透传，WebSocket 原生升级 |
 | 管理面 | Gin v1.12 + GORM v1.31 | `/api` 路由、CSRF/权限/审计中间件 |
 | 存储 | SQLite（glebarez 纯 Go 驱动，CGO_ENABLED=0，WAL） | 零依赖，静态编译，可交叉编译 |
-| 自研检测 | AC 自动机（自实现）+ RE2 正则 | 181 条 YAML 规则，关键词预筛 → 正则精匹配，正则 50ms 超时熔断 |
+| 自研检测 | AC 自动机（自实现）+ RE2 正则 | 181 条 YAML 规则，关键词预筛 → 正则精匹配，引擎级 2s 超时熔断（`engine.timeout_ms`，panics 隔离） |
 | CRS 检测 | Coraza v3.8 + coraza-coreruleset（OWASP CRS v4） | 内嵌第二个引擎，`SecRuleEngine On` / `DetectionOnly`，偏执等级 1–4；协议合规类规则（920000–922000）单条降权 15、整段封顶 29，避免正常登录被累计到拦截线 |
 | 威胁情报 | 自研区间集合（uint32 闭区间 + IPv6 前缀，二分查找） | 多源合并去重，单源失败保留上次快照；解析支持纯文本与 JSON 列表 |
 | 精准访问控制 | 自研条件树编译器 + `atomic.Pointer` 快照 | 条件树在 Reload 时编译成判定闭包，热路径无锁无 JSON；`EvaluateDenyEarly` 供缓存前的提前判定 |
@@ -878,7 +878,8 @@ gowaf/
   `block_score`、`challenge_score` 用原子变量存储，控制台改阈值即时生效，不重启。
   高危规则可设 `action: ban`，命中一次立即封禁来源 IP，不走评分累计。
 - **性能闸门**：归一化文本先进 AC 自动机做关键词预筛，关键词不出现则正则根本不跑；
-  正则匹配整体 50ms 超时熔断（RE2 + deadline），防止恶意 payload 打爆 CPU。
+  引擎级超时熔断（`engine.timeout_ms`，默认 2s）+ panic 隔离兜底，
+  防止单引擎异常拖垮数据面（RE2 本身线性时间，输入尺寸已由 max_body_inspect 有界）。
 - **双引擎协同**：自研规则负责「快、准、可解释」的业务规则，CRS 负责广覆盖的通用特征、
   随上游更新，两者并行跑、分数相加后由同一个 `decide()` 判动作。没有把 SecRule 翻译成
   YAML —— CRS 依赖变换链（`t:urlDecodeUni`）、`ARGS_NAMES`、`chain` 与 `TX` 变量，
