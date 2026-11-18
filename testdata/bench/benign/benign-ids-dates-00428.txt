@@ -1,0 +1,5 @@
+GET /events?ts=1788983601 HTTP/1.1
+Host: demo.example.com
+User-Agent: dashboard/0.8
+Connection: close
+

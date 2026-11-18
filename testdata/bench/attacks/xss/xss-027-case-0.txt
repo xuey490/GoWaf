@@ -1,0 +1,4 @@
+GET /a?token=<x%20OnClIcK%3DaLeRt(1)%20TaBiNdEx%3D1>X HTTP/1.1
+Host: demo.example.com
+Connection: close
+

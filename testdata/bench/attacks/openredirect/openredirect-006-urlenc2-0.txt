@@ -1,0 +1,4 @@
+GET /a?target=https%253A%252F%252Fsub.evil.tld%252Fa HTTP/1.1
+Host: demo.example.com
+Connection: close
+

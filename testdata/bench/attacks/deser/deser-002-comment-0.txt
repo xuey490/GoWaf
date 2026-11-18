@@ -1,0 +1,4 @@
+GET /a?file=/*%00*/aced0005737200116a6176612e7574696c2e486173684d6170 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

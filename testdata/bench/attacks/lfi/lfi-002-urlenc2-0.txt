@@ -1,0 +1,4 @@
+GET /a?file=data%253A%252F%252Ftext%252Fplain%252Chello HTTP/1.1
+Host: demo.example.com
+Connection: close
+

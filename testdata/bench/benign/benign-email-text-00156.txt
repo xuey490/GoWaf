@@ -1,0 +1,8 @@
+POST /mail/parse HTTP/1.1
+Host: demo.example.com
+User-Agent: mail-gateway/2.2
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 75
+Connection: close
+
+body=Thanks+for+the+update.+I+will+send+the+signed+contract+back+by+Friday.

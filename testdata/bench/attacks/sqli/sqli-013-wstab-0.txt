@@ -1,0 +1,4 @@
+GET /a?token=1%09or%091%3D1%09limit%091%09offset%090 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

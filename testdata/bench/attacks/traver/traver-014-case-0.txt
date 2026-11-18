@@ -1,0 +1,4 @@
+GET /a?q=%252e%252E%252fEtC%252fPaSsWd HTTP/1.1
+Host: demo.example.com
+Connection: close
+

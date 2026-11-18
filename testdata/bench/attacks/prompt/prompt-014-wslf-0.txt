@@ -1,0 +1,4 @@
+GET /a?q=jailbreak%0amode%0aactivated,%0aignore%0aall%0adirections HTTP/1.1
+Host: demo.example.com
+Connection: close
+

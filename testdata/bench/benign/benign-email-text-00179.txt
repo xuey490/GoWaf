@@ -1,0 +1,8 @@
+POST /mail/parse HTTP/1.1
+Host: demo.example.com
+User-Agent: mail-gateway/2.2
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 83
+Connection: close
+
+body=Reminder%3A+office+closed+on+the+holiday.+On-call+rotation+posted+in+the+wiki.

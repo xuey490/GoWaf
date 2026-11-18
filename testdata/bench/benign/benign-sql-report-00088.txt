@@ -1,0 +1,5 @@
+GET /reports/sales?from=2024-01&to=2024-06&format=csv HTTP/1.1
+Host: demo.example.com
+User-Agent: bi-dashboard/1.1
+Connection: close
+

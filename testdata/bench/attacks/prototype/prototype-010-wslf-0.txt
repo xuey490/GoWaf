@@ -1,0 +1,4 @@
+GET /a?cmd={"__proto__":[],"length":10} HTTP/1.1
+Host: demo.example.com
+Connection: close
+

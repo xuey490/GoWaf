@@ -1,0 +1,4 @@
+GET /a?path=obj["__proto__"]["polluted"]%3D"yes" HTTP/1.1
+Host: demo.example.com
+Connection: close
+

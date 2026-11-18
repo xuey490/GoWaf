@@ -1,0 +1,4 @@
+GET /a?page=[{%26quot;query%26quot;:%26quot;query{a}%26quot;},{%26quot;query%26quot;:%26quot;query{b}%26quot;},{%26quot;query%26quot;:%26quot;query{c}%26quot;},{%26quot;query%26quot;:%26quot;query{d}%26quot;}] HTTP/1.1
+Host: demo.example.com
+Connection: close
+

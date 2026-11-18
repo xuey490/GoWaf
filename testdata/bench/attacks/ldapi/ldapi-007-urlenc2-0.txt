@@ -1,0 +1,4 @@
+GET /a?data=%252A%2529%2528%2526%2528objectClass%253Duser%2529%2528uid%253D%252A%2529%2529 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,4 @@
+GET /a?name='*)(cn%3D*)' HTTP/1.1
+Host: demo.example.com
+Connection: close
+

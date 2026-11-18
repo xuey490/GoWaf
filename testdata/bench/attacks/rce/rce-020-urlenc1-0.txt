@@ -1,0 +1,4 @@
+GET /a?redirect=b%3Dpcntl_exec%28%22%2Fbin%2Fsh%22%29 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

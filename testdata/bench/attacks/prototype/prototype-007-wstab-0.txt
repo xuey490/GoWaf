@@ -1,0 +1,4 @@
+GET /a?data=deepmerge(target,{"__proto__":{}}) HTTP/1.1
+Host: demo.example.com
+Connection: close
+

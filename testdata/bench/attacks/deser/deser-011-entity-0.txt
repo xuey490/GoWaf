@@ -1,0 +1,4 @@
+GET /a?input=O:12:%26quot;DateInterval%26quot;:2:{s:1:%26quot;y%26quot;;s:1:%26quot;1%26quot;;} HTTP/1.1
+Host: demo.example.com
+Connection: close
+

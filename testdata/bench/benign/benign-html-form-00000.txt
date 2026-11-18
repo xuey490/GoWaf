@@ -1,0 +1,8 @@
+POST /register HTTP/1.1
+Host: demo.example.com
+User-Agent: Mozilla/5.0 (Windows NT 10.0)
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 94
+Connection: close
+
+age=45&bio=I+like+music+and+travel&city=beijing&email=user2737%40example.com&username=user2737

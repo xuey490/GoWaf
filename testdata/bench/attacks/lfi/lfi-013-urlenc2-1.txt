@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 32
+Connection: close
+
+token=php%253A%252F%252Ffd%252F3

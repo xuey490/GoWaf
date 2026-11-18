@@ -1,0 +1,4 @@
+GET /a?id={\u0022query\u0022:\u0022query{__schema{types{name}}}\u0022} HTTP/1.1
+Host: demo.example.com
+Connection: close
+

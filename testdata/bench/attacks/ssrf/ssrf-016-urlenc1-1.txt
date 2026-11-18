@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 35
+Connection: close
+
+file=tftp%3A%2F%2F10.0.0.5%2Fx.conf

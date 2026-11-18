@@ -1,0 +1,4 @@
+GET /a?id=<sElEcT%20oNcHaNgE%3DaLeRt(1)><OpTiOn>1</OpTiOn></SeLeCt> HTTP/1.1
+Host: demo.example.com
+Connection: close
+

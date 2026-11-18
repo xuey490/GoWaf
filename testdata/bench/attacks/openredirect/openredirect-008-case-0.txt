@@ -1,0 +1,4 @@
+GET /a?destination=hTtPs://EvIl.TlD%3Fa%3D1 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

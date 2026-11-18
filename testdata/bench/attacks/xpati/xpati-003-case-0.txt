@@ -1,0 +1,4 @@
+GET /a?url='%20oR%20sTrInG-lEnGtH(nAmE)>0%20oR%20'a HTTP/1.1
+Host: demo.example.com
+Connection: close
+

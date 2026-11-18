@@ -139,8 +139,9 @@ var (
 	// semCmdiRules 命令注入：元字符 + 系统命令 的结构组合。
 	// 尾部分隔符类统一为 [\s),;&|'"] 或行尾（$）：命令词后跟 = 的参数形态不判。
 	semCmdiRules = []semRule{
-		// 高置信系统词：; | && ` $( 紧邻即判
-		{re: mustRe(`[;&|]\s*(whoami|uname|ncat?\b|nc -|telnet|wget|curl|chmod|chown|base64|xxd|strings|nslookup|dig |ifconfig|ipconfig|netstat|apt(?:-get)? |yum |pip[23]? |npm )`)},
+		// 高置信系统词：; | && ` $( 紧邻即判（不含 base64——data URI 的
+		// ";base64," 是海量良性形态，实测 0.1% 误报预算的第一杀手）
+		{re: mustRe(`[;&|]\s*(whoami|uname|ncat?\b|nc -|telnet|wget|curl|chmod|chown|xxd|strings|nslookup|dig |ifconfig|ipconfig|netstat|apt(?:-get)? |yum |pip[23]? |npm )`)},
 		// 模糊词：要求 ; 前缀（查询串里 & 太常见、| 少见但仍有 a=1|cat 风险）
 		{re: mustRe(`;\s*(cat|ls|id|pwd|head|tail|sleep|ping|rm |cp |mv |find|grep|awk|sed|touch|kill|ps )`)},
 		// 管道/&&/|| + 常见命令词，要求其后跟空白或引号或结尾（排除 |cat=5 形式）
@@ -616,14 +617,16 @@ func (e *SemanticEngine) Inspect(in *Input) Result {
 }
 
 // semRedirectParamRe 开放重定向的参数形态：redirect 类参数名 + 绝对 URL。
-// 宿主捕获停在端口/路径前（[a-z0-9.-]+ 不含冒号），(?i) 由 RE2 原生支持。
-var semRedirectParamRe = mustRe(`(?i)(redirect|redirect_uri|redirecturl|returnurl|return_to|return|rurl|url|next|goto|target|dest|destination|continue|callback|jump|link|forward|out)=https?://([a-z0-9._-]+)`)
+// 宿主捕获停在端口/路径前（[a-z0-9._-]+ 不含冒号），(?i) 由 RE2 原生支持；
+// = 后允许引号（quote-pad 变体是真实攻击形态）。
+var semRedirectParamRe = mustRe(`(?i)(redirect|redirect_uri|redirecturl|returnurl|return_to|return|rurl|url|next|goto|target|dest|destination|continue|callback|jump|link|forward|out)=['"]?https?://([a-z0-9._-]+)`)
 
 // semCheckOpenRedirect 开放重定向的跨域判定：redirect 类参数指向与站点
 // 自身不同的主机才算命中。同域互跳（含 www. 前缀与子域，按点边界判定）
 // 是合法业务行为；本站域名未知（Host 为空）时放弃判定，宁漏勿误。
+// query 与 body（form 表单 POST 重定向）都查，原文与归一化各一遍。
 func semCheckOpenRedirect(in *Input) (string, bool) {
-	if in.Query == "" || in.Host == "" {
+	if in.Host == "" {
 		return "", false
 	}
 	own := strings.ToLower(in.Host)
@@ -633,9 +636,22 @@ func semCheckOpenRedirect(in *Input) (string, bool) {
 	if own == "" {
 		return "", false
 	}
-	// 原文与归一化文本各查一次：URL 编码形态（%3A%2F%）只有归一化后可读，
-	// 明文形态两边等价，重复检查无副作用。
-	for _, text := range []string{in.Query, Normalize(in.Query)} {
+	// 原文、归一化与解码变体各查一遍：URL 编码（%3A%2F%）、unicode 转义
+	// 与 base64 整包形态只有解码后才可读，重复检查无副作用（同类只记一次）。
+	var texts []string
+	appendTexts := func(raw string, variants []string) {
+		if raw != "" {
+			texts = append(texts, raw, Normalize(raw))
+		}
+		for _, v := range variants {
+			if v != "" {
+				texts = append(texts, v, Normalize(v))
+			}
+		}
+	}
+	appendTexts(in.Query, in.DecodedQuery)
+	appendTexts(in.Body, in.DecodedBody)
+	for _, text := range texts {
 		m := semRedirectParamRe.FindStringSubmatch(text)
 		if m == nil {
 			continue

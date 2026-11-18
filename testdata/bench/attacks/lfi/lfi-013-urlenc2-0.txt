@@ -1,0 +1,4 @@
+GET /a?token=php%253A%252F%252Ffd%252F3 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

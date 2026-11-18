@@ -1,0 +1,4 @@
+GET /a?q={{%20[1,2]|map(\u0027system\u0027)%20}} HTTP/1.1
+Host: demo.example.com
+Connection: close
+

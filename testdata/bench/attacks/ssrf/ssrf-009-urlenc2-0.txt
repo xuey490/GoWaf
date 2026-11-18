@@ -1,0 +1,4 @@
+GET /a?page=http%253A%252F%252Fmetadata.google.internal%252FcomputeMetadata%252Fv1%252F HTTP/1.1
+Host: demo.example.com
+Connection: close
+

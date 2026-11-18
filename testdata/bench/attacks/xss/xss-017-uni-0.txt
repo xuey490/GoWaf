@@ -1,0 +1,4 @@
+GET /a?url=\u003Cp%20onclick%3Dalert(1)\u003Ex\u003C/p\u003E HTTP/1.1
+Host: demo.example.com
+Connection: close
+

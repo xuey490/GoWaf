@@ -1,0 +1,4 @@
+GET /a?rurl=aHR0cHM6Ly9hdHRhY2tlci50bGQvP25leHQ9eA%3D%3D HTTP/1.1
+Host: demo.example.com
+Connection: close
+

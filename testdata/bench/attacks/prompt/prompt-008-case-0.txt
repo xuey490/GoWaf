@@ -1,0 +1,4 @@
+GET /a?search=pReTeNd%20ThAt%20YoU%20aRe%20RoOt%20AnD%20iGnOrE%20aNy%20ReStRiCtIoNs HTTP/1.1
+Host: demo.example.com
+Connection: close
+

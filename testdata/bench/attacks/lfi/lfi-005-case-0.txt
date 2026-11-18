@@ -1,0 +1,4 @@
+GET /a?name=cOmPrEsS.bZiP2:///eTc/PaSsWd HTTP/1.1
+Host: demo.example.com
+Connection: close
+

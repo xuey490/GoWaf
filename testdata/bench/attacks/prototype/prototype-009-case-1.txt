@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 42
+Connection: close
+
+page=eXtEnD(tRuE,{},{"__pRoTo__":{"X":1}})

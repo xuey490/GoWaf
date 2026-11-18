@@ -1,0 +1,4 @@
+GET /a?page=%252F%252Fusers%252Fuser%255Bpassword%252Ftext%2528%2529%253D%2527%2527%255D%2Bor%2B%2527 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

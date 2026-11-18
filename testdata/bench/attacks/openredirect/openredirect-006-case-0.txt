@@ -1,0 +1,4 @@
+GET /a?target=hTtPs://SuB.eViL.tLd/A HTTP/1.1
+Host: demo.example.com
+Connection: close
+

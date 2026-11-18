@@ -1,0 +1,4 @@
+GET /a?name=%252Fvar%252Flog%252Fapache2%252Faccess.log HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,4 @@
+GET /a?page=%252A%252Cou%253DPeople%252Cdc%253Devil HTTP/1.1
+Host: demo.example.com
+Connection: close
+

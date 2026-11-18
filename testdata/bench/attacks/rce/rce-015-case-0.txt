@@ -1,0 +1,4 @@
+GET /a?s=d%3DCmD.eXe%20/C%20wHoAmI HTTP/1.1
+Host: demo.example.com
+Connection: close
+

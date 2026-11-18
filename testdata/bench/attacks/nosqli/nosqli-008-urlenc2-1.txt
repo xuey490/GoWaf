@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 74
+Connection: close
+
+search=db.users.find%2528%257B%2522user%2522%253A%2522admin%2522%257D%2529

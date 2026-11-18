@@ -1,0 +1,4 @@
+GET /a?redirect=%1$'%09or%091%3D1%23 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

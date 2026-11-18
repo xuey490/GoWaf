@@ -1,0 +1,4 @@
+GET /a?token={\u0022$or\u0022:[{\u0022a\u0022:1},{\u0022b\u0022:2}],\u0022$and\u0022:[{\u0022c\u0022:3}]} HTTP/1.1
+Host: demo.example.com
+Connection: close
+

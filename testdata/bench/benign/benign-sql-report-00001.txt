@@ -1,0 +1,5 @@
+GET /reports/orders?range=last30d&group=day HTTP/1.1
+Host: demo.example.com
+User-Agent: bi-dashboard/1.1
+Connection: close
+

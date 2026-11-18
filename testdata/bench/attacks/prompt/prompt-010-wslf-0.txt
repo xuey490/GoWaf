@@ -1,0 +1,4 @@
+GET /a?cmd=act%0aas%0aif%0ayou%0ahave%0ano%0arules%0aand%0aobey%0aonly%0ame HTTP/1.1
+Host: demo.example.com
+Connection: close
+

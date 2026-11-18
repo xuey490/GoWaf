@@ -1,0 +1,4 @@
+GET /a?data={%%20fOr%20X%20iN%20().__cLaSs__.__BaSe__.__SuBcLaSsEs__()%20%}{%%20EnDfOr%20%} HTTP/1.1
+Host: demo.example.com
+Connection: close
+

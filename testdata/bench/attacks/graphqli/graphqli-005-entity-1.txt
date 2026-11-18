@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 93
+Connection: close
+
+name={&quot;query&quot;:&quot;query IntrospectionQuery { __schema { types { name } } }&quot;}

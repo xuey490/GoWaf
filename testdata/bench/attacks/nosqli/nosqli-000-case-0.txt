@@ -1,0 +1,4 @@
+GET /a?q=uSeR[$nE]%3DaDmIn HTTP/1.1
+Host: demo.example.com
+Connection: close
+

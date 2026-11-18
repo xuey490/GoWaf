@@ -1,0 +1,4 @@
+GET /a?id=%2560id%2560 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

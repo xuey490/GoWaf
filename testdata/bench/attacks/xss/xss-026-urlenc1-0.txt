@@ -1,0 +1,4 @@
+GET /a?path=%3Cimg%2Bsrc%3D%22x%22%2Bonerror%3D%22alert%28atob%28%27YWxlcnQoMSk%3D%27%29%29%22%3E HTTP/1.1
+Host: demo.example.com
+Connection: close
+

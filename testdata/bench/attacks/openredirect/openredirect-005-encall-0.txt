@@ -1,0 +1,4 @@
+GET /a?goto=%68%74%74%70%73%3A%2F%2F%65%76%69%6C%2E%74%6C%64%23%61%6E%63%68%6F%72 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

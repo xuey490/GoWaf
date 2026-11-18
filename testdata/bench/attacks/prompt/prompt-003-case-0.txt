@@ -1,0 +1,4 @@
+GET /a?url=fOrGeT%20aLl%20PrEvIoUs%20CoNsTrAiNtS%20aNd%20AcT%20fReElY HTTP/1.1
+Host: demo.example.com
+Connection: close
+

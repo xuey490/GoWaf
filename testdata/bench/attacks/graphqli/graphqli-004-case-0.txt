@@ -1,0 +1,4 @@
+GET /a?id={"qUeRy":"QuErY{__sChEmA{tYpEs{NaMe}}}"} HTTP/1.1
+Host: demo.example.com
+Connection: close
+

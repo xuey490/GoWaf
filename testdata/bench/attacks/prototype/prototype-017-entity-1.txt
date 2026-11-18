@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 80
+Connection: close
+
+url=_.merge({}, JSON.parse(&#39;{&quot;__proto__&quot;:{&quot;x&quot;:1}}&#39;))

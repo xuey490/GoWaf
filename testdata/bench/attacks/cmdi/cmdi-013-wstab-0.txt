@@ -1,0 +1,4 @@
+GET /a?token=;%09ls%09-la%09/ HTTP/1.1
+Host: demo.example.com
+Connection: close
+

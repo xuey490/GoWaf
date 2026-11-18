@@ -1,0 +1,4 @@
+GET /a?url=/*x*/eval(str_rot13(''); HTTP/1.1
+Host: demo.example.com
+Connection: close
+

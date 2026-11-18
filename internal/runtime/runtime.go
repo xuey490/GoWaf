@@ -84,6 +84,7 @@ const (
 	KeyCRSPrescreen    = "engine.crs.prescreen"      // 可疑度预筛（加速模式，默认关）
 	KeyCRSSkipStatic   = "engine.crs.skip_static"    // 无参数静态资源旁路（默认开）
 	KeyCRSBodyTextOnly = "engine.crs.body_text_only" // 非 text 请求体跳过 CRS body 解析（默认开）
+	KeyCRSSafeDataURI  = "engine.crs.safe_datauri"   // 图片 data URI 白名单旁路（默认开）
 	KeyCRSExcludePaths = "engine.crs.exclude_paths"  // 路径前缀豁免清单（逗号分隔）
 	KeyCRSRemoveRanges = "engine.crs.remove_ranges"  // 编译期整体移除的规则号段（如 "920,921"）
 
@@ -978,6 +979,7 @@ func (r *Runtime) Reload(ctx context.Context) error {
 		Prescreen:    r.settingFromBool(sm, KeyCRSPrescreen, false),
 		SkipStatic:   r.settingFromBool(sm, KeyCRSSkipStatic, true),
 		BodyTextOnly: r.settingFromBool(sm, KeyCRSBodyTextOnly, true),
+		SafeDataURI:  r.settingFromBool(sm, KeyCRSSafeDataURI, true),
 		ExcludePaths: splitList(r.settingFrom(sm, KeyCRSExcludePaths, "")),
 	}))
 
@@ -1315,6 +1317,7 @@ func DefaultSettings(cfg *config.Config) map[string]string {
 		KeyCRSPrescreen:          "false",
 		KeyCRSSkipStatic:         "true",
 		KeyCRSBodyTextOnly:       "true",
+		KeyCRSSafeDataURI:        "true",
 		KeyCRSExcludePaths:       "",
 		KeyCRSRemoveRanges:       "",
 

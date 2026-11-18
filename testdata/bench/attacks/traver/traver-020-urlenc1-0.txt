@@ -1,0 +1,4 @@
+GET /a?redirect=..%2F%2F..%2F%2Fetc%2F%2Fhosts HTTP/1.1
+Host: demo.example.com
+Connection: close
+

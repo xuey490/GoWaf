@@ -1,0 +1,8 @@
+POST /ops/logpaste HTTP/1.1
+Host: demo.example.com
+User-Agent: ops-console/0.9
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 273
+Connection: close
+
+paste=auth\n2024-12-27 12:44:43 INFO auth request done in 91ms\n2024-02-22 07:12:40 INFO auth request done in 132ms\n2024-08-12 13:28:33 INFO auth request done in 296ms\n2024-06-11 04:29:17 INFO auth request done in 363ms\n2024-09-03 05:19:45 INFO auth request done in 52ms

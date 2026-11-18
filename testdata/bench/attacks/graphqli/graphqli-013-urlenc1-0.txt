@@ -1,0 +1,4 @@
+GET /a?token=%7B__schema%2B%7B%2Btypes%2B%7B%2Bname%2Bfields%2B%7B%2Bname%2B%7D%2B%7D%2B%7D%7D HTTP/1.1
+Host: demo.example.com
+Connection: close
+

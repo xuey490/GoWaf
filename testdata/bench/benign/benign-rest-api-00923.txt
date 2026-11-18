@@ -1,0 +1,5 @@
+GET /api/v1/tickets/1154?sort=created_at&order=asc HTTP/1.1
+Host: demo.example.com
+User-Agent: app-client/1.2
+Connection: close
+

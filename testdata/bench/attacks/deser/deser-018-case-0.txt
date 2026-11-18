@@ -1,0 +1,4 @@
+GET /a?id=ySaMl%20Io%20DeViCe%20%3D%20YaMl.LoAd("!!PyThOn/ObJeCt/ApPlY:oS.sYsTeM") HTTP/1.1
+Host: demo.example.com
+Connection: close
+

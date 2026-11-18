@@ -1,0 +1,4 @@
+GET /a?page=Ly91c2Vycy91c2VyW3Bhc3N3b3JkL3RleHQoKT0nJ10gb3IgJw%3D%3D HTTP/1.1
+Host: demo.example.com
+Connection: close
+

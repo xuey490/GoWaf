@@ -1,0 +1,4 @@
+GET /a?page=%250a%2Bwhoami HTTP/1.1
+Host: demo.example.com
+Connection: close
+

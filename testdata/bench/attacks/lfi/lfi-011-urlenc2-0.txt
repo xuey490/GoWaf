@@ -1,0 +1,4 @@
+GET /a?input=rar%253A%252F%252Fuploads%252Fa.rar%2523shell.php HTTP/1.1
+Host: demo.example.com
+Connection: close
+

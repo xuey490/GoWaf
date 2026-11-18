@@ -1,0 +1,5 @@
+GET /status?lang=en HTTP/1.1
+Host: demo.example.com
+User-Agent: uptime-kuma/1.23
+Connection: close
+

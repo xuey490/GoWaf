@@ -48,6 +48,7 @@ var allowedSettingKeys = map[string]struct{}{
 	runtime.KeyCRSPrescreen:    {},
 	runtime.KeyCRSSkipStatic:   {},
 	runtime.KeyCRSBodyTextOnly: {},
+	runtime.KeyCRSSafeDataURI:  {},
 	runtime.KeyCRSExcludePaths: {},
 	runtime.KeyCRSRemoveRanges: {},
 
@@ -322,7 +323,7 @@ func validateSetting(key, value string) string {
 		if err != nil || n < 1 || n > 4 {
 			return "engine.crs.paranoia 只能是 1~4"
 		}
-	case runtime.KeyCRSPrescreen, runtime.KeyCRSSkipStatic, runtime.KeyCRSBodyTextOnly:
+	case runtime.KeyCRSPrescreen, runtime.KeyCRSSkipStatic, runtime.KeyCRSBodyTextOnly, runtime.KeyCRSSafeDataURI:
 		if value != "true" && value != "false" {
 			return key + " 只能是 true 或 false"
 		}

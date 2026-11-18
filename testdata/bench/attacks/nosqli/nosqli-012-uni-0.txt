@@ -1,0 +1,4 @@
+GET /a?path={\u0022$or\u0022:[{\u0022user\u0022:\u0022admin\u0022},{\u0022role\u0022:\u0022root\u0022}]} HTTP/1.1
+Host: demo.example.com
+Connection: close
+

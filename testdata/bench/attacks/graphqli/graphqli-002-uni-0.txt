@@ -1,0 +1,4 @@
+GET /a?file={__type(name:\u0022User\u0022){fields{name%20type{name}}}} HTTP/1.1
+Host: demo.example.com
+Connection: close
+

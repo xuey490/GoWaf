@@ -1,0 +1,4 @@
+GET /a?q=/*%00*/http://x%0d%0aLocation:http://evil.tld HTTP/1.1
+Host: demo.example.com
+Connection: close
+

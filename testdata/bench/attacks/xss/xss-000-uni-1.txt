@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 47
+Connection: close
+
+q=\u003Cscript\u003Ealert(1)\u003C/script\u003E

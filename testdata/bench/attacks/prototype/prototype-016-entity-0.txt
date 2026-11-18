@@ -1,0 +1,4 @@
+GET /a?file={%26%23x22;constructor.prototype%26%23x22;:{}} HTTP/1.1
+Host: demo.example.com
+Connection: close
+

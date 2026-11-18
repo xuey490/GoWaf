@@ -1,0 +1,5 @@
+GET /search?q=%E6%96%B0%E8%83%BD%E6%BA%90%E6%B1%BD%E8%BD%A6+%E6%97%85%E6%B8%B8%E6%94%BB%E7%95%A5&page=2 HTTP/1.1
+Host: demo.example.com
+User-Agent: Mozilla/5.0 (Windows NT 10.0) Chrome/120
+Connection: close
+

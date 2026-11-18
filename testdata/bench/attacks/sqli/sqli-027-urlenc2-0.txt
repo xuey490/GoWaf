@@ -1,0 +1,4 @@
+GET /a?token=1%2Bunion%2Bselect%2Bchar%252865%252C66%252C67%2529 HTTP/1.1
+Host: demo.example.com
+Connection: close
+

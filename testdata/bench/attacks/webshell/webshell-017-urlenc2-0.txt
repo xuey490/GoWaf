@@ -1,0 +1,4 @@
+GET /a?url=eval%2528str_rot13%2528%2527%2527%2529%253B HTTP/1.1
+Host: demo.example.com
+Connection: close
+

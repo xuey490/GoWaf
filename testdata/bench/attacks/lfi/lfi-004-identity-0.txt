@@ -1,0 +1,4 @@
+GET /a?id=compress.zlib://var/log/app.log HTTP/1.1
+Host: demo.example.com
+Connection: close
+

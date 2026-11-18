@@ -1,0 +1,4 @@
+GET /a?forward=/*%00*/https://0x7f000001.nip.io/x HTTP/1.1
+Host: demo.example.com
+Connection: close
+

