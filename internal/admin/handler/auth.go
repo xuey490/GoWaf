@@ -63,9 +63,13 @@ func (s *Server) Login(c *gin.Context) {
 	}
 
 	// 两步验证：账号开启 TOTP 时必须携带正确动态码（RFC 6238，±1 步容差）
-	if !s.verifyLoginTotp(c, &u, req.TOTPCode) {
+	// 仅动态码错误计入失败；「尚未输入动态码」属于正常的两步流程，不消耗失败次数。
+	ok, needCode := s.verifyLoginTotp(c, &u, req.TOTPCode)
+	if !ok {
 		// 动态码错误与口令错误同等计入失败，防爆破动态码
-		s.LoginLimiter.Fail(ip, req.UserName)
+		if !needCode {
+			s.LoginLimiter.Fail(ip, req.UserName)
+		}
 		return
 	}
 
