@@ -137,21 +137,22 @@ func (s *Server) TotpDisable(c *gin.Context) {
 const totpRequiredCode = 40102
 
 // verifyLoginTotp 登录流程的 TOTP 校验环节。
-// 已开启 2FA 且未携带正确动态码时返回需要验证码的业务响应。
+// 已开启 2FA 且未携带动态码时返回「需要验证码」的业务响应。
 // 参数 c：Gin 上下文；参数 u：已通过口令校验的用户；参数 code：登录请求中的动态码。
-// 返回 bool：true=校验通过（或未开启），可继续签发令牌；false=已写入错误响应。
-func (s *Server) verifyLoginTotp(c *gin.Context, u *model.User, code string) bool {
+// 返回 ok：true=校验通过（或未开启），可继续签发令牌；false=已写入错误响应。
+// 返回 needCode：true=仅缺少动态码（正常的两步流程，不应计为登录失败）。
+func (s *Server) verifyLoginTotp(c *gin.Context, u *model.User, code string) (ok bool, needCode bool) {
 	if u.TOTPEnabled != 1 || u.TOTPSecret == "" {
-		return true
+		return true, false
 	}
 	if strings.TrimSpace(code) == "" {
 		// 明确告诉前端「还差验证码这一步」：业务码 40102 + 提示字段
 		response.Fail(c, 400, totpRequiredCode, "该账号已开启两步验证，请输入动态码")
-		return false
+		return false, true
 	}
 	if !totp.Verify(u.TOTPSecret, code) {
 		response.BadRequest(c, "动态码不正确")
-		return false
+		return false, false
 	}
-	return true
+	return true, false
 }
